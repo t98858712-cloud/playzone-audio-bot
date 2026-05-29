@@ -640,8 +640,11 @@ async def start(message: Message):
     if not await require_follow_message(message):
         return
     await message.answer(
-        f"🎧 أهلاً بك في {APP_NAME}\n\nالبوت مجاني لمتابعي PlayZone.\n"
-        "أرسل ملف فيديو/صوت لتحويله إلى MP3، أو رابطاً من المصادر المسموحة.",
+        f"🎧 أهلاً بك في {APP_NAME}\n\n"
+        "الاستخدام بسيط جداً:\n"
+        "أرسل ملف فيديو أو صوت، وسأحوله إلى MP3 جاهز للتشغيل.\n\n"
+        "أو أرسل رابط ملف مباشر مسموح.\n\n"
+        "⚠️ إذا كان الرابط من منصة لا تسمح بالتحميل، أرسل الملف نفسه للبوت وسأحوله لك.",
         reply_markup=main_menu(message.from_user.id)
     )
 
@@ -1056,7 +1059,12 @@ async def handle_text(message: Message):
         return
     allowed, why = is_allowed_url(text)
     if not allowed:
-        await message.answer(f"❌ الرابط غير مسموح.\n\nالسبب: {why}\n\nاستخدم رابطاً من المواقع المسموحة، أو أرسل ملفك مباشرة للبوت.", reply_markup=main_menu(user_id))
+        await message.answer(
+            "⚠️ لا يمكن تحميل هذا الرابط مباشرة.\n\n"
+            "التحميل المباشر متاح فقط للروابط المسموحة أو روابط الملفات المباشرة.\n\n"
+            "✅ الحل الأسهل: أرسل ملف الفيديو أو الصوت هنا، وسأحوله لك إلى MP3 فوراً.",
+            reply_markup=main_menu(user_id)
+        )
         return
 
     job_id = str(uuid.uuid4())
