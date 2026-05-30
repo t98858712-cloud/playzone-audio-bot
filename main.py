@@ -650,17 +650,12 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
 
 def apply_platform_tweaks(opts: dict, url: str):
     """
-    هذا هو أساس إعداد يوتيوب القديم الذي كان يعمل:
-    - player_client web/android
-    - skip webpage
-    - cookies.txt ليوتيوب عند وجوده
-    أما باقي المنصات فتستخدم الإعداد العام.
+    إعدادات خاصة حسب المنصة.
     """
     if is_youtube_url(url):
         opts["extractor_args"] = {
             "youtube": {
                 "player_client": ["web", "android"],
-                "skip": ["webpage"],
             }
         }
 
