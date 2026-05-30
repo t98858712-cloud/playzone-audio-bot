@@ -519,27 +519,6 @@ async def edit_or_send(query, text: str, reply_markup=None):
 # الأزرار
 # ==========================================================
 
-def links_reply_keyboard():
-    from telegram import ReplyKeyboardMarkup, KeyboardButton
-
-    return ReplyKeyboardMarkup(
-        [
-            [
-                KeyboardButton("🌐 موقع PlayZone"),
-                KeyboardButton("🤖 بوت PlayZone"),
-            ],
-            [
-                KeyboardButton("🎮 PlayZone"),
-                KeyboardButton("👨‍💻 المطور"),
-            ],
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=False,
-        is_persistent=True,
-        input_field_placeholder="أرسل رابط التحميل هنا..."
-    )
-
-
 def download_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
@@ -650,12 +629,17 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
 
 def apply_platform_tweaks(opts: dict, url: str):
     """
-    إعدادات خاصة حسب المنصة.
+    هذا هو أساس إعداد يوتيوب القديم الذي كان يعمل:
+    - player_client web/android
+    - skip webpage
+    - cookies.txt ليوتيوب عند وجوده
+    أما باقي المنصات فتستخدم الإعداد العام.
     """
     if is_youtube_url(url):
         opts["extractor_args"] = {
             "youtube": {
                 "player_client": ["web", "android"],
+                "skip": ["webpage"],
             }
         }
 
@@ -788,12 +772,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=admin_welcome_keyboard() if is_admin(update.effective_user.id) else welcome_keyboard(),
     )
 
-    await update.message.reply_text(
-        "🔗 روابط PlayZone الرسمية متاحة من الأزرار بالأسفل.",
-        reply_markup=links_reply_keyboard(),
-        disable_web_page_preview=True,
-    )
-
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(update.effective_user)
 
@@ -825,43 +803,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
     text = update.message.text.strip()
-
-    # أزرار الروابط الثابتة أسفل المحادثة
-    if text == "🌐 موقع PlayZone":
-        await update.message.reply_text(
-            "🌐 موقع PlayZone:\n"
-            "https://tasmg1.github.io/tasmg/",
-            reply_markup=links_reply_keyboard(),
-            disable_web_page_preview=True,
-        )
-        return
-
-    if text == "🤖 بوت PlayZone":
-        await update.message.reply_text(
-            "🤖 بوت PlayZone:\n"
-            "https://t.me/P1ay_Z0ne_Bot",
-            reply_markup=links_reply_keyboard(),
-            disable_web_page_preview=True,
-        )
-        return
-
-    if text == "🎮 PlayZone":
-        await update.message.reply_text(
-            "🎮 PlayZone:\n"
-            "https://www.instagram.com/p1ay.zone?igsh=MWpjdGpodGRqeXdwdg==",
-            reply_markup=links_reply_keyboard(),
-            disable_web_page_preview=True,
-        )
-        return
-
-    if text == "👨‍💻 المطور":
-        await update.message.reply_text(
-            "👨‍💻 المطور:\n"
-            "https://www.instagram.com/ta_smg?igsh=aTB5dTJzdmRtaTA4&utm_source=qr",
-            reply_markup=links_reply_keyboard(),
-            disable_web_page_preview=True,
-        )
-        return
 
     # وضع كتابة التنبيه للأدمن
     if is_admin(user_id) and context.user_data.get("awaiting_broadcast"):
