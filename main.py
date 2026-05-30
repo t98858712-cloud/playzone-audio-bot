@@ -360,7 +360,7 @@ def build_preview_caption(info: dict, url: str) -> str:
         f"🌐 {extractor}\n"
         f"⏱️ {duration}\n"
         f"📦 {size}\n\n"
-        "اختر نوع التحميل:\n🎵 ملف صوتي عالي = أفضل جودة متاحة"
+        "اختر نوع التحميل:\n🎵 ملف صوتي عالي الجودة = أفضل جودة متاحة"
     )
 
 
@@ -836,10 +836,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_last_error(err)
         logger.warning(f"فشل فحص الرابط للمستخدم {user_id}: {err}")
 
+        # إذا فشل جلب الصورة أو التفاصيل، لا نوقف المستخدم.
+        # نعرض خيارات التحميل مباشرة بدون صورة.
+        context.user_data["current_url"] = text
+        context.user_data["created_at"] = time.time()
+        context.user_data["preview_title"] = "ملف ميديا"
+        context.user_data["preview_author"] = ""
+        context.user_data["preview_platform"] = platform_name_from_url(text)
+        context.user_data["preview_duration"] = 0
+        stat_inc("requests", 1)
+
         await safe_edit(
             status,
-            "❌ تعذر تجهيز الرابط.\n\n"
-            "جرّب رابطاً آخر أو حاول لاحقاً."
+            "✅ تم استلام الرابط.\n\n"
+            f"🌐 المنصة: {platform_name_from_url(text)}\n"
+            "📌 لم أستطع جلب الصورة، لكن يمكنك تجربة التحميل.\n\n"
+            "اختر نوع التحميل:",
+            reply_markup=download_keyboard(),
         )
 
 
