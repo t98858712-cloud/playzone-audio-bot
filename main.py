@@ -109,7 +109,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "noplaylist": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "web"],  # التمويه كإصدار أندرويد لتفادي الحظر
+                "player_client": ["android", "web"],
                 "skip": ["webpage"]
             }
         }
@@ -118,7 +118,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # التحقق من وجود ملف الكوكيز وتطبيقه تلقائياً
     if os.path.exists(COOKIES_FILE):
         base_ydl_opts["cookiefile"] = COOKIES_FILE
-        print("ℹ️ تم العثور على ملف الكوكيز وتطبيقه بنجاح.")
 
     if choice == "mp3":
         ydl_opts = {
@@ -185,8 +184,15 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_message.delete()
 
     except Exception as e:
+        # فحص ذكي لملف الكوكيز لمساعدتك في معرفة السبب
+        cookie_diagnostic = ""
+        if not os.path.exists(COOKIES_FILE):
+            cookie_diagnostic = "\n\n⚠️ تشخيص: البوت لا يرى ملف cookies.txt! تأكد من إنشاء الملف في المجلد الرئيسي وإعادة تشغيل البوت."
+        else:
+            cookie_diagnostic = "\n\nℹ️ تشخيص: ملف cookies.txt موجود، ولكن قد تكون الكوكيز منتهية الصلاحية أو تم نسخها بشكل خاطئ."
+
         await status_message.edit_text(
-            f"❌ حدث خطأ أثناء المعالجة:\n{short_error(e)}"
+            f"❌ حدث خطأ أثناء المعالجة:\n{short_error(e)}{cookie_diagnostic}"
         )
         print(f"Error: {e}")
 
