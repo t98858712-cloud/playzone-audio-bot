@@ -81,15 +81,17 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_message = await query.edit_message_text("⏳ جاري تجهيز الطلب...")
     out_tmpl = str(job_dir / "%(title).80s [%(id)s].%(ext)s")
 
-    # إعدادات التمويه السحرية الجديدة (تخطي الحظر بدون كوكيز)
+    # إعدادات التمويه المتوافقة مع السيرفر بدون مكتبات خارجية
     base_ydl_opts = {
         "outtmpl": out_tmpl,
         "quiet": True,
         "noplaylist": True,
-        "impersonate": "chrome",  # تقمص متصفح كروم حقيقي بكامل هويته
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
         "extractor_args": {
             "youtube": {
-                "player_client": ["tv", "ios"],  # محاكاة عملاء يوتيوب الأكثر تسامحاً مع الحظر
+                "player_client": ["tv", "ios"],  # استخدام مشغلات يوتيوب الأكثر تسامحاً مع السيرفرات
                 "skip": ["webpage"]
             }
         }
@@ -105,7 +107,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     loop = asyncio.get_running_loop()
     try:
-        await status_message.edit_text("📥 جاري التحميل من يوتيوب...")
+        await status_message.edit_text("📥 جاري التحميل والمعالجة...")
         info = await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(ydl_opts).extract_info(url, download=True))
         
         title = info.get("title", "ملف")
@@ -116,7 +118,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if file_path.stat().st_size > MAX_TELEGRAM_SIZE:
-            await status_message.edit_text("❌ حجم الملف أكبر من 50MB حد تيليجرام.")
+            await status_message.edit_text("❌ حجم الملف أكبر من 50MB حد تيليجرام البوتات العادية.")
             return
 
         await status_message.edit_text("📤 جاري الرفع إلى تيليجرام...")
