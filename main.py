@@ -650,17 +650,13 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
 
 def apply_platform_tweaks(opts: dict, url: str):
     """
-    هذا هو أساس إعداد يوتيوب القديم الذي كان يعمل:
-    - player_client web/android
-    - skip webpage
-    - cookies.txt ليوتيوب عند وجوده
-    أما باقي المنصات فتستخدم الإعداد العام.
+    إعدادات خاصة حسب المنصة.
+    ليوتيوب نبدأ بمحاولة android، ثم download_sync يجرب أكثر من طريقة تلقائياً.
     """
     if is_youtube_url(url):
         opts["extractor_args"] = {
             "youtube": {
-                "player_client": ["web", "android"],
-                "skip": ["webpage"],
+                "player_client": ["android"],
             }
         }
 
@@ -768,10 +764,46 @@ def build_download_options(url: str, choice: str, job_dir: Path, progress_data: 
 
 
 def download_sync(url: str, choice: str, job_dir: Path, progress_data: dict):
-    opts = build_download_options(url, choice, job_dir, progress_data)
+    base_opts = build_download_options(url, choice, job_dir, progress_data)
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        return ydl.extract_info(url, download=True)
+    attempts = [base_opts]
+
+    if is_youtube_url(url):
+        opts_android = dict(base_opts)
+        opts_android["extractor_args"] = {
+            "youtube": {
+                "player_client": ["android"],
+            }
+        }
+        attempts.append(opts_android)
+
+        opts_web = dict(base_opts)
+        opts_web["extractor_args"] = {
+            "youtube": {
+                "player_client": ["web"],
+            }
+        }
+        attempts.append(opts_web)
+
+        opts_web_android = dict(base_opts)
+        opts_web_android["extractor_args"] = {
+            "youtube": {
+                "player_client": ["web", "android"],
+            }
+        }
+        attempts.append(opts_web_android)
+
+    last_error = None
+
+    for opts in attempts:
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(url, download=True)
+        except yt_dlp.utils.DownloadError as e:
+            last_error = e
+            continue
+
+    raise last_error
 
 
 # ==========================================================
