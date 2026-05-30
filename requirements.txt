@@ -1,2 +1,2 @@
-aiogram==3.13.1
-yt-dlp==2025.1.15
+python-telegram-bot==21.1.1
+yt-dlp==2026.03.11
