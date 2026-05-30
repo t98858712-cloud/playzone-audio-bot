@@ -62,7 +62,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["current_url"] = url
     keyboard = [[InlineKeyboardButton("🎵 صوت", callback_data="mp3"), InlineKeyboardButton("🎬 فيديو MP4", callback_data="mp4")]]
-    await update.message.reply_text("اختر الصيغة المباشرة للتحميل:", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text("اختر الصيغة:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -78,58 +78,61 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = query.from_user.id
     job_dir = make_job_dir(user_id)
-    status_message = await query.edit_message_text("⏳ جاري سحب الملف المباشر من السيرفر...")
+    status_message = await query.edit_message_text("⏳ جاري تجاوز حماية يوتيوب والتحميل...")
     out_tmpl = str(job_dir / "%(title).80s.%(ext)s")
 
-    # إعدادات أندرويد لتفادي الحظر والـ DRM
+    # إعدادات متطورة تحاكي متصفح سفاري حقيقي لكسر حظر سيرفرات Railway
     base_ydl_opts = {
         "outtmpl": out_tmpl,
         "quiet": True,
         "noplaylist": True,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Mode": "navigate",
+        },
         "extractor_args": {
             "youtube": {
-                "player_client": ["android"],
+                "player_client": ["web", "mweb"], # التبديل إلى مشغلات الويب لكسر قيود تطبيق الأندرويد المكتشفة
                 "skip": ["webpage"]
             }
         }
     }
 
-    if os.path.exists(COOKIES_FILE):
+    if os.path.exists(COOKIES_FILE) and os.path.getsize(COOKIES_FILE) > 100:
         base_ydl_opts["cookiefile"] = COOKIES_FILE
 
-    # هنا الحيلة: التحميل بصيغ جاهزة مباشرة لا تحتاج إلى معالجة ffmpeg مطلقاً
     if choice == "mp3":
         ydl_opts = {
             **base_ydl_opts, 
-            "format": "bestaudio[ext=m4a]/bestaudio/best",  # تحميل صوت m4a الجاهز (يعمل على التليجرام كصوت ممتاز جداً وبدون تعليق)
+            "format": "bestaudio[ext=m4a]/bestaudio/best",
         }
     else:
         ydl_opts = {
             **base_ydl_opts, 
-            "format": "best[ext=mp4][height<=480]/best[ext=mp4]/best", # تحميل فيديو mp4 مدمج وجاهز مباشرة
+            "format": "best[ext=mp4][height<=480]/best[ext=mp4]/best",
         }
 
     loop = asyncio.get_running_loop()
     try:
-        await status_message.edit_text("📥 جاري التحميل الفوري للملف...")
         info = await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(ydl_opts).extract_info(url, download=True))
         
         title = info.get("title", "ملف")
         file_path = find_downloaded_file(job_dir)
 
         if not file_path or not file_path.exists():
-            await status_message.edit_text("❌ لم يتم العثور على الملف.")
+            await status_message.edit_text("❌ فشل معالجة الملف بعد التحميل.")
             return
 
         if file_path.stat().st_size > MAX_TELEGRAM_SIZE:
-            await status_message.edit_text("❌ حجم الملف أكبر من 50MB (حد تيليجرام للبوتات العادية).")
+            await status_message.edit_text("❌ حجم الملف أكبر من 50MB حد تيليجرام.")
             return
 
-        await status_message.edit_text("📤 جاري الرفع إلى تيليجرام...")
+        await status_message.edit_text("📤 جاري الرفع الفوري...")
         with open(file_path, "rb") as f:
             if choice == "mp3":
-                # رفع الملف الصوتي (سيرسل بتنسيق صوتي نقي ومتوافق تماماً مع مشغل التليجرام)
-                await query.message.reply_audio(audio=f, title=title, caption="✅ تم تحميل الصوت بنجاح")
+                await query.message.reply_audio(audio=f, title=title, caption="✅ تم تحميل الصوت")
             else:
                 await query.message.reply_video(video=f, caption=f"✅ {title}")
         await status_message.delete()
