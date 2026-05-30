@@ -851,7 +851,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "🤖 بوت PlayZone ":
         await update.message.reply_text(
             "🤖 بوت PlayZone:\n"
-            "https://t.me/P1ay_Z0ne_Bot",
+            "@P1ay_Z0ne_Bot",
             reply_markup=links_reply_keyboard(),
             disable_web_page_preview=True,
         )
