@@ -527,7 +527,7 @@ def links_reply_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton("🌍 موقع PlayZone"),
             ],
             [
-                KeyboardButton("🤖 بوت PlayZone "),
+                KeyboardButton("🤖 بوت PlayZone"),
                 KeyboardButton("👨‍💻 المطور"),
             ],
         ],
@@ -848,9 +848,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if text == "🤖 بوت PlayZone ":
+    if text == "🤖 بوت PlayZone":
         await update.message.reply_text(
-            "🤖 بوت PlayZone:\n"
             "@P1ay_Z0ne_Bot",
             reply_markup=links_reply_keyboard(),
             disable_web_page_preview=True,
