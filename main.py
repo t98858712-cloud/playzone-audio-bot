@@ -360,7 +360,7 @@ def build_preview_caption(info: dict, url: str) -> str:
         f"🌐 {extractor}\n"
         f"⏱️ {duration}\n"
         f"📦 {size}\n\n"
-        "اختر نوع التحميل:"
+        "اختر نوع التحميل:\n🎵 ملف صوتي عالي = أفضل جودة متاحة"
     )
 
 
@@ -500,7 +500,7 @@ async def edit_or_send(query, text: str, reply_markup=None):
 def download_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🎵 ملف صوتي", callback_data="download_audio"),
+            InlineKeyboardButton("🎵 ملف صوتي عالي الجودة", callback_data="download_audio"),
             InlineKeyboardButton("🎙 مقطع صوتي", callback_data="download_voice"),
         ],
         [
@@ -693,9 +693,21 @@ async def progress_updater(status_message, progress_data: dict, stop_event: asyn
 def build_download_options(url: str, choice: str, job_dir: Path, progress_data: dict):
     opts = base_ydl_opts(job_dir, progress_data)
 
-    if choice in ["audio", "voice"]:
-        # أفضل صوت متاح من المصدر بدون تحويل لتبقى الجودة أصلية
-        opts["format"] = "bestaudio/best"
+    if choice == "audio":
+        # أعلى جودة صوت متاحة من المصدر بدون تحويل
+        # يفضل Opus/WebM في يوتيوب لأنه غالباً الأفضل جودة
+        opts["format"] = (
+            "bestaudio[acodec*=opus][abr>=128]/"
+            "bestaudio[acodec*=opus]/"
+            "bestaudio[ext=webm]/"
+            "bestaudio[ext=m4a]/"
+            "bestaudio/best"
+        )
+
+    elif choice == "voice":
+        # مقطع صوتي للاستماع السريع داخل تيليجرام
+        # نحاول اختيار m4a أولاً لأنه أكثر توافقاً، ثم الأفضل المتاح
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
 
     elif choice == "video":
         # مثل الأساس القديم: فيديو MP4 جاهز ومناسب لتجنب ffmpeg
