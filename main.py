@@ -26,6 +26,32 @@ MAX_TELEGRAM_SIZE = 50 * 1024 * 1024
 COOKIES_FILE = "cookies.txt"  # اسم ملف الكوكيز
 
 
+def fix_cookies_format(file_path: str):
+    """دالة ذكية لإصلاح التخريب الذي يحدث للمسافات عند اللصق من الموبايل"""
+    path = Path(file_path)
+    if not path.exists():
+        return
+    try:
+        content = path.read_text(encoding="utf-8")
+        # إذا كان الملف يحتوي على مسافات عادية ولا يحتوي على Tabs، نقوم بإصلاحه
+        if " " in content and "\t" not in content:
+            lines = content.splitlines()
+            fixed_lines = []
+            for line in lines:
+                if line.strip() and not line.startswith("#"):
+                    parts = line.split()
+                    if len(parts) >= 5:  # التأكد من أنه سطر كوكيز حقيقي
+                        fixed_lines.append("\t".join(parts))
+                    else:
+                        fixed_lines.append(line)
+                else:
+                    fixed_lines.append(line)
+            path.write_text("\n".join(fixed_lines), encoding="utf-8")
+            print("⚙️ تم إصلاح تنسيق ملف cookies.txt تلقائياً وتحويل المسافات إلى Tabs.")
+    except Exception as e:
+        print(f"خطأ أثناء محاولة إصلاح الكوكيز: {e}")
+
+
 def make_job_dir(user_id: int) -> Path:
     job_dir = BASE_DOWNLOAD_DIR / f"{user_id}_{int(time.time())}"
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -102,20 +128,23 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     out_tmpl = str(job_dir / "%(title).80s [%(id)s].%(ext)s")
 
-    # إعدادات مشتركة للتمويه وتخطي حظر يوتيوب
+    # تشغيل مصلح الكوكيز التلقائي قبل البدء
+    fix_cookies_format(COOKIES_FILE)
+
+    # إعدادات التمويه المتقدمة (تطبيق iOS هو الأنجح حالياً في تخطي الحظر)
     base_ydl_opts = {
         "outtmpl": out_tmpl,
         "quiet": True,
         "noplaylist": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "web"],
+                "player_client": ["ios"],  # التمويه كجهاز آيفون لتخطي حظر السيرفرات
                 "skip": ["webpage"]
             }
         }
     }
 
-    # التحقق من وجود ملف الكوكيز وتطبيقه تلقائياً
+    # تطبيق ملف الكوكيز بعدما تم إصلاحه
     if os.path.exists(COOKIES_FILE):
         base_ydl_opts["cookiefile"] = COOKIES_FILE
 
@@ -184,12 +213,11 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_message.delete()
 
     except Exception as e:
-        # فحص ذكي لملف الكوكيز لمساعدتك في معرفة السبب
         cookie_diagnostic = ""
         if not os.path.exists(COOKIES_FILE):
-            cookie_diagnostic = "\n\n⚠️ تشخيص: البوت لا يرى ملف cookies.txt! تأكد من إنشاء الملف في المجلد الرئيسي وإعادة تشغيل البوت."
+            cookie_diagnostic = "\n\n⚠️ تشخيص: البوت لا يرى ملف cookies.txt!"
         else:
-            cookie_diagnostic = "\n\nℹ️ تشخيص: ملف cookies.txt موجود، ولكن قد تكون الكوكيز منتهية الصلاحية أو تم نسخها بشكل خاطئ."
+            cookie_diagnostic = "\n\nℹ️ تشخيص: ملف cookies.txt موجود، وتمت محاولة إصلاحه برمجياً."
 
         await status_message.edit_text(
             f"❌ حدث خطأ أثناء المعالجة:\n{short_error(e)}{cookie_diagnostic}"
