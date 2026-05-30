@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import yt_dlp
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, BotCommandScopeDefault, BotCommandScopeChat
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, BotCommand, BotCommandScopeDefault, BotCommandScopeChat
 from telegram.constants import ChatAction
 from telegram.error import BadRequest, TimedOut, NetworkError, RetryAfter
 from telegram.ext import (
@@ -519,6 +519,25 @@ async def edit_or_send(query, text: str, reply_markup=None):
 # الأزرار
 # ==========================================================
 
+def links_reply_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [
+            [
+                KeyboardButton("🎮 PlayZone"),
+                KeyboardButton("🌍 الموقع"),
+            ],
+            [
+                KeyboardButton("🤖 البوت"),
+                KeyboardButton("👨‍💻 المطور"),
+            ],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=False,
+        is_persistent=True,
+        input_field_placeholder="أرسل رابط التحميل هنا..."
+    )
+
+
 def download_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
@@ -772,6 +791,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=admin_welcome_keyboard() if is_admin(update.effective_user.id) else welcome_keyboard(),
     )
 
+    await update.message.reply_text(
+        "🔗 روابطنا الرسمية في الأزرار بالأسفل.",
+        reply_markup=links_reply_keyboard(),
+        disable_web_page_preview=True,
+    )
+
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(update.effective_user)
 
@@ -803,6 +828,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
     text = update.message.text.strip()
+
+    # أزرار الروابط الثابتة أسفل المحادثة
+    if text == "🎮 PlayZone":
+        await update.message.reply_text(
+            "🎮 PlayZone الرسمي:\n"
+            "https://www.instagram.com/p1ay.zone?igsh=MWpjdGpodGRqeXdwdg==",
+            reply_markup=links_reply_keyboard(),
+            disable_web_page_preview=True,
+        )
+        return
+
+    if text == "🌍 الموقع":
+        await update.message.reply_text(
+            "🌍 الموقع الرسمي:\n"
+            "https://tasmg1.github.io/tasmg/",
+            reply_markup=links_reply_keyboard(),
+            disable_web_page_preview=True,
+        )
+        return
+
+    if text == "🤖 البوت":
+        await update.message.reply_text(
+            "🤖 بوت PlayZone:\n"
+            "https://t.me/P1ay_Z0ne_Bot",
+            reply_markup=links_reply_keyboard(),
+            disable_web_page_preview=True,
+        )
+        return
+
+    if text == "👨‍💻 المطور":
+        await update.message.reply_text(
+            "👨‍💻 حساب المطور:\n"
+            "https://www.instagram.com/ta_smg?igsh=aTB5dTJzdmRtaTA4&utm_source=qr",
+            reply_markup=links_reply_keyboard(),
+            disable_web_page_preview=True,
+        )
+        return
 
     # وضع كتابة التنبيه للأدمن
     if is_admin(user_id) and context.user_data.get("awaiting_broadcast"):
