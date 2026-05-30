@@ -839,7 +839,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if text == "🌍 الموقع":
+    if text == "🌍 موقع PlayZone":
         await update.message.reply_text(
             "🌍 الموقع الرسمي:\n"
             "https://tasmg1.github.io/tasmg/",
@@ -848,7 +848,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if text == "🤖 البوت":
+    if text == "🤖 بوت PlayZone ":
         await update.message.reply_text(
             "🤖 بوت PlayZone:\n"
             "https://t.me/P1ay_Z0ne_Bot",
