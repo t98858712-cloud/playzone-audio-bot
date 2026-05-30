@@ -524,10 +524,10 @@ def links_reply_keyboard() -> ReplyKeyboardMarkup:
         [
             [
                 KeyboardButton("🎮 PlayZone"),
-                KeyboardButton("🌍 الموقع"),
+                KeyboardButton("🌍 موقع PlayZone"),
             ],
             [
-                KeyboardButton("🤖 البوت"),
+                KeyboardButton("🤖 بوت PlayZone "),
                 KeyboardButton("👨‍💻 المطور"),
             ],
         ],
