@@ -15,41 +15,11 @@ from telegram.ext import (
     filters,
 )
 
-# التوكن من Railway Variables
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-
 BASE_DOWNLOAD_DIR = Path("./downloads")
 BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
-
-# حد تيليجرام للبوتات العادية 50MB
 MAX_TELEGRAM_SIZE = 50 * 1024 * 1024
-COOKIES_FILE = "cookies.txt"  # اسم ملف الكوكيز
-
-
-def fix_cookies_format(file_path: str):
-    """دالة ذكية لإصلاح التخريب الذي يحدث للمسافات عند اللصق من الموبايل"""
-    path = Path(file_path)
-    if not path.exists():
-        return
-    try:
-        content = path.read_text(encoding="utf-8")
-        # إذا كان الملف يحتوي على مسافات عادية ولا يحتوي على Tabs، نقوم بإصلاحه
-        if " " in content and "\t" not in content:
-            lines = content.splitlines()
-            fixed_lines = []
-            for line in lines:
-                if line.strip() and not line.startswith("#"):
-                    parts = line.split()
-                    if len(parts) >= 5:  # التأكد من أنه سطر كوكيز حقيقي
-                        fixed_lines.append("\t".join(parts))
-                    else:
-                        fixed_lines.append(line)
-                else:
-                    fixed_lines.append(line)
-            path.write_text("\n".join(fixed_lines), encoding="utf-8")
-            print("⚙️ تم إصلاح تنسيق ملف cookies.txt تلقائياً وتحويل المسافات إلى Tabs.")
-    except Exception as e:
-        print(f"خطأ أثناء محاولة إصلاح الكوكيز: {e}")
+COOKIES_FILE = "cookies.txt"
 
 
 def make_job_dir(user_id: int) -> Path:
@@ -81,33 +51,18 @@ def short_error(e: Exception) -> str:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "👋 أهلاً بك في بوت التحميل.\n\n"
-        "أرسل رابط يوتيوب، ثم اختر الصيغة المطلوبة.\n\n"
-        "⚠️ استخدم البوت فقط مع المحتوى الذي تملك حق تحميله أو استخدامه."
-    )
+    await update.message.reply_text("👋 أهلاً بك في بوت التحميل.\n\nأرسل رابط يوتيوب للبدء.")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
-
     if "youtube.com" not in url and "youtu.be" not in url:
         await update.message.reply_text("❌ هذا لا يبدو كرابط يوتيوب صحيح.")
         return
 
     context.user_data["current_url"] = url
-
-    keyboard = [
-        [
-            InlineKeyboardButton("🎵 صوت MP3", callback_data="mp3"),
-            InlineKeyboardButton("🎬 فيديو MP4", callback_data="mp4"),
-        ]
-    ]
-
-    await update.message.reply_text(
-        "اختر الصيغة التي تريد تحميلها:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
+    keyboard = [[InlineKeyboardButton("🎵 صوت MP3", callback_data="mp3"), InlineKeyboardButton("🎬 فيديو MP4", callback_data="mp4")]]
+    await update.message.reply_text("اختر الصيغة:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -118,131 +73,74 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = context.user_data.get("current_url")
 
     if not url:
-        await query.edit_message_text("❌ انتهت صلاحية الطلب. أرسل الرابط مرة أخرى.")
+        await query.edit_message_text("❌ انتهت صلاحية الطلب.")
         return
 
     user_id = query.from_user.id
     job_dir = make_job_dir(user_id)
-
     status_message = await query.edit_message_text("⏳ جاري تجهيز الطلب...")
-
     out_tmpl = str(job_dir / "%(title).80s [%(id)s].%(ext)s")
 
-    # تشغيل مصلح الكوكيز التلقائي قبل البدء
-    fix_cookies_format(COOKIES_FILE)
-
-    # إعدادات التمويه المتقدمة (تطبيق iOS هو الأنجح حالياً في تخطي الحظر)
+    # إعدادات التمويه السحرية الجديدة (تخطي الحظر بدون كوكيز)
     base_ydl_opts = {
         "outtmpl": out_tmpl,
         "quiet": True,
         "noplaylist": True,
+        "impersonate": "chrome",  # تقمص متصفح كروم حقيقي بكامل هويته
         "extractor_args": {
             "youtube": {
-                "player_client": ["ios"],  # التمويه كجهاز آيفون لتخطي حظر السيرفرات
+                "player_client": ["tv", "ios"],  # محاكاة عملاء يوتيوب الأكثر تسامحاً مع الحظر
                 "skip": ["webpage"]
             }
         }
     }
 
-    # تطبيق ملف الكوكيز بعدما تم إصلاحه
     if os.path.exists(COOKIES_FILE):
         base_ydl_opts["cookiefile"] = COOKIES_FILE
 
     if choice == "mp3":
-        ydl_opts = {
-            **base_ydl_opts,
-            "format": "bestaudio/best",
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "128",
-                }
-            ],
-        }
+        ydl_opts = {**base_ydl_opts, "format": "bestaudio/best", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "128"}]}
     else:
-        ydl_opts = {
-            **base_ydl_opts,
-            "format": "best[ext=mp4][height<=480]/best[height<=480]/best",
-            "merge_output_format": "mp4",
-        }
+        ydl_opts = {**base_ydl_opts, "format": "best[ext=mp4][height<=480]/best[height<=480]", "merge_output_format": "mp4"}
 
     loop = asyncio.get_running_loop()
-
     try:
-        await status_message.edit_text("📥 جاري التحميل والمعالجة...")
-
-        def download_file():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                return ydl.extract_info(url, download=True)
-
-        info = await loop.run_in_executor(None, download_file)
-
+        await status_message.edit_text("📥 جاري التحميل من يوتيوب...")
+        info = await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(ydl_opts).extract_info(url, download=True))
+        
         title = info.get("title", "ملف")
         file_path = find_downloaded_file(job_dir)
 
         if not file_path or not file_path.exists():
-            await status_message.edit_text("❌ لم يتم العثور على الملف بعد التحميل.")
+            await status_message.edit_text("❌ لم يتم العثور على الملف.")
             return
 
-        file_size = file_path.stat().st_size
-
-        if file_size > MAX_TELEGRAM_SIZE:
-            size_mb = round(file_size / 1024 / 1024, 2)
-            await status_message.edit_text(
-                f"❌ حجم الملف {size_mb}MB وهذا أكبر من حد تيليجرام للبوتات العادية 50MB.\n\n"
-                "جرّب فيديو أقصر أو جودة أقل."
-            )
+        if file_path.stat().st_size > MAX_TELEGRAM_SIZE:
+            await status_message.edit_text("❌ حجم الملف أكبر من 50MB حد تيليجرام.")
             return
 
-        await status_message.edit_text("📤 جاري رفع الملف إلى تيليجرام...")
-
+        await status_message.edit_text("📤 جاري الرفع إلى تيليجرام...")
         with open(file_path, "rb") as f:
             if choice == "mp3":
-                await query.message.reply_audio(
-                    audio=f,
-                    title=title,
-                    caption="✅ تم تحميل الصوت بنجاح",
-                )
+                await query.message.reply_audio(audio=f, title=title, caption="✅ تم تحميل الصوت")
             else:
-                await query.message.reply_video(
-                    video=f,
-                    caption=f"✅ {title}",
-                )
-
+                await query.message.reply_video(video=f, caption=f"✅ {title}")
         await status_message.delete()
 
     except Exception as e:
-        cookie_diagnostic = ""
-        if not os.path.exists(COOKIES_FILE):
-            cookie_diagnostic = "\n\n⚠️ تشخيص: البوت لا يرى ملف cookies.txt!"
-        else:
-            cookie_diagnostic = "\n\nℹ️ تشخيص: ملف cookies.txt موجود، وتمت محاولة إصلاحه برمجياً."
-
-        await status_message.edit_text(
-            f"❌ حدث خطأ أثناء المعالجة:\n{short_error(e)}{cookie_diagnostic}"
-        )
-        print(f"Error: {e}")
-
+        await status_message.edit_text(f"❌ حدث خطأ أثناء المعالجة:\n{short_error(e)}")
     finally:
         clean_job_dir(job_dir)
         context.user_data.pop("current_url", None)
 
 
 def main():
-    if not TOKEN:
-        print("❌ خطأ: لم يتم العثور على TELEGRAM_TOKEN في Railway Variables")
-        return
-
+    if not TOKEN: return
     app = Application.builder().token(TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(button_click))
-
-    print("🚀 البوت يعمل الآن...")
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
