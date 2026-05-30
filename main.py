@@ -360,7 +360,7 @@ def subscription_keyboard() -> InlineKeyboardMarkup:
 def choose_format_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🎵 صوت MP3", callback_data="download_mp3"),
+            InlineKeyboardButton("🎵 صوت", callback_data="download_mp3"),
             InlineKeyboardButton("🎬 فيديو MP4", callback_data="download_mp4"),
         ],
         [InlineKeyboardButton("❌ إلغاء", callback_data="cancel")],
@@ -511,16 +511,11 @@ def build_ydl_options(choice: str, job_dir: Path, progress_data: dict):
         )
 
     if choice == "mp3":
+        # مثل الكود الأساسي: تحميل أفضل صوت بدون تحويل MP3
+        # هذا يتجنب خطأ ffmpeg / ffprobe على Railway
         return {
             **base_opts,
             "format": "bestaudio[ext=m4a]/bestaudio/best",
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "192",
-                }
-            ],
         }
 
     if choice == "mp4":
@@ -576,7 +571,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📘 المساعدة\n\n"
         "أرسل رابط يوتيوب فقط، وستظهر لك أزرار واضحة:\n\n"
-        "🎵 صوت MP3\n"
+        "🎵 صوت\n"
         "🎬 فيديو MP4\n\n"
         f"حد تيليجرام: {format_size(MAX_TELEGRAM_SIZE)}\n"
         "يجب وجود cookies.txt بجانب main.py."
