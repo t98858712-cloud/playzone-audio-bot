@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import yt_dlp
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, BotCommandScopeDefault, BotCommandScopeChat
 from telegram.constants import ChatAction
 from telegram.error import BadRequest, TimedOut, NetworkError, RetryAfter
 from telegram.ext import (
@@ -597,10 +597,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "👋 أهلاً بك في بوت التحميل الشامل.\n\n"
-        "أرسل رابط فيديو أو صوت وسأجهزه لك بخيارات واضحة.\n\n"
+        "طريقة الاستخدام بسيطة جداً:\n"
+        "1️⃣ أرسل الرابط.\n"
+        "2️⃣ اختر صوت أو فيديو أو ملف.\n"
+        "3️⃣ انتظر التحميل والإرسال.\n\n"
         "يدعم غالباً:\n"
         "YouTube • TikTok • Instagram • Facebook • X • SoundCloud وغيرها.\n\n"
-        "✅ الخطوة التالية: أرسل الرابط مباشرة.",
+        "✅ أرسل الرابط الآن للبدء.",
         reply_markup=admin_welcome_keyboard() if is_admin(update.effective_user.id) else welcome_keyboard(),
         disable_web_page_preview=True,
     )
@@ -621,7 +624,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("broadcast_text", None)
 
     await update.message.reply_text(
-        "🛠 لوحة الإدارة الضرورية",
+        "🛠 لوحة الإدارة الضرورية\n\nاختر ما تحتاجه فقط:",
         reply_markup=admin_keyboard(),
     )
 
@@ -761,7 +764,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("broadcast_text", None)
 
         await query.message.reply_text(
-            "🛠 لوحة الإدارة الضرورية",
+            "🛠 لوحة الإدارة الضرورية\n\nاختر ما تحتاجه فقط:",
             reply_markup=admin_keyboard(),
         )
         return
@@ -878,6 +881,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data.pop("broadcast_text", None)
         await query.message.reply_text(
             "📢 اكتب الآن نص التنبيه الذي تريد إرساله للمستخدمين.\n\n"
+            "سيتم إرسال النص كما تكتبه تماماً.\n\n"
             "مثال:\n"
             "تم تحديث البوت ✅"
         )
@@ -1108,13 +1112,41 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "اضغط /start ثم أرسل رابط التحميل.\n\n"
-        "لا تحتاج أي أوامر أخرى كمستخدم.",
+        "كمستخدم لا تحتاج أي أوامر أخرى.",
         reply_markup=welcome_keyboard(),
     )
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.exception("Telegram error:", exc_info=context.error)
+
+
+# ==========================================================
+# ترتيب السلاشات في تيليجرام
+# ==========================================================
+
+async def setup_bot_commands(app):
+    # المستخدم العادي يرى /start فقط
+    await app.bot.set_my_commands(
+        [
+            BotCommand("start", "بدء استخدام البوت"),
+        ],
+        scope=BotCommandScopeDefault(),
+    )
+
+    # الأدمن يرى /start و /admin فقط
+    for admin_id in ADMIN_IDS:
+        try:
+            await app.bot.set_my_commands(
+                [
+                    BotCommand("start", "بدء استخدام البوت"),
+                    BotCommand("admin", "لوحة الإدارة"),
+                ],
+                scope=BotCommandScopeChat(chat_id=admin_id),
+            )
+        except Exception as e:
+            logger.warning(f"تعذر ضبط أوامر الأدمن {admin_id}: {e}")
+
 
 
 # ==========================================================
@@ -1131,6 +1163,7 @@ def main():
         Application
         .builder()
         .token(TOKEN)
+        .post_init(setup_bot_commands)
         .connect_timeout(30)
         .read_timeout(30)
         .write_timeout(30)
