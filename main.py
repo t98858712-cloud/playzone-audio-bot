@@ -58,7 +58,7 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-logger = logging.getLogger("PlayZoneFinalBot")
+logger = logging.getLogger("PlayZoneBot")
 
 
 # ==========================================================
@@ -125,6 +125,8 @@ def load_stats():
         "file": 0,
         "bytes": 0,
         "last_error": "",
+        "broadcast_sent": 0,
+        "broadcast_failed": 0,
     }
 
     data = load_json(STATS_FILE, default)
@@ -392,7 +394,17 @@ def admin_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🍪 الكوكيز", callback_data="admin_cookies"),
         ],
         [
+            InlineKeyboardButton("📢 إرسال تنبيه", callback_data="admin_broadcast"),
             InlineKeyboardButton("🧹 تنظيف", callback_data="admin_clean"),
+        ],
+    ])
+
+
+def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ إرسال الآن", callback_data="broadcast_confirm"),
+            InlineKeyboardButton("❌ إلغاء", callback_data="broadcast_cancel"),
         ],
     ])
 
@@ -538,7 +550,7 @@ def download_sync(url: str, choice: str, job_dir: Path, progress_data: dict):
 
 
 # ==========================================================
-# أوامر المستخدم الضرورية
+# أوامر المستخدم
 # ==========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -550,37 +562,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "أرسل أي رابط فيديو أو صوت من منصة مدعومة، وسأعرض لك خيارات التحميل.\n\n"
         "يدعم غالباً:\n"
         "YouTube • TikTok • Instagram • Facebook • X • SoundCloud وغيرها.\n\n"
-        "الأوامر:\n"
-        "/help للمساعدة\n"
-        "/status حالة البوت"
-    )
-
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    register_user(update.effective_user)
-
-    await update.message.reply_text(
-        "📘 طريقة الاستخدام:\n\n"
-        "1️⃣ أرسل الرابط.\n"
-        "2️⃣ اختر نوع التحميل.\n"
-        "3️⃣ انتظر حتى يصلك الملف.\n\n"
-        "الخيارات:\n"
-        "🎵 صوت\n"
-        "🎬 فيديو\n"
-        "📁 ملف\n\n"
-        f"📦 حد الملف: {format_size(MAX_TELEGRAM_SIZE)}\n"
-        "🍪 cookies.txt اختياري، لكنه يساعد مع بعض المنصات."
-    )
-
-
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    register_user(update.effective_user)
-
-    await update.message.reply_text(
-        "📊 حالة البوت:\n\n"
-        f"🍪 cookies.txt: {'موجود ✅' if has_cookies_file() else 'غير موجود / اختياري ⚠️'}\n"
-        f"📥 التحميل النشط: {len(ACTIVE_USERS)}\n"
-        f"📦 حد الملف: {format_size(MAX_TELEGRAM_SIZE)}"
+        "أرسل الرابط الآن للبدء ✅"
     )
 
 
@@ -591,37 +573,13 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
         return
 
+    context.user_data.pop("awaiting_broadcast", None)
+    context.user_data.pop("broadcast_text", None)
+
     await update.message.reply_text(
         "🛠 لوحة الإدارة الضرورية",
         reply_markup=admin_keyboard(),
     )
-
-
-async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    register_user(update.effective_user)
-
-    if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
-        return
-
-    text = " ".join(context.args).strip()
-
-    if not text:
-        await update.message.reply_text("استخدم الأمر هكذا:\n/broadcast نص الرسالة")
-        return
-
-    sent = 0
-    failed = 0
-
-    for uid in all_user_ids():
-        try:
-            await context.bot.send_message(chat_id=uid, text=text)
-            sent += 1
-            await asyncio.sleep(0.05)
-        except Exception:
-            failed += 1
-
-    await update.message.reply_text(f"✅ تم الإرسال: {sent}\n❌ فشل: {failed}")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -632,13 +590,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(update.effective_user)
 
     user_id = update.effective_user.id
-    url = update.message.text.strip()
+    text = update.message.text.strip()
+
+    # وضع كتابة التنبيه للأدمن
+    if is_admin(user_id) and context.user_data.get("awaiting_broadcast"):
+        context.user_data["awaiting_broadcast"] = False
+        context.user_data["broadcast_text"] = text
+
+        await update.message.reply_text(
+            "📢 معاينة التنبيه:\n\n"
+            f"{text}\n\n"
+            f"سيتم إرساله إلى {len(all_user_ids())} مستخدم.\n"
+            "هل تريد الإرسال الآن؟",
+            reply_markup=broadcast_confirm_keyboard(),
+        )
+        return
 
     if user_id in ACTIVE_USERS:
         await update.message.reply_text("⏳ لديك تحميل يعمل الآن، انتظر حتى ينتهي.")
         return
 
-    if not is_valid_url(url):
+    if not is_valid_url(text):
         await update.message.reply_text(
             "❌ أرسل رابطاً صحيحاً يبدأ بـ http أو https.\n\n"
             "مثال:\n"
@@ -652,7 +624,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         loop = asyncio.get_running_loop()
-        info = await loop.run_in_executor(None, lambda: extract_info_sync(url))
+        info = await loop.run_in_executor(None, lambda: extract_info_sync(text))
 
         title = safe_title(info.get("title", "ملف ميديا"))
         duration = info.get("duration")
@@ -661,7 +633,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         extractor = safe_title(info.get("extractor_key", "منصة"), 40)
         thumb = get_thumbnail(info)
 
-        context.user_data["current_url"] = url
+        context.user_data["current_url"] = text
         context.user_data["created_at"] = time.time()
 
         stat_inc("requests", 1)
@@ -723,12 +695,17 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "cancel":
-        context.user_data.clear()
+        context.user_data.pop("current_url", None)
+        context.user_data.pop("created_at", None)
         await query.message.reply_text("✅ تم إلغاء الطلب. أرسل رابطاً جديداً متى أردت.")
         return
 
     if data.startswith("admin_"):
         await handle_admin_button(update, context)
+        return
+
+    if data in ["broadcast_confirm", "broadcast_cancel"]:
+        await handle_broadcast_button(update, context)
         return
 
     choices = {
@@ -770,7 +747,9 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"🎵 الصوت: {stats.get('audio', 0)}\n"
             f"🎬 الفيديو: {stats.get('video', 0)}\n"
             f"📁 الملفات: {stats.get('file', 0)}\n"
-            f"📦 الحجم المرسل: {format_size(stats.get('bytes', 0))}"
+            f"📦 الحجم المرسل: {format_size(stats.get('bytes', 0))}\n"
+            f"📢 تنبيهات ناجحة: {stats.get('broadcast_sent', 0)}\n"
+            f"⚠️ تنبيهات فاشلة: {stats.get('broadcast_failed', 0)}"
         )
         return
 
@@ -793,6 +772,61 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
         cleanup_old_downloads()
         await query.message.reply_text("✅ تم تنظيف الملفات القديمة.")
         return
+
+    if data == "admin_broadcast":
+        context.user_data["awaiting_broadcast"] = True
+        context.user_data.pop("broadcast_text", None)
+        await query.message.reply_text(
+            "📢 اكتب الآن نص التنبيه الذي تريد إرساله للمستخدمين.\n\n"
+            "مثال:\n"
+            "تم تحديث البوت ✅"
+        )
+        return
+
+
+async def handle_broadcast_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    if not is_admin(query.from_user.id):
+        await query.message.reply_text("❌ هذا الزر للأدمن فقط.")
+        return
+
+    if query.data == "broadcast_cancel":
+        context.user_data.pop("broadcast_text", None)
+        context.user_data.pop("awaiting_broadcast", None)
+        await query.message.reply_text("✅ تم إلغاء إرسال التنبيه.")
+        return
+
+    text = context.user_data.get("broadcast_text")
+
+    if not text:
+        await query.message.reply_text("❌ لا يوجد نص تنبيه. اضغط إرسال تنبيه من لوحة الأدمن واكتب الرسالة.")
+        return
+
+    await query.message.reply_text("📢 جاري إرسال التنبيه للمستخدمين...")
+
+    sent = 0
+    failed = 0
+
+    for uid in all_user_ids():
+        try:
+            await context.bot.send_message(chat_id=uid, text=text)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            failed += 1
+
+    stat_inc("broadcast_sent", sent)
+    stat_inc("broadcast_failed", failed)
+
+    context.user_data.pop("broadcast_text", None)
+    context.user_data.pop("awaiting_broadcast", None)
+
+    await query.message.reply_text(
+        "✅ انتهى إرسال التنبيه.\n\n"
+        f"تم الإرسال: {sent}\n"
+        f"فشل: {failed}"
+    )
 
 
 async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, choice: str):
@@ -960,7 +994,8 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ أمر غير معروف. استخدم /help")
+    # لا نعرض سلاشات للمستخدم، فقط نوجهه للبداية
+    await update.message.reply_text("اضغط /start ثم أرسل رابط التحميل.")
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -988,12 +1023,10 @@ def main():
         .build()
     )
 
-    # السلاشات الضرورية فقط
+    # للمستخدم: /start فقط
+    # للأدمن: /admin فقط
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("admin", admin_command))
-    app.add_handler(CommandHandler("broadcast", broadcast_command))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(button_click))
