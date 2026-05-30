@@ -78,17 +78,17 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = query.from_user.id
     job_dir = make_job_dir(user_id)
-    status_message = await query.edit_message_text("⏳ جاري تجهيز الطلب...")
+    status_message = await query.edit_message_text("⏳ جاري تجهيز الطلب واكتشاف السيرفر...")
     out_tmpl = str(job_dir / "%(title).80s [%(id)s].%(ext)s")
 
-    # استخدام عميل الأندرويد لحل مشكلة الـ DRM نهائياً وتجنب الحظر
+    # تهيئة إعدادات الأندرويد الأكثر استقراراً لتفادي الـ DRM والحظر
     base_ydl_opts = {
         "outtmpl": out_tmpl,
         "quiet": True,
         "noplaylist": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android"],  # هذا العميل يمنع مشاكل الحماية والتشفير الرقمي
+                "player_client": ["android"],
                 "skip": ["webpage"]
             }
         }
@@ -98,30 +98,42 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         base_ydl_opts["cookiefile"] = COOKIES_FILE
 
     if choice == "mp3":
-        ydl_opts = {**base_ydl_opts, "format": "bestaudio/best", "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "128"}]}
+        ydl_opts = {
+            **base_ydl_opts, 
+            "format": "ba/b",  # سحب الصوت الأصلي المتاح بدون تعقيد
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio", 
+                "preferredcodec": "mp3", 
+                "preferredquality": "128"
+            }]
+        }
     else:
-        ydl_opts = {**base_ydl_opts, "format": "best[ext=mp4][height<=480]/best[height<=480]", "merge_output_format": "mp4"}
+        ydl_opts = {
+            **base_ydl_opts, 
+            "format": "worstvideo[ext=mp4]+ba[ext=m4a]/best[ext=mp4]/best", # اختيار صيغة MP4 جاهزة ومباشرة لتفادي مشاكل الدمج المعقدة
+            "merge_output_format": "mp4"
+        }
 
     loop = asyncio.get_running_loop()
     try:
-        await status_message.edit_text("📥 جاري التحميل والمعالجة...")
+        await status_message.edit_text("📥 جاري التحميل والمعالجة باستخدام FFmpeg...")
         info = await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(ydl_opts).extract_info(url, download=True))
         
         title = info.get("title", "ملف")
         file_path = find_downloaded_file(job_dir)
 
         if not file_path or not file_path.exists():
-            await status_message.edit_text("❌ لم يتم العثور على الملف.")
+            await status_message.edit_text("❌ لم يتم العثور على الملف المعالج.")
             return
 
         if file_path.stat().st_size > MAX_TELEGRAM_SIZE:
-            await status_message.edit_text("❌ حجم الملف أكبر من 50MB حد تيليجرام البوتات العادية.")
+            await status_message.edit_text("❌ حجم الملف أكبر من 50MB (حد تيليجرام للبوتات العادية).")
             return
 
         await status_message.edit_text("📤 جاري الرفع إلى تيليجرام...")
         with open(file_path, "rb") as f:
             if choice == "mp3":
-                await query.message.reply_audio(audio=f, title=title, caption="✅ تم تحميل الصوت")
+                await query.message.reply_audio(audio=f, title=title, caption="✅ تم تحميل الصوت بنجاح")
             else:
                 await query.message.reply_video(video=f, caption=f"✅ {title}")
         await status_message.delete()
