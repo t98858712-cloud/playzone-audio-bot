@@ -340,6 +340,70 @@ def get_thumbnail(info: dict) -> str:
         return ""
 
 
+def get_media_author(info: dict) -> str:
+    for key in ["artist", "uploader", "channel", "creator", "playlist_uploader"]:
+        value = info.get(key)
+        if value:
+            return safe_title(value, 60)
+    return "غير معروف"
+
+
+def build_preview_caption(info: dict, url: str) -> str:
+    title = safe_title(info.get("title", "ملف ميديا"), 90)
+    duration = format_duration(info.get("duration")) if info.get("duration") else "غير معروف"
+    size = estimate_size(info)
+    extractor = safe_title(info.get("extractor_key") or platform_name_from_url(url), 40)
+    author = get_media_author(info)
+    return (
+        f"🎬 {title}\n\n"
+        f"👤 {author}\n"
+        f"🌐 {extractor}\n"
+        f"⏱️ {duration}\n"
+        f"📦 {size}\n\n"
+        "اختر نوع التحميل:"
+    )
+
+
+def build_result_caption(title: str, extractor: str, duration, file_size: int, author: str = "") -> str:
+    lines = [
+        "✅ تم التحميل بنجاح",
+        f"📌 {title}",
+    ]
+    if author and author != "غير معروف":
+        lines.append(f"👤 {author}")
+    if extractor:
+        lines.append(f"🌐 {extractor}")
+    lines.append(f"⏱️ {format_duration(duration) if duration else 'غير معروف'}")
+    lines.append(f"📦 {format_size(file_size)}")
+    return "\n".join(lines)
+
+
+async def send_preview_card(update: Update, context: ContextTypes.DEFAULT_TYPE, info: dict, url: str):
+    thumb = get_thumbnail(info)
+    caption = build_preview_caption(info, url)
+    await delete_previous_ui(update, context)
+
+    if thumb:
+        try:
+            msg = await update.message.reply_photo(
+                photo=thumb,
+                caption=caption,
+                reply_markup=download_keyboard(),
+            )
+            await remember_ui_message(context, msg.message_id)
+            return msg
+        except Exception:
+            pass
+
+    msg = await update.message.reply_text(
+        caption,
+        reply_markup=download_keyboard(),
+        disable_web_page_preview=True,
+    )
+    await remember_ui_message(context, msg.message_id)
+    return msg
+
+
 def progress_bar(percent: float) -> str:
     try:
         percent = max(0, min(100, float(percent)))
@@ -436,11 +500,11 @@ async def edit_or_send(query, text: str, reply_markup=None):
 def download_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🎵 صوت أصلي", callback_data="download_audio"),
-            InlineKeyboardButton("🎬 فيديو", callback_data="download_video"),
+            InlineKeyboardButton("🎵 ملف صوتي", callback_data="download_audio"),
+            InlineKeyboardButton("🎙 مقطع صوتي", callback_data="download_voice"),
         ],
         [
-            InlineKeyboardButton("📁 ملف", callback_data="download_file"),
+            InlineKeyboardButton("🎬 مقطع فيديو", callback_data="download_video"),
             InlineKeyboardButton("❌ إلغاء", callback_data="cancel"),
         ],
     ])
@@ -629,8 +693,8 @@ async def progress_updater(status_message, progress_data: dict, stop_event: asyn
 def build_download_options(url: str, choice: str, job_dir: Path, progress_data: dict):
     opts = base_ydl_opts(job_dir, progress_data)
 
-    if choice == "audio":
-        # بدون تحويل MP3 حتى لا يحتاج ffmpeg
+    if choice in ["audio", "voice"]:
+        # أفضل صوت متاح من المصدر بدون تحويل لتبقى الجودة أصلية
         opts["format"] = "bestaudio/best"
 
     elif choice == "video":
@@ -733,74 +797,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # الوضع السريع:
-    # لا نستخدم yt-dlp هنا حتى لا يتأخر المستخدم.
-    # نخزن الرابط ونعرض خيارات التحميل فوراً.
-    if FAST_LINK_CHECK:
-        context.user_data["current_url"] = text
-        context.user_data["created_at"] = time.time()
-        stat_inc("requests", 1)
-
-        await send_clean_message(
-            update,
-            context,
-            "✅ تم استلام الرابط.\n\n"
-            "اختر نوع التحميل:",
-            reply_markup=download_keyboard(),
-        )
-        return
-
-    # الوضع القديم إذا عطلت FAST_LINK_CHECK من Railway
-    status = await update.message.reply_text("🔍 جاري فحص الرابط...")
+    status = await update.message.reply_text("🔍 جاري جلب الصورة ومعلومات الملف...")
 
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, lambda: extract_info_sync(text))
 
-        title = safe_title(info.get("title", "ملف ميديا"))
-        duration = info.get("duration")
-        duration_text = format_duration(duration) if duration else "غير معروف"
-        size = estimate_size(info)
-        extractor = safe_title(info.get("extractor_key", "منصة"), 40)
-        thumb = get_thumbnail(info)
-
         context.user_data["current_url"] = text
         context.user_data["created_at"] = time.time()
+        context.user_data["preview_title"] = safe_title(info.get("title", "ملف ميديا"))
+        context.user_data["preview_author"] = get_media_author(info)
+        context.user_data["preview_platform"] = safe_title(info.get("extractor_key") or platform_name_from_url(text), 40)
+        context.user_data["preview_duration"] = info.get("duration") or 0
 
         stat_inc("requests", 1)
-
-        caption = (
-            f"✅ تم جلب الرابط\n\n"
-            f"📌 {title}\n"
-            f"🌐 المنصة: {extractor}\n"
-            f"⏱️ المدة: {duration_text}\n"
-            f"📦 الحجم التقريبي: {size}\n\n"
-            "اختر نوع التحميل:"
-        )
 
         try:
             await status.delete()
         except Exception:
             pass
 
-        if thumb:
-            try:
-                msg = await update.message.reply_photo(
-                    photo=thumb,
-                    caption=caption,
-                    reply_markup=download_keyboard(),
-                )
-                await remember_ui_message(context, msg.message_id)
-                return
-            except Exception:
-                pass
-
-        msg = await update.message.reply_text(
-            caption,
-            reply_markup=download_keyboard(),
-            disable_web_page_preview=True,
-        )
-        await remember_ui_message(context, msg.message_id)
+        await send_preview_card(update, context, info, text)
 
     except Exception as e:
         err = short_error(e)
@@ -889,8 +906,8 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     choices = {
         "download_audio": "audio",
+        "download_voice": "voice",
         "download_video": "video",
-        "download_file": "file",
     }
 
     if data not in choices:
@@ -1047,14 +1064,16 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
             lambda: download_sync(url, choice, job_dir, progress_data)
         )
 
-        title = "ملف ميديا"
-        duration = None
-        extractor = ""
+        title = context.user_data.get("preview_title") or "ملف ميديا"
+        duration = context.user_data.get("preview_duration") or None
+        extractor = context.user_data.get("preview_platform") or ""
+        author = context.user_data.get("preview_author") or ""
 
         if isinstance(info, dict):
-            title = safe_title(info.get("title", "ملف ميديا"))
-            duration = info.get("duration")
-            extractor = safe_title(info.get("extractor_key", ""), 40)
+            title = safe_title(info.get("title", title))
+            duration = info.get("duration") or duration
+            extractor = safe_title(info.get("extractor_key") or extractor, 40)
+            author = get_media_author(info)
 
         file_path = find_downloaded_file(job_dir)
 
@@ -1096,7 +1115,7 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
         )
 
         upload_action = ChatAction.UPLOAD_DOCUMENT
-        if choice == "audio":
+        if choice in ["audio", "voice"]:
             upload_action = ChatAction.UPLOAD_VOICE
         elif choice == "video":
             upload_action = ChatAction.UPLOAD_VIDEO
@@ -1111,9 +1130,28 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
                 await query.message.reply_audio(
                     audio=f,
                     title=title,
+                    performer=author if author and author != "غير معروف" else None,
                     caption=caption,
                     duration=int(duration) if duration else None,
                 )
+                stat_inc("audio", 1)
+
+            elif choice == "voice":
+                try:
+                    await query.message.reply_voice(
+                        voice=f,
+                        caption=caption,
+                        duration=int(duration) if duration else None,
+                    )
+                except Exception:
+                    f.seek(0)
+                    await query.message.reply_audio(
+                        audio=f,
+                        title=title,
+                        performer=author if author and author != "غير معروف" else None,
+                        caption=caption,
+                        duration=int(duration) if duration else None,
+                    )
                 stat_inc("audio", 1)
 
             elif choice == "video":
@@ -1124,13 +1162,6 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
                     duration=int(duration) if duration else None,
                 )
                 stat_inc("video", 1)
-
-            else:
-                await query.message.reply_document(
-                    document=f,
-                    caption=caption,
-                )
-                stat_inc("file", 1)
 
         stat_inc("success", 1)
         stat_inc("bytes", file_size)
