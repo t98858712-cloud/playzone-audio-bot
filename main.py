@@ -41,12 +41,8 @@ COOKIES_FILE = "cookies.txt"
 
 REQUEST_EXPIRE_SECONDS = 15 * 60
 OLD_DOWNLOADS_EXPIRE_SECONDS = 60 * 60
-PROGRESS_UPDATE_SECONDS = 2
+PROGRESS_UPDATE_SECONDS = 3
 
-# يمكن تعديلها من Railway Variables عند الحاجة
-FAST_FRAGMENT_DOWNLOADS = int(os.getenv("FAST_FRAGMENT_DOWNLOADS", "5"))
-DOWNLOAD_SOCKET_TIMEOUT = int(os.getenv("DOWNLOAD_SOCKET_TIMEOUT", "20"))
-DOWNLOAD_RETRIES = int(os.getenv("DOWNLOAD_RETRIES", "2"))
 
 ADMIN_IDS_RAW = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS = set()
@@ -453,16 +449,12 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
         "no_warnings": True,
         "noplaylist": True,
         "ignoreerrors": False,
-        "retries": DOWNLOAD_RETRIES,
-        "fragment_retries": DOWNLOAD_RETRIES,
+        "retries": 5,
+        "fragment_retries": 5,
         "continuedl": True,
-        "socket_timeout": DOWNLOAD_SOCKET_TIMEOUT,
+        "socket_timeout": 30,
         "windowsfilenames": True,
-        "restrictfilenames": False,
-        "concurrent_fragment_downloads": FAST_FRAGMENT_DOWNLOADS,
-        "playlist_items": "1",
-        "extract_flat": False,
-        "http_headers": {
+        "restrictfilenames": False,        "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -575,10 +567,10 @@ def build_download_options(url: str, choice: str, job_dir: Path, progress_data: 
 
     elif choice == "video":
         # مثل الأساس القديم: فيديو MP4 جاهز ومناسب لتجنب ffmpeg
-        opts["format"] = "best[ext=mp4][height<=480]/best[height<=480]/best[ext=mp4]/best"
+        opts["format"] = "best[ext=mp4][height<=480]/best[ext=mp4]/best"
 
     elif choice == "file":
-        opts["format"] = "best[height<=720]/best"
+        opts["format"] = "best"
 
     else:
         raise ValueError("اختيار غير معروف.")
@@ -935,7 +927,7 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
     try:
         job_dir = make_job_dir(user_id)
-        status_message = await query.message.reply_text("⚡ جاري التحميل السريع...")
+        status_message = await query.message.reply_text("⏳ جاري التحميل...")
 
         progress_data = {"text": "⏳ جاري التحميل..."}
 
