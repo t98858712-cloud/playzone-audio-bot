@@ -1,135 +1,199 @@
 import os
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
-import yt_dlp
+import shutil
+import time
+from pathlib import Path
 
-# سحب التوكن بأمان من متغيرات بيئة سيرفر Railway
+import yt_dlp
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters,
+)
+
+# التوكن من Railway Variables
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-DOWNLOAD_DIR = "./downloads"
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+BASE_DOWNLOAD_DIR = Path("./downloads")
+BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
+
+# حد تيليجرام للبوتات العادية 50MB
+MAX_TELEGRAM_SIZE = 50 * 1024 * 1024
+
+
+def make_job_dir(user_id: int) -> Path:
+    job_dir = BASE_DOWNLOAD_DIR / f"{user_id}_{int(time.time())}"
+    job_dir.mkdir(parents=True, exist_ok=True)
+    return job_dir
+
+
+def clean_job_dir(job_dir: Path):
+    try:
+        if job_dir.exists():
+            shutil.rmtree(job_dir)
+    except Exception as e:
+        print(f"خطأ أثناء تنظيف الملفات: {e}")
+
+
+def find_downloaded_file(job_dir: Path):
+    files = [p for p in job_dir.iterdir() if p.is_file()]
+    if not files:
+        return None
+    return max(files, key=lambda p: p.stat().st_mtime)
+
+
+def short_error(e: Exception) -> str:
+    msg = str(e)
+    if len(msg) > 900:
+        msg = msg[:900] + "..."
+    return msg
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """أمر البدء /start"""
     await update.message.reply_text(
-        "👋 أهلاً بك في بوت تحميل يوتيوب على سيرفر Railway!\n"
-        "قم بإرسال أي رابط فيديو من يوتيوب وسأقوم بالواجب."
+        "👋 أهلاً بك في بوت التحميل.\n\n"
+        "أرسل رابط يوتيوب، ثم اختر الصيغة المطلوبة.\n\n"
+        "⚠️ استخدم البوت فقط مع المحتوى الذي تملك حق تحميله أو استخدامه."
     )
 
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """الخطوة 1: استلاف الرابط من المستخدم"""
-    url = update.message.text
-    
+    url = update.message.text.strip()
+
     if "youtube.com" not in url and "youtu.be" not in url:
-        await update.message.reply_text("❌ عذراً، هذا الرابط لا يبدو كرابط يوتيوب صحيح.")
+        await update.message.reply_text("❌ هذا لا يبدو كرابط يوتيوب صحيح.")
         return
 
-    # حفظ الرابط مؤقتاً في ذاكرة الجلسة
-    context.user_data['current_url'] = url
+    context.user_data["current_url"] = url
 
-    # إنشاء الأزرار التفاعلية للصيغ
     keyboard = [
         [
-            InlineKeyboardButton("🎵 صوت (MP3)", callback_data='mp3'),
-            InlineKeyboardButton("🎬 فيديو (MP4)", callback_data='mp4')
+            InlineKeyboardButton("🎵 صوت MP3", callback_data="mp3"),
+            InlineKeyboardButton("🎬 فيديو MP4", callback_data="mp4"),
         ]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("اختر الصيغة التي ترغب بتحميلها:", reply_markup=reply_markup)
+
+    await update.message.reply_text(
+        "اختر الصيغة التي تريد تحميلها:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
 
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """الخطوات 2، 3، 4، 5، 6: المعالجة، التحميل، التحويل، الرفع، ثم الحذف"""
     query = update.callback_query
     await query.answer()
-    
+
     choice = query.data
-    url = context.user_data.get('current_url')
+    url = context.user_data.get("current_url")
 
     if not url:
-        await query.edit_message_text("❌ انتهت صلاحية الجلسة، يرجى إعادة إرسال الرابط.")
+        await query.edit_message_text("❌ انتهت صلاحية الطلب. أرسل الرابط مرة أخرى.")
         return
 
-    status_message = await query.edit_message_text("⏳ جاري استخراج روابط يوتيوب الداخلية وبدء المعالجة...")
-    out_tmpl = os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s')
+    user_id = query.from_user.id
+    job_dir = make_job_dir(user_id)
 
-    # إعدادات yt-dlp واستدعاء ffmpeg للتحويل تلقائياً
-    if choice == 'mp3':
+    status_message = await query.edit_message_text("⏳ جاري تجهيز الطلب...")
+
+    out_tmpl = str(job_dir / "%(title).80s [%(id)s].%(ext)s")
+
+    if choice == "mp3":
         ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': out_tmpl,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
-            'quiet': True,
+            "format": "bestaudio/best",
+            "outtmpl": out_tmpl,
+            "quiet": True,
+            "noplaylist": True,
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "128",
+                }
+            ],
         }
     else:
         ydl_opts = {
-            # اختيار جودة متوسطة لعدم تخطي حد الـ 50 ميجا الخاص بتيليجرام
-            'format': 'best[ext=mp4][height<=720]/best',
-            'outtmpl': out_tmpl,
-            'quiet': True,
+            "format": "best[ext=mp4][height<=480]/best[height<=480]/best",
+            "outtmpl": out_tmpl,
+            "quiet": True,
+            "noplaylist": True,
+            "merge_output_format": "mp4",
         }
 
     loop = asyncio.get_running_loop()
-    file_path = None
 
     try:
-        await status_message.edit_text("📥 السيرفر يقوم بتحميل الملف وتحويله الآن عبر ffmpeg...")
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # الخطوة 2 و 3: استخراج المعلومات وتحميل الملف مؤقتاً على السيرفر
-            info = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=True))
-            
-            # الخطوة 4: تحديد المسار النهائي للملف بعد معالجة ffmpeg
-            if choice == 'mp3':
-                file_path = ydl.prepare_filename(info).rsplit('.', 1)[0] + ".mp3"
-            else:
-                file_path = ydl.prepare_filename(info)
-                if not os.path.exists(file_path):
-                    file_path = ydl.prepare_filename(info).rsplit('.', 1)[0] + ".mp4"
+        await status_message.edit_text("📥 جاري التحميل والمعالجة...")
 
-            title = info.get('title', 'Audio/Video')
+        def download_file():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(url, download=True)
 
-        # الخطوة 5: إرسال الملف النهائي عبر Telegram Bot API للمستخدم
+        info = await loop.run_in_executor(None, download_file)
+
+        title = info.get("title", "ملف")
+        file_path = find_downloaded_file(job_dir)
+
+        if not file_path or not file_path.exists():
+            await status_message.edit_text("❌ لم يتم العثور على الملف بعد التحميل.")
+            return
+
+        file_size = file_path.stat().st_size
+
+        if file_size > MAX_TELEGRAM_SIZE:
+            size_mb = round(file_size / 1024 / 1024, 2)
+            await status_message.edit_text(
+                f"❌ حجم الملف {size_mb}MB وهذا أكبر من حد تيليجرام للبوتات العادية 50MB.\n\n"
+                "جرّب فيديو أقصر أو جودة أقل."
+            )
+            return
+
         await status_message.edit_text("📤 جاري رفع الملف إلى تيليجرام...")
-        
-        with open(file_path, 'rb') as file_to_send:
-            if choice == 'mp3':
-                await query.message.reply_audio(audio=file_to_send, title=title)
+
+        with open(file_path, "rb") as f:
+            if choice == "mp3":
+                await query.message.reply_audio(
+                    audio=f,
+                    title=title,
+                    caption="✅ تم تحميل الصوت بنجاح",
+                )
             else:
-                await query.message.reply_video(video=file_to_send, caption=title)
-        
+                await query.message.reply_video(
+                    video=f,
+                    caption=f"✅ {title}",
+                )
+
         await status_message.delete()
 
     except Exception as e:
-        await status_message.edit_text(f"❌ حدث خطأ أثناء المعالجة: {str(e)}")
+        await status_message.edit_text(
+            f"❌ حدث خطأ أثناء المعالجة:\n{short_error(e)}"
+        )
         print(f"Error: {e}")
 
     finally:
-        # الخطوة 6: حذف الملف من السيرفر فوراً لحفظ مساحة التخزين في Railway
-        if file_path and os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-                print(f"🧹 تم تنظيف السيرفر وحذف: {file_path}")
-            except Exception as delete_error:
-                print(f"خطأ أثناء الحذف: {delete_error}")
-        
-        context.user_data.pop('current_url', None)
+        clean_job_dir(job_dir)
+        context.user_data.pop("current_url", None)
+
 
 def main():
     if not TOKEN:
-        print("❌ خطأ: لم يتم العثور على متغير البيئة TELEGRAM_TOKEN في Railway!")
+        print("❌ خطأ: لم يتم العثور على TELEGRAM_TOKEN في Railway Variables")
         return
 
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    application.add_handler(CallbackQueryHandler(button_click))
+    app = Application.builder().token(TOKEN).build()
 
-    print("🚀 البوت يعمل الآن على Railway...")
-    application.run_polling()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(button_click))
 
-if __name__ == '__main__':
+    print("🚀 البوت يعمل الآن...")
+    app.run_polling()
+
+
+if __name__ == "__main__":
     main()
