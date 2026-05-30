@@ -6,7 +6,7 @@ import asyncio
 import shutil
 import logging
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus
 
 import yt_dlp
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -22,7 +22,7 @@ from telegram.ext import (
 )
 
 # ==========================================================
-# الأساس من الكود الأول
+# الأساس
 # ==========================================================
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -34,7 +34,7 @@ MAX_TELEGRAM_SIZE = 50 * 1024 * 1024
 COOKIES_FILE = "cookies.txt"
 
 # ==========================================================
-# إعدادات الاشتراك
+# الاشتراك
 # ==========================================================
 
 FORCE_SUBSCRIPTION = os.getenv("FORCE_SUBSCRIPTION", "true").lower() == "true"
@@ -49,12 +49,11 @@ TELEGRAM_REQUIRED_BOT_URL = os.getenv(
     "https://t.me/P1ay_Z0ne_Bot"
 )
 
-# اختياري فقط إذا عندك قناة/مجموعة وتريد تحقق حقيقي
-# مثال: TELEGRAM_REQUIRED_CHAT=@YourChannel
+# اختياري لقناة/مجموعة حقيقية
 TELEGRAM_REQUIRED_CHAT = os.getenv("TELEGRAM_REQUIRED_CHAT", "").strip()
 
 # ==========================================================
-# إعدادات الأدمن
+# الأدمن
 # ==========================================================
 
 ADMIN_IDS_RAW = os.getenv("ADMIN_IDS", "")
@@ -65,8 +64,10 @@ for x in ADMIN_IDS_RAW.split(","):
     if x.isdigit():
         ADMIN_IDS.add(int(x))
 
+BOT_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "P1ay_Z0ne_Bot").replace("@", "")
+
 # ==========================================================
-# ملفات بيانات بسيطة
+# بيانات بسيطة
 # ==========================================================
 
 DATA_DIR = Path("./data")
@@ -76,8 +77,7 @@ VERIFIED_FILE = DATA_DIR / "verified_users.json"
 STATS_FILE = DATA_DIR / "stats.json"
 
 ACTIVE_USERS = set()
-
-JOB_EXPIRE_SECONDS = 10 * 60
+JOB_EXPIRE_SECONDS = 15 * 60
 OLD_DOWNLOADS_EXPIRE_SECONDS = 60 * 60
 PROGRESS_UPDATE_SECONDS = 3
 
@@ -90,21 +90,19 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-logger = logging.getLogger("PlayZoneSimpleBot")
+logger = logging.getLogger("PlayZoneErBotStyle")
 
 
 # ==========================================================
-# JSON helpers
+# JSON
 # ==========================================================
 
 def load_json(path: Path, default):
     try:
         if not path.exists():
             return default
-
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-
     except Exception:
         return default
 
@@ -115,7 +113,6 @@ def save_json(path: Path, data):
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         tmp.replace(path)
-
     except Exception as e:
         logger.warning(f"تعذر حفظ {path}: {e}")
 
@@ -128,15 +125,12 @@ def load_verified():
 def is_verified(user_id: int) -> bool:
     if user_id in ADMIN_IDS:
         return True
-
     return str(user_id) in load_verified()
 
 
 def set_verified(user_id: int):
     data = load_verified()
-    data[str(user_id)] = {
-        "verified_at": int(time.time()),
-    }
+    data[str(user_id)] = {"verified_at": int(time.time())}
     save_json(VERIFIED_FILE, data)
 
 
@@ -179,7 +173,7 @@ def set_last_error(text: str):
 
 
 # ==========================================================
-# أدوات مساعدة
+# أدوات
 # ==========================================================
 
 def safe_text(text, limit=3500):
@@ -195,17 +189,14 @@ def short_error(e: Exception) -> str:
     return safe_text(msg, 900)
 
 
-def safe_title(text: str, limit=80) -> str:
+def safe_title(text: str, limit=90) -> str:
     if not text:
         return "ملف"
-
     text = str(text)
     text = re.sub(r"[\\/:*?\"<>|]+", "", text)
     text = re.sub(r"\s+", " ", text).strip()
-
     if len(text) > limit:
         text = text[:limit].strip()
-
     return text or "ملف"
 
 
@@ -216,17 +207,17 @@ def format_size(size_bytes) -> str:
         return "غير معروف"
 
     if size_bytes <= 0:
-        return "0 KB"
+        return "غير معروف"
 
     kb = size_bytes / 1024
     mb = kb / 1024
     gb = mb / 1024
 
     if gb >= 1:
-        return f"{gb:.2f} GB"
+        return f"{gb:.1f} GB"
     if mb >= 1:
-        return f"{mb:.2f} MB"
-    return f"{kb:.2f} KB"
+        return f"{mb:.1f} MB"
+    return f"{kb:.1f} KB"
 
 
 def format_duration(seconds) -> str:
@@ -241,8 +232,7 @@ def format_duration(seconds) -> str:
 
     if h:
         return f"{h}:{m:02d}:{s:02d}"
-
-    return f"{m}:{s:02d}"
+    return f"{m:02d}:{s:02d}"
 
 
 def is_youtube_url(url: str) -> bool:
@@ -329,6 +319,31 @@ def find_downloaded_file(job_dir: Path):
         return None
 
 
+def estimate_best_size(info: dict) -> str:
+    try:
+        formats = info.get("formats") or []
+        sizes = []
+
+        for f in formats:
+            size = f.get("filesize") or f.get("filesize_approx")
+            height = f.get("height") or 0
+            acodec = f.get("acodec")
+            vcodec = f.get("vcodec")
+
+            if size and (
+                (height and height <= 480)
+                or (acodec and acodec != "none" and (not vcodec or vcodec == "none"))
+            ):
+                sizes.append(size)
+
+        if sizes:
+            return format_size(max(sizes))
+
+        return "غير معروف"
+    except Exception:
+        return "غير معروف"
+
+
 async def safe_edit(message, text: str, reply_markup=None):
     try:
         await message.edit_text(
@@ -346,35 +361,54 @@ async def safe_edit(message, text: str, reply_markup=None):
 
 
 # ==========================================================
-# أزرار بسيطة وواضحة
+# أزرار مثل تجربة البوت الظاهر بالصور
 # ==========================================================
 
 def subscription_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📸 متابعة الإنستغرام", url=INSTAGRAM_REQUIRED_URL)],
-        [InlineKeyboardButton("🤖 متابعة بوت تيليجرام", url=TELEGRAM_REQUIRED_BOT_URL)],
-        [InlineKeyboardButton("✅ تحققت من الاشتراك", callback_data="sub_check")],
+        [InlineKeyboardButton("📢 اشترك في القناة", url=TELEGRAM_REQUIRED_BOT_URL)],
+        [InlineKeyboardButton("📸 تابع الإنستغرام", url=INSTAGRAM_REQUIRED_URL)],
+        [InlineKeyboardButton("✅ اشتركت", callback_data="sub_check")],
     ])
 
 
-def choose_format_keyboard() -> InlineKeyboardMarkup:
+def home_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("اليوتيوب", callback_data="home_youtube")],
+        [InlineKeyboardButton("الانستكرام", callback_data="home_instagram")],
+        [InlineKeyboardButton("سناب جات", callback_data="home_snap")],
+        [InlineKeyboardButton("📊 إحصائياتي", callback_data="home_stats")],
+        [InlineKeyboardButton("➕ أضف البوت لمجموعتك", url=f"https://t.me/{BOT_USERNAME}?startgroup=true")],
+    ])
+
+
+def youtube_back_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("• رجوع •", callback_data="home_back")],
+    ])
+
+
+def download_choices_keyboard() -> InlineKeyboardMarkup:
+    # مثل الصور: 3 اختيارات واضحة فقط
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🎵 صوت", callback_data="download_mp3"),
-            InlineKeyboardButton("🎬 فيديو MP4", callback_data="download_mp4"),
+            InlineKeyboardButton("مقطع صوتي", callback_data="download_audio_clip"),
+            InlineKeyboardButton("ملف صوتي", callback_data="download_audio_file"),
         ],
-        [InlineKeyboardButton("❌ إلغاء", callback_data="cancel")],
+        [
+            InlineKeyboardButton("مقطع فيديو", callback_data="download_video"),
+        ],
     ])
 
 
 def after_done_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔁 تحميل رابط آخر", callback_data="new")],
+        [InlineKeyboardButton("• تم الإرسال •", callback_data="done")],
     ])
 
 
 # ==========================================================
-# شرط الاشتراك
+# الاشتراك
 # ==========================================================
 
 async def check_telegram_chat_membership(user_id: int, context: ContextTypes.DEFAULT_TYPE):
@@ -385,20 +419,17 @@ async def check_telegram_chat_membership(user_id: int, context: ContextTypes.DEF
         member = await context.bot.get_chat_member(TELEGRAM_REQUIRED_CHAT, user_id)
         if member.status in ["member", "administrator", "creator"]:
             return True, ""
-
-        return False, "أنت غير مشترك في قناة/مجموعة تيليجرام المطلوبة."
-
+        return False, "أنت غير مشترك في القناة المطلوبة."
     except Exception as e:
-        return False, f"تعذر التحقق من الاشتراك: {short_error(e)}"
+        return False, f"تعذر التحقق: {short_error(e)}"
 
 
 async def send_subscription_message(update: Update):
     text = (
-        "🔒 لاستخدام البوت يجب الاشتراك أولاً:\n\n"
-        "1️⃣ تابع صفحة الإنستغرام.\n"
-        "2️⃣ تابع بوت تيليجرام.\n"
-        "3️⃣ اضغط زر التحقق.\n\n"
-        "بعد التحقق أرسل رابط يوتيوب مباشرة."
+        "⚠️ | عذراً عزيزي\n"
+        "🔰 | عليك الاشتراك بقناة البوت لتتمكن من استخدامه\n\n"
+        f"- {TELEGRAM_REQUIRED_BOT_URL}\n\n"
+        "‼️ | اشترك ثم ارسل /start"
     )
 
     if update.message:
@@ -431,8 +462,49 @@ async def ensure_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 # ==========================================================
-# yt-dlp
+# yt-dlp معلومات وتحميل
 # ==========================================================
+
+def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None):
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "ignoreerrors": False,
+        "retries": 5,
+        "fragment_retries": 5,
+        "continuedl": True,
+        "socket_timeout": 30,
+        "windowsfilenames": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web", "android"],
+                "skip": ["webpage"],
+            }
+        },
+    }
+
+    if job_dir:
+        opts["outtmpl"] = str(job_dir / "%(title).80s.%(ext)s")
+
+    if progress_data is not None:
+        opts["progress_hooks"] = [progress_hook(progress_data)]
+
+    if has_cookies_file():
+        opts["cookiefile"] = COOKIES_FILE
+    else:
+        raise FileNotFoundError("لم يتم العثور على cookies.txt بجانب main.py.")
+
+    return opts
+
+
+def extract_info_sync(url: str):
+    opts = base_ydl_opts()
+    opts["skip_download"] = True
+
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        return ydl.extract_info(url, download=False)
+
 
 def progress_hook(progress_data: dict):
     def hook(d):
@@ -442,24 +514,15 @@ def progress_hook(progress_data: dict):
             if status == "downloading":
                 downloaded = d.get("downloaded_bytes") or 0
                 total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
-                speed = d.get("speed") or 0
 
                 if total:
                     percent = downloaded / total * 100
-                    progress_data["text"] = (
-                        "📥 جاري التحميل...\n\n"
-                        f"📊 {percent:.1f}%\n"
-                        f"📦 {format_size(downloaded)} / {format_size(total)}\n"
-                        f"⚡ {format_size(speed)}/s"
-                    )
+                    progress_data["text"] = f"يتم التحميل...\n\n📥 {percent:.1f}%"
                 else:
-                    progress_data["text"] = (
-                        "📥 جاري التحميل...\n\n"
-                        f"📦 تم تحميل: {format_size(downloaded)}"
-                    )
+                    progress_data["text"] = "يتم التحميل..."
 
             elif status == "finished":
-                progress_data["text"] = "⚙️ تم التحميل، جاري تجهيز الملف..."
+                progress_data["text"] = "يتم تجهيز الملف..."
 
         except Exception:
             pass
@@ -480,69 +543,105 @@ async def progress_updater(status_message, progress_data: dict, stop_event: asyn
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 
-def build_ydl_options(choice: str, job_dir: Path, progress_data: dict):
-    out_tmpl = str(job_dir / "%(title).80s.%(ext)s")
+def build_download_options(choice: str, job_dir: Path, progress_data: dict):
+    opts = base_ydl_opts(job_dir, progress_data)
 
-    base_opts = {
-        "outtmpl": out_tmpl,
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-        "ignoreerrors": False,
-        "retries": 5,
-        "fragment_retries": 5,
-        "continuedl": True,
-        "socket_timeout": 30,
-        "windowsfilenames": True,
-        "progress_hooks": [progress_hook(progress_data)],
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["web", "android"],
-                "skip": ["webpage"],
-            }
-        },
-    }
+    if choice in ["audio_clip", "audio_file"]:
+        # بدون تحويل MP3 حتى لا يحتاج ffmpeg
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
+        return opts
 
-    if has_cookies_file():
-        base_opts["cookiefile"] = COOKIES_FILE
-    else:
-        raise FileNotFoundError(
-            "لم يتم العثور على cookies.txt بجانب main.py."
+    if choice == "video":
+        opts["format"] = (
+            "best[ext=mp4][height<=480]/"
+            "bestvideo[ext=mp4][height<=480]+bestaudio[ext=m4a]/"
+            "best[ext=mp4]/best"
         )
-
-    if choice == "mp3":
-        # مثل الكود الأساسي: تحميل أفضل صوت بدون تحويل MP3
-        # هذا يتجنب خطأ ffmpeg / ffprobe على Railway
-        return {
-            **base_opts,
-            "format": "bestaudio[ext=m4a]/bestaudio/best",
-        }
-
-    if choice == "mp4":
-        return {
-            **base_opts,
-            "format": (
-                "bestvideo[ext=mp4][height<=480]+bestaudio[ext=m4a]/"
-                "best[ext=mp4][height<=480]/"
-                "best[ext=mp4]/best"
-            ),
-            "merge_output_format": "mp4",
-        }
+        opts["merge_output_format"] = "mp4"
+        return opts
 
     raise ValueError("اختيار غير معروف.")
 
 
 def download_sync(url: str, choice: str, job_dir: Path, progress_data: dict):
-    opts = build_ydl_options(choice, job_dir, progress_data)
+    opts = build_download_options(choice, job_dir, progress_data)
 
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-
-    return info
+        return ydl.extract_info(url, download=True)
 
 
 # ==========================================================
-# أوامر البوت
+# رسائل الواجهة
+# ==========================================================
+
+async def send_home(message):
+    text = (
+        "- تحميل فيديو من يوتيوب بجودة عالية\n"
+        "4K وملفات صوتية وفويس.\n"
+        "- لتحميل ارسل رابط الفيديو او الاسم ✅"
+    )
+    await message.reply_text(text, reply_markup=home_keyboard())
+
+
+async def send_youtube_section(message):
+    text = (
+        "• مرحبا بك في قسم تحميل من اليوتيوب\n"
+        "- يمكنك التحميل بعده طرق:\n\n"
+        "1. ارسال رابط الفيديو من اليوتيوب بشكل مباشر\n"
+        "2. ارسال رابط الاغنية من يوتيوب music\n"
+        "3. ارسال كلمة للبحث عنها في اليوتيوب لعرض النتائج\n\n"
+        "- اختر الطريقة التي تناسبك."
+    )
+    await message.reply_text(text, reply_markup=youtube_back_keyboard())
+
+
+async def send_video_card(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
+    user_id = update.effective_user.id
+    message = update.message
+
+    status = await message.reply_text("يتم جلب المعلومات...")
+
+    try:
+        loop = asyncio.get_running_loop()
+        info = await loop.run_in_executor(None, lambda: extract_info_sync(url))
+
+        title = safe_title(info.get("title", "فيديو"))
+        duration = format_duration(info.get("duration"))
+        size = estimate_best_size(info)
+        uploader = safe_title(info.get("uploader", ""), 60)
+
+        context.user_data["current_url"] = url
+        context.user_data["current_info"] = {
+            "title": title,
+            "duration": duration,
+            "size": size,
+            "uploader": uploader,
+        }
+        context.user_data["created_at"] = time.time()
+
+        text = (
+            f"🎬 {title}\n\n"
+            f"◯ {duration} - 💾 {size}"
+        )
+
+        if uploader:
+            text += f"\n👤 {uploader}"
+
+        await safe_edit(status, text, reply_markup=download_choices_keyboard())
+
+    except FileNotFoundError as e:
+        await safe_edit(status, f"⚠️ {short_error(e)}")
+
+    except Exception as e:
+        await safe_edit(
+            status,
+            "❌ تعذر جلب معلومات الرابط.\n\n"
+            f"{short_error(e)}"
+        )
+
+
+# ==========================================================
+# أوامر
 # ==========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -551,17 +650,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_subscription(update, context):
         return
 
-    await update.message.reply_text(
-        "👋 أهلاً بك في بوت التحميل.\n\n"
-        "طريقة الاستخدام بسيطة:\n"
-        "1️⃣ أرسل رابط يوتيوب.\n"
-        "2️⃣ اختر صوت أو فيديو.\n"
-        "3️⃣ انتظر إرسال الملف.\n\n"
-        "الأوامر:\n"
-        "/help - المساعدة\n"
-        "/status - حالة البوت\n"
-        "/admin - لوحة الأدمن"
-    )
+    await send_home(update.message)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -569,12 +658,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text(
-        "📘 المساعدة\n\n"
-        "أرسل رابط يوتيوب فقط، وستظهر لك أزرار واضحة:\n\n"
-        "🎵 صوت\n"
-        "🎬 فيديو MP4\n\n"
-        f"حد تيليجرام: {format_size(MAX_TELEGRAM_SIZE)}\n"
-        "يجب وجود cookies.txt بجانب main.py."
+        "📘 طريقة الاستخدام:\n\n"
+        "1. اضغط اليوتيوب.\n"
+        "2. أرسل رابط الفيديو.\n"
+        "3. اختر نوع التحميل.\n\n"
+        "يمكنك أيضاً إرسال رابط يوتيوب مباشرة."
     )
 
 
@@ -598,7 +686,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     stats = load_stats()
-    text = (
+    await update.message.reply_text(
         "🛠 لوحة الأدمن\n\n"
         f"📩 الطلبات: {stats.get('requests', 0)}\n"
         f"✅ الناجحة: {stats.get('success', 0)}\n"
@@ -607,18 +695,13 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🎬 الفيديو: {stats.get('video', 0)}\n"
         f"📦 الحجم المرسل: {format_size(stats.get('bytes', 0))}\n"
         f"🔒 المستخدمون المتحققون: {len(load_verified())}\n\n"
-        "أوامر الأدمن:\n"
         "/clean - تنظيف الملفات\n"
-        "/resetverify USER_ID - تصفير اشتراك مستخدم"
+        "/resetverify USER_ID - تصفير تحقق"
     )
-
-    await update.message.reply_text(text)
 
 
 async def clean_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    if user_id not in ADMIN_IDS:
+    if update.effective_user.id not in ADMIN_IDS:
         await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
         return
 
@@ -627,9 +710,7 @@ async def clean_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def resetverify_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    if user_id not in ADMIN_IDS:
+    if update.effective_user.id not in ADMIN_IDS:
         await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
         return
 
@@ -642,6 +723,10 @@ async def resetverify_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(f"✅ تم تصفير تحقق المستخدم: {target}")
 
 
+# ==========================================================
+# التعامل مع الرسائل
+# ==========================================================
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
@@ -650,30 +735,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = update.effective_user.id
-    url = update.message.text.strip()
+    text = update.message.text.strip()
 
     if user_id in ACTIVE_USERS:
-        await update.message.reply_text("⏳ لديك تحميل يعمل حالياً، انتظر حتى ينتهي.")
+        await update.message.reply_text("⏳ يوجد تحميل يعمل الآن، انتظر حتى ينتهي.")
         return
 
-    if not is_youtube_url(url):
-        await update.message.reply_text(
-            "❌ أرسل رابط يوتيوب صحيح فقط.\n\n"
-            "مثال:\n"
-            "https://youtu.be/xxxx"
-        )
+    if is_youtube_url(text):
+        stat_inc("requests", 1)
+        await send_video_card(update, context, text)
         return
 
-    context.user_data["current_url"] = url
-    context.user_data["created_at"] = time.time()
-
-    stat_inc("requests", 1)
-
+    # إذا كتب اسم فيديو، نعطيه رابط بحث بدل كثرة نتائج
+    search_url = f"https://www.youtube.com/results?search_query={quote_plus(text)}"
     await update.message.reply_text(
-        "✅ تم استلام الرابط.\n\nاختر الصيغة:",
-        reply_markup=choose_format_keyboard(),
+        "🔎 أرسلت اسم وليس رابطاً.\n\n"
+        "افتح نتائج البحث، اختر الفيديو، ثم أرسل رابطه للبوت.",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔎 بحث في يوتيوب", url=search_url)],
+            [InlineKeyboardButton("• رجوع •", callback_data="home_back")],
+        ]),
+        disable_web_page_preview=True,
     )
 
+
+# ==========================================================
+# الأزرار
+# ==========================================================
 
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -684,7 +772,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "sub_check":
         ok, reason = await check_telegram_chat_membership(user_id, context)
-
         if not ok:
             await query.edit_message_text(
                 f"❌ لم يكتمل الاشتراك.\n\n{reason}",
@@ -694,40 +781,57 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         set_verified(user_id)
-
-        await query.edit_message_text(
-            "✅ تم تفعيل البوت بنجاح.\n\n"
-            "أرسل رابط يوتيوب الآن."
-        )
-        return
-
-    if data == "cancel":
-        context.user_data.clear()
-        await query.edit_message_text("✅ تم إلغاء الطلب.")
-        return
-
-    if data == "new":
-        context.user_data.clear()
-        await query.edit_message_text("📩 أرسل رابط يوتيوب جديد.")
-        return
-
-    if data not in ["download_mp3", "download_mp4"]:
-        await query.edit_message_text("❌ خيار غير معروف.")
+        await query.edit_message_text("✅ تم تفعيل البوت بنجاح.\n\nارسل /start")
         return
 
     if not await ensure_subscription(update, context):
+        return
+
+    if data == "home_youtube":
+        await query.message.reply_text("يتم التحميل...")
+        await send_youtube_section(query.message)
+        return
+
+    if data in ["home_instagram", "home_snap"]:
+        await query.message.reply_text("هذا القسم غير متاح حالياً.", reply_markup=youtube_back_keyboard())
+        return
+
+    if data == "home_stats":
+        stats = load_stats()
+        await query.message.reply_text(
+            "📊 إحصائيات عامة:\n\n"
+            f"📩 الطلبات: {stats.get('requests', 0)}\n"
+            f"✅ الناجحة: {stats.get('success', 0)}\n"
+            f"❌ الفاشلة: {stats.get('failed', 0)}"
+        )
+        return
+
+    if data == "home_back":
+        await send_home(query.message)
+        return
+
+    if data == "done":
+        await query.answer("تم الإرسال")
+        return
+
+    choices = {
+        "download_audio_clip": "audio_clip",
+        "download_audio_file": "audio_file",
+        "download_video": "video",
+    }
+
+    if data not in choices:
+        await query.message.reply_text("❌ خيار غير معروف.")
         return
 
     url = context.user_data.get("current_url")
     created_at = context.user_data.get("created_at", 0)
 
     if not url or time.time() - created_at > JOB_EXPIRE_SECONDS:
-        await query.edit_message_text("❌ انتهت صلاحية الطلب. أرسل الرابط مرة أخرى.")
+        await query.message.reply_text("⏱️ انتهت صلاحية الطلب. أرسل الرابط مرة أخرى.")
         return
 
-    choice = "mp3" if data == "download_mp3" else "mp4"
-
-    await process_download(update, context, url, choice)
+    await process_download(update, context, url, choices[data])
 
 
 async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, choice: str):
@@ -735,7 +839,7 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
     user_id = query.from_user.id
 
     if user_id in ACTIVE_USERS:
-        await query.edit_message_text("⏳ لديك تحميل يعمل حالياً، انتظر.")
+        await query.message.reply_text("⏳ يوجد تحميل يعمل الآن، انتظر.")
         return
 
     ACTIVE_USERS.add(user_id)
@@ -743,19 +847,14 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
     job_dir = None
     stop_event = asyncio.Event()
     updater_task = None
-    status_message = query.message
+    status_message = None
 
     try:
         job_dir = make_job_dir(user_id)
 
-        await safe_edit(
-            status_message,
-            "⏳ جاري تجهيز التحميل..."
-        )
+        status_message = await query.message.reply_text("يتم التحميل...")
 
-        progress_data = {
-            "text": "🔍 جاري فحص الرابط..."
-        }
+        progress_data = {"text": "يتم التحميل..."}
 
         updater_task = asyncio.create_task(
             progress_updater(status_message, progress_data, stop_event)
@@ -792,9 +891,9 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
         if file_size > MAX_TELEGRAM_SIZE:
             await safe_edit(
                 status_message,
-                "❌ حجم الملف أكبر من حد تيليجرام.\n\n"
-                f"حجم الملف: {format_size(file_size)}\n"
-                f"الحد: {format_size(MAX_TELEGRAM_SIZE)}"
+                "❌ الملف أكبر من حد تيليجرام.\n\n"
+                f"📦 الحجم: {format_size(file_size)}\n"
+                f"📌 الحد: {format_size(MAX_TELEGRAM_SIZE)}"
             )
             stat_inc("failed", 1)
             return
@@ -807,19 +906,16 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
             except Exception:
                 pass
 
-        await safe_edit(status_message, "📤 جاري إرسال الملف...")
+        await safe_edit(status_message, "يتم الإرسال...")
 
         caption = (
             f"✅ تم التحميل\n"
-            f"📌 {title}\n"
-            f"📦 {format_size(file_size)}"
+            f"🎬 {title}\n"
+            f"◯ {format_duration(duration) if duration else 'غير معروف'} - 💾 {format_size(file_size)}"
         )
 
-        if duration:
-            caption += f"\n⏱️ {format_duration(duration)}"
-
         with open(file_path, "rb") as f:
-            if choice == "mp3":
+            if choice in ["audio_clip", "audio_file"]:
                 kwargs = {
                     "audio": f,
                     "title": title,
@@ -857,11 +953,7 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
         stat_inc("success", 1)
         stat_inc("bytes", file_size)
 
-        await safe_edit(
-            status_message,
-            "✅ اكتملت العملية.",
-            reply_markup=after_done_keyboard(),
-        )
+        await safe_edit(status_message, "• تم الإرسال •", reply_markup=after_done_keyboard())
 
     except FileNotFoundError as e:
         stat_inc("failed", 1)
@@ -892,11 +984,7 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
         logger.exception("خطأ غير متوقع")
         stat_inc("failed", 1)
         set_last_error(short_error(e))
-        await safe_edit(
-            status_message,
-            "❌ حدث خطأ أثناء المعالجة:\n"
-            f"{short_error(e)}"
-        )
+        await safe_edit(status_message, f"❌ حدث خطأ:\n{short_error(e)}")
 
     finally:
         stop_event.set()
@@ -912,11 +1000,12 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
         ACTIVE_USERS.discard(user_id)
         context.user_data.pop("current_url", None)
+        context.user_data.pop("current_info", None)
         context.user_data.pop("created_at", None)
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ أمر غير معروف. استخدم /help")
+    await update.message.reply_text("❌ أمر غير معروف. استخدم /start")
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -924,14 +1013,12 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ==========================================================
-# تشغيل البوت
+# تشغيل
 # ==========================================================
 
 def main():
     if not TOKEN:
-        raise RuntimeError(
-            "لم يتم العثور على TELEGRAM_TOKEN في Railway Variables."
-        )
+        raise RuntimeError("لم يتم العثور على TELEGRAM_TOKEN في Railway Variables.")
 
     cleanup_old_downloads()
 
