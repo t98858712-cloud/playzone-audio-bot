@@ -41,7 +41,12 @@ COOKIES_FILE = "cookies.txt"
 
 REQUEST_EXPIRE_SECONDS = 15 * 60
 OLD_DOWNLOADS_EXPIRE_SECONDS = 60 * 60
-PROGRESS_UPDATE_SECONDS = 3
+PROGRESS_UPDATE_SECONDS = 2
+
+# يمكن تعديلها من Railway Variables عند الحاجة
+FAST_FRAGMENT_DOWNLOADS = int(os.getenv("FAST_FRAGMENT_DOWNLOADS", "5"))
+DOWNLOAD_SOCKET_TIMEOUT = int(os.getenv("DOWNLOAD_SOCKET_TIMEOUT", "20"))
+DOWNLOAD_RETRIES = int(os.getenv("DOWNLOAD_RETRIES", "2"))
 
 ADMIN_IDS_RAW = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS = set()
@@ -367,7 +372,7 @@ async def safe_edit(message, text: str, reply_markup=None):
 def download_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🎵 صوت", callback_data="download_audio"),
+            InlineKeyboardButton("🎵 صوت أصلي", callback_data="download_audio"),
             InlineKeyboardButton("🎬 فيديو", callback_data="download_video"),
         ],
         [
@@ -448,12 +453,15 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
         "no_warnings": True,
         "noplaylist": True,
         "ignoreerrors": False,
-        "retries": 5,
-        "fragment_retries": 5,
+        "retries": DOWNLOAD_RETRIES,
+        "fragment_retries": DOWNLOAD_RETRIES,
         "continuedl": True,
-        "socket_timeout": 30,
+        "socket_timeout": DOWNLOAD_SOCKET_TIMEOUT,
         "windowsfilenames": True,
         "restrictfilenames": False,
+        "concurrent_fragment_downloads": FAST_FRAGMENT_DOWNLOADS,
+        "playlist_items": "1",
+        "extract_flat": False,
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -563,14 +571,14 @@ def build_download_options(url: str, choice: str, job_dir: Path, progress_data: 
 
     if choice == "audio":
         # بدون تحويل MP3 حتى لا يحتاج ffmpeg
-        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
+        opts["format"] = "bestaudio/best"
 
     elif choice == "video":
         # مثل الأساس القديم: فيديو MP4 جاهز ومناسب لتجنب ffmpeg
-        opts["format"] = "best[ext=mp4][height<=480]/best[ext=mp4]/best"
+        opts["format"] = "best[ext=mp4][height<=480]/best[height<=480]/best[ext=mp4]/best"
 
     elif choice == "file":
-        opts["format"] = "best"
+        opts["format"] = "best[height<=720]/best"
 
     else:
         raise ValueError("اختيار غير معروف.")
@@ -692,7 +700,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🌐 المنصة: {extractor}\n"
             f"⏱️ المدة: {duration_text}\n"
             f"📦 الحجم التقريبي: {size}\n\n"
-            "اختر نوع التحميل:"
+            "اختر نوع التحميل:\n🎵 الصوت الأصلي = أفضل جودة صوت متاحة من المصدر"
         )
 
         try:
@@ -927,7 +935,7 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
     try:
         job_dir = make_job_dir(user_id)
-        status_message = await query.message.reply_text("⏳ جاري التحميل...")
+        status_message = await query.message.reply_text("⚡ جاري التحميل السريع...")
 
         progress_data = {"text": "⏳ جاري التحميل..."}
 
