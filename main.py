@@ -49,8 +49,16 @@ TELEGRAM_REQUIRED_BOT_URL = os.getenv(
     "https://t.me/P1ay_Z0ne_Bot"
 )
 
-# اختياري لقناة/مجموعة حقيقية
+# تحقق حقيقي فقط إذا وضعت قناة/مجموعة هنا وجعلت البوت أدمن فيها
+# مثال:
+# TELEGRAM_REQUIRED_CHAT=@YourChannel
 TELEGRAM_REQUIRED_CHAT = os.getenv("TELEGRAM_REQUIRED_CHAT", "").strip()
+
+# رابط عرض القناة للمستخدم إذا استخدمت TELEGRAM_REQUIRED_CHAT
+TELEGRAM_REQUIRED_CHAT_URL = os.getenv("TELEGRAM_REQUIRED_CHAT_URL", "").strip()
+
+# إذا false لا يطلب اشتراك إنستغرام
+REQUIRE_INSTAGRAM = os.getenv("REQUIRE_INSTAGRAM", "true").lower() == "true"
 
 # ==========================================================
 # الأدمن
@@ -67,7 +75,7 @@ for x in ADMIN_IDS_RAW.split(","):
 BOT_USERNAME = os.getenv("BOT_PUBLIC_USERNAME", "P1ay_Z0ne_Bot").replace("@", "")
 
 # ==========================================================
-# بيانات بسيطة
+# بيانات
 # ==========================================================
 
 DATA_DIR = Path("./data")
@@ -75,6 +83,8 @@ DATA_DIR.mkdir(exist_ok=True)
 
 VERIFIED_FILE = DATA_DIR / "verified_users.json"
 STATS_FILE = DATA_DIR / "stats.json"
+BANNED_FILE = DATA_DIR / "banned_users.json"
+USERS_FILE = DATA_DIR / "users.json"
 
 ACTIVE_USERS = set()
 JOB_EXPIRE_SECONDS = 15 * 60
@@ -90,7 +100,7 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-logger = logging.getLogger("PlayZoneErBotStyle")
+logger = logging.getLogger("PlayZoneExactStyle")
 
 
 # ==========================================================
@@ -122,22 +132,75 @@ def load_verified():
     return data if isinstance(data, dict) else {}
 
 
+def save_verified(data):
+    save_json(VERIFIED_FILE, data)
+
+
+def load_banned():
+    data = load_json(BANNED_FILE, [])
+    try:
+        return set(int(x) for x in data)
+    except Exception:
+        return set()
+
+
+def save_banned(data):
+    save_json(BANNED_FILE, sorted(list(data)))
+
+
+def register_user(user):
+    if not user:
+        return
+
+    data = load_json(USERS_FILE, {})
+    data[str(user.id)] = {
+        "id": user.id,
+        "username": user.username or "",
+        "first_name": user.first_name or "",
+        "last_seen": int(time.time()),
+    }
+    save_json(USERS_FILE, data)
+
+
+def all_user_ids():
+    data = load_json(USERS_FILE, {})
+    ids = []
+    for k in data.keys():
+        try:
+            ids.append(int(k))
+        except Exception:
+            pass
+    return ids
+
+
+def is_admin(user_id: int) -> bool:
+    return user_id in ADMIN_IDS
+
+
+def is_banned(user_id: int) -> bool:
+    return user_id in load_banned()
+
+
 def is_verified(user_id: int) -> bool:
-    if user_id in ADMIN_IDS:
+    if is_admin(user_id):
         return True
     return str(user_id) in load_verified()
 
 
 def set_verified(user_id: int):
     data = load_verified()
-    data[str(user_id)] = {"verified_at": int(time.time())}
-    save_json(VERIFIED_FILE, data)
+    data[str(user_id)] = {
+        "verified_at": int(time.time()),
+        "instagram": "manual",
+        "telegram": "real" if TELEGRAM_REQUIRED_CHAT else "manual",
+    }
+    save_verified(data)
 
 
 def reset_verified(user_id: int):
     data = load_verified()
     data.pop(str(user_id), None)
-    save_json(VERIFIED_FILE, data)
+    save_verified(data)
 
 
 def load_stats():
@@ -344,6 +407,21 @@ def estimate_best_size(info: dict) -> str:
         return "غير معروف"
 
 
+def get_thumbnail(info: dict) -> str:
+    try:
+        thumbs = info.get("thumbnails") or []
+        if thumbs:
+            best = sorted(
+                thumbs,
+                key=lambda x: (x.get("width") or 0) * (x.get("height") or 0),
+                reverse=True,
+            )[0]
+            return best.get("url") or info.get("thumbnail") or ""
+        return info.get("thumbnail") or ""
+    except Exception:
+        return ""
+
+
 async def safe_edit(message, text: str, reply_markup=None):
     try:
         await message.edit_text(
@@ -361,15 +439,22 @@ async def safe_edit(message, text: str, reply_markup=None):
 
 
 # ==========================================================
-# أزرار مثل تجربة البوت الظاهر بالصور
+# أزرار الواجهة
 # ==========================================================
 
 def subscription_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 اشترك في القناة", url=TELEGRAM_REQUIRED_BOT_URL)],
-        [InlineKeyboardButton("📸 تابع الإنستغرام", url=INSTAGRAM_REQUIRED_URL)],
-        [InlineKeyboardButton("✅ اشتركت", callback_data="sub_check")],
-    ])
+    rows = []
+
+    if TELEGRAM_REQUIRED_CHAT and TELEGRAM_REQUIRED_CHAT_URL:
+        rows.append([InlineKeyboardButton("📢 اشترك في القناة", url=TELEGRAM_REQUIRED_CHAT_URL)])
+    else:
+        rows.append([InlineKeyboardButton("📢 اشترك في البوت", url=TELEGRAM_REQUIRED_BOT_URL)])
+
+    if REQUIRE_INSTAGRAM:
+        rows.append([InlineKeyboardButton("📸 تابع الإنستغرام", url=INSTAGRAM_REQUIRED_URL)])
+
+    rows.append([InlineKeyboardButton("✅ اشتركت", callback_data="sub_check")])
+    return InlineKeyboardMarkup(rows)
 
 
 def home_keyboard() -> InlineKeyboardMarkup:
@@ -389,7 +474,6 @@ def youtube_back_keyboard() -> InlineKeyboardMarkup:
 
 
 def download_choices_keyboard() -> InlineKeyboardMarkup:
-    # مثل الصور: 3 اختيارات واضحة فقط
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("مقطع صوتي", callback_data="download_audio_clip"),
@@ -401,9 +485,26 @@ def download_choices_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def after_done_keyboard() -> InlineKeyboardMarkup:
+def sent_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("• تم الإرسال •", callback_data="done")],
+    ])
+
+
+def admin_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📊 الإحصائيات", callback_data="admin_stats"),
+            InlineKeyboardButton("👥 المستخدمين", callback_data="admin_users"),
+        ],
+        [
+            InlineKeyboardButton("📥 النشط", callback_data="admin_active"),
+            InlineKeyboardButton("🍪 الكوكيز", callback_data="admin_cookies"),
+        ],
+        [
+            InlineKeyboardButton("🔒 الاشتراك", callback_data="admin_sub"),
+            InlineKeyboardButton("🧹 تنظيف", callback_data="admin_clean"),
+        ],
     ])
 
 
@@ -413,24 +514,32 @@ def after_done_keyboard() -> InlineKeyboardMarkup:
 
 async def check_telegram_chat_membership(user_id: int, context: ContextTypes.DEFAULT_TYPE):
     if not TELEGRAM_REQUIRED_CHAT:
-        return True, ""
+        return True, "manual"
 
     try:
         member = await context.bot.get_chat_member(TELEGRAM_REQUIRED_CHAT, user_id)
         if member.status in ["member", "administrator", "creator"]:
-            return True, ""
+            return True, "real"
         return False, "أنت غير مشترك في القناة المطلوبة."
     except Exception as e:
-        return False, f"تعذر التحقق: {short_error(e)}"
+        return False, f"تعذر التحقق من اشتراك تيليجرام: {short_error(e)}"
 
 
 async def send_subscription_message(update: Update):
     text = (
         "⚠️ | عذراً عزيزي\n"
         "🔰 | عليك الاشتراك بقناة البوت لتتمكن من استخدامه\n\n"
-        f"- {TELEGRAM_REQUIRED_BOT_URL}\n\n"
-        "‼️ | اشترك ثم ارسل /start"
     )
+
+    if TELEGRAM_REQUIRED_CHAT and TELEGRAM_REQUIRED_CHAT_URL:
+        text += f"- {TELEGRAM_REQUIRED_CHAT_URL}\n"
+    else:
+        text += f"- {TELEGRAM_REQUIRED_BOT_URL}\n"
+
+    if REQUIRE_INSTAGRAM:
+        text += f"- {INSTAGRAM_REQUIRED_URL}\n"
+
+    text += "\n‼️ | اشترك ثم ارسل /start"
 
     if update.message:
         await update.message.reply_text(
@@ -455,6 +564,12 @@ async def ensure_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE
         return False
 
     if is_verified(user.id):
+        if TELEGRAM_REQUIRED_CHAT and not is_admin(user.id):
+            ok, _ = await check_telegram_chat_membership(user.id, context)
+            if not ok:
+                reset_verified(user.id)
+                await send_subscription_message(update)
+                return False
         return True
 
     await send_subscription_message(update)
@@ -462,7 +577,7 @@ async def ensure_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 # ==========================================================
-# yt-dlp معلومات وتحميل
+# yt-dlp
 # ==========================================================
 
 def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None):
@@ -552,12 +667,8 @@ def build_download_options(choice: str, job_dir: Path, progress_data: dict):
         return opts
 
     if choice == "video":
-        opts["format"] = (
-            "best[ext=mp4][height<=480]/"
-            "bestvideo[ext=mp4][height<=480]+bestaudio[ext=m4a]/"
-            "best[ext=mp4]/best"
-        )
-        opts["merge_output_format"] = "mp4"
+        # اختيار MP4 جاهز لتجنب الدمج الذي يحتاج ffmpeg
+        opts["format"] = "best[ext=mp4][height<=480]/best[ext=mp4]/best"
         return opts
 
     raise ValueError("اختيار غير معروف.")
@@ -577,7 +688,7 @@ def download_sync(url: str, choice: str, job_dir: Path, progress_data: dict):
 async def send_home(message):
     text = (
         "- تحميل فيديو من يوتيوب بجودة عالية\n"
-        "4K وملفات صوتية وفويس.\n"
+        "4K وملفات صوتية وفويس .\n"
         "- لتحميل ارسل رابط الفيديو او الاسم ✅"
     )
     await message.reply_text(text, reply_markup=home_keyboard())
@@ -586,17 +697,16 @@ async def send_home(message):
 async def send_youtube_section(message):
     text = (
         "• مرحبا بك في قسم تحميل من اليوتيوب\n"
-        "- يمكنك التحميل بعده طرق:\n\n"
+        "- يمكنك التحميل بعده طرق :\n\n"
         "1. ارسال رابط الفيديو من اليوتيوب بشكل مباشر\n"
         "2. ارسال رابط الاغنية من يوتيوب music\n"
         "3. ارسال كلمة للبحث عنها في اليوتيوب لعرض النتائج\n\n"
-        "- اختر الطريقة التي تناسبك."
+        "- اختر الطريقة التي تناسبك ."
     )
     await message.reply_text(text, reply_markup=youtube_back_keyboard())
 
 
 async def send_video_card(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
-    user_id = update.effective_user.id
     message = update.message
 
     status = await message.reply_text("يتم جلب المعلومات...")
@@ -609,6 +719,7 @@ async def send_video_card(update: Update, context: ContextTypes.DEFAULT_TYPE, ur
         duration = format_duration(info.get("duration"))
         size = estimate_best_size(info)
         uploader = safe_title(info.get("uploader", ""), 60)
+        thumb = get_thumbnail(info)
 
         context.user_data["current_url"] = url
         context.user_data["current_info"] = {
@@ -624,10 +735,25 @@ async def send_video_card(update: Update, context: ContextTypes.DEFAULT_TYPE, ur
             f"◯ {duration} - 💾 {size}"
         )
 
-        if uploader:
-            text += f"\n👤 {uploader}"
+        await safe_edit(status, "تم جلب المعلومات.")
 
-        await safe_edit(status, text, reply_markup=download_choices_keyboard())
+        try:
+            await status.delete()
+        except Exception:
+            pass
+
+        if thumb:
+            try:
+                await message.reply_photo(
+                    photo=thumb,
+                    caption=text,
+                    reply_markup=download_choices_keyboard(),
+                )
+                return
+            except Exception:
+                pass
+
+        await message.reply_text(text, reply_markup=download_choices_keyboard())
 
     except FileNotFoundError as e:
         await safe_edit(status, f"⚠️ {short_error(e)}")
@@ -646,6 +772,11 @@ async def send_video_card(update: Update, context: ContextTypes.DEFAULT_TYPE, ur
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cleanup_old_downloads()
+    register_user(update.effective_user)
+
+    if is_banned(update.effective_user.id):
+        await update.message.reply_text("❌ لا يمكنك استخدام البوت حالياً.")
+        return
 
     if not await ensure_subscription(update, context):
         return
@@ -681,27 +812,15 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    if user_id not in ADMIN_IDS:
+    if not is_admin(user_id):
         await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
         return
 
-    stats = load_stats()
-    await update.message.reply_text(
-        "🛠 لوحة الأدمن\n\n"
-        f"📩 الطلبات: {stats.get('requests', 0)}\n"
-        f"✅ الناجحة: {stats.get('success', 0)}\n"
-        f"❌ الفاشلة: {stats.get('failed', 0)}\n"
-        f"🎵 الصوت: {stats.get('audio', 0)}\n"
-        f"🎬 الفيديو: {stats.get('video', 0)}\n"
-        f"📦 الحجم المرسل: {format_size(stats.get('bytes', 0))}\n"
-        f"🔒 المستخدمون المتحققون: {len(load_verified())}\n\n"
-        "/clean - تنظيف الملفات\n"
-        "/resetverify USER_ID - تصفير تحقق"
-    )
+    await update.message.reply_text("🛠 تحكم الأدمن", reply_markup=admin_keyboard())
 
 
 async def clean_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS:
+    if not is_admin(update.effective_user.id):
         await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
         return
 
@@ -709,8 +828,38 @@ async def clean_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ تم تنظيف الملفات القديمة.")
 
 
+async def ban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
+        return
+
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("استخدم:\n/ban 123456789")
+        return
+
+    banned = load_banned()
+    banned.add(int(context.args[0]))
+    save_banned(banned)
+    await update.message.reply_text("✅ تم الحظر.")
+
+
+async def unban_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
+        return
+
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("استخدم:\n/unban 123456789")
+        return
+
+    banned = load_banned()
+    banned.discard(int(context.args[0]))
+    save_banned(banned)
+    await update.message.reply_text("✅ تم فك الحظر.")
+
+
 async def resetverify_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS:
+    if not is_admin(update.effective_user.id):
         await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
         return
 
@@ -723,12 +872,41 @@ async def resetverify_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(f"✅ تم تصفير تحقق المستخدم: {target}")
 
 
+async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
+        return
+
+    text = " ".join(context.args).strip()
+    if not text:
+        await update.message.reply_text("استخدم:\n/broadcast نص الرسالة")
+        return
+
+    sent = 0
+    failed = 0
+    for uid in all_user_ids():
+        try:
+            await context.bot.send_message(chat_id=uid, text=text)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            failed += 1
+
+    await update.message.reply_text(f"✅ تم الإرسال: {sent}\n❌ فشل: {failed}")
+
+
 # ==========================================================
 # التعامل مع الرسائل
 # ==========================================================
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
+        return
+
+    register_user(update.effective_user)
+
+    if is_banned(update.effective_user.id):
+        await update.message.reply_text("❌ لا يمكنك استخدام البوت حالياً.")
         return
 
     if not await ensure_subscription(update, context):
@@ -746,7 +924,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_video_card(update, context, text)
         return
 
-    # إذا كتب اسم فيديو، نعطيه رابط بحث بدل كثرة نتائج
     search_url = f"https://www.youtube.com/results?search_query={quote_plus(text)}"
     await update.message.reply_text(
         "🔎 أرسلت اسم وليس رابطاً.\n\n"
@@ -767,6 +944,8 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    register_user(query.from_user)
+
     data = query.data or ""
     user_id = query.from_user.id
 
@@ -782,6 +961,11 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         set_verified(user_id)
         await query.edit_message_text("✅ تم تفعيل البوت بنجاح.\n\nارسل /start")
+        return
+
+    # أزرار الأدمن
+    if data.startswith("admin_"):
+        await handle_admin_button(update, context)
         return
 
     if not await ensure_subscription(update, context):
@@ -832,6 +1016,60 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await process_download(update, context, url, choices[data])
+
+
+async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    if not is_admin(query.from_user.id):
+        await query.message.reply_text("❌ هذا الزر للأدمن فقط.")
+        return
+
+    data = query.data
+    stats = load_stats()
+
+    if data == "admin_stats":
+        await query.message.reply_text(
+            "📊 الإحصائيات:\n\n"
+            f"📩 الطلبات: {stats.get('requests', 0)}\n"
+            f"✅ الناجحة: {stats.get('success', 0)}\n"
+            f"❌ الفاشلة: {stats.get('failed', 0)}\n"
+            f"🎵 الصوت: {stats.get('audio', 0)}\n"
+            f"🎬 الفيديو: {stats.get('video', 0)}\n"
+            f"📦 الحجم: {format_size(stats.get('bytes', 0))}"
+        )
+        return
+
+    if data == "admin_users":
+        await query.message.reply_text(
+            "👥 المستخدمين:\n\n"
+            f"المسجلين: {len(all_user_ids())}\n"
+            f"المتحققين: {len(load_verified())}\n"
+            f"المحظورين: {len(load_banned())}"
+        )
+        return
+
+    if data == "admin_active":
+        await query.message.reply_text(f"📥 التحميل النشط: {len(ACTIVE_USERS)}")
+        return
+
+    if data == "admin_cookies":
+        await query.message.reply_text(f"🍪 cookies.txt: {'موجود ✅' if has_cookies_file() else 'غير موجود ❌'}")
+        return
+
+    if data == "admin_sub":
+        await query.message.reply_text(
+            "🔒 الاشتراك:\n\n"
+            f"مفعل: {'نعم ✅' if FORCE_SUBSCRIPTION else 'لا ❌'}\n"
+            f"تحقق تيليجرام الحقيقي: {TELEGRAM_REQUIRED_CHAT or 'غير مفعّل'}\n"
+            f"إنستغرام: {'مطلوب شكلياً' if REQUIRE_INSTAGRAM else 'غير مطلوب'}"
+        )
+        return
+
+    if data == "admin_clean":
+        cleanup_old_downloads()
+        await query.message.reply_text("✅ تم تنظيف الملفات القديمة.")
+        return
 
 
 async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, choice: str):
@@ -953,7 +1191,7 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
         stat_inc("success", 1)
         stat_inc("bytes", file_size)
 
-        await safe_edit(status_message, "• تم الإرسال •", reply_markup=after_done_keyboard())
+        await safe_edit(status_message, "• تم الإرسال •", reply_markup=sent_keyboard())
 
     except FileNotFoundError as e:
         stat_inc("failed", 1)
@@ -1038,7 +1276,10 @@ def main():
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CommandHandler("clean", clean_command))
+    app.add_handler(CommandHandler("ban", ban_command))
+    app.add_handler(CommandHandler("unban", unban_command))
     app.add_handler(CommandHandler("resetverify", resetverify_command))
+    app.add_handler(CommandHandler("broadcast", broadcast_command))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(button_click))
