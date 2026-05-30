@@ -43,7 +43,6 @@ REQUEST_EXPIRE_SECONDS = 15 * 60
 OLD_DOWNLOADS_EXPIRE_SECONDS = 60 * 60
 PROGRESS_UPDATE_SECONDS = 3
 
-
 ADMIN_IDS_RAW = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS = set()
 
@@ -368,7 +367,7 @@ async def safe_edit(message, text: str, reply_markup=None):
 def download_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🎵 صوت أصلي", callback_data="download_audio"),
+            InlineKeyboardButton("🎵 صوت", callback_data="download_audio"),
             InlineKeyboardButton("🎬 فيديو", callback_data="download_video"),
         ],
         [
@@ -454,7 +453,8 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
         "continuedl": True,
         "socket_timeout": 30,
         "windowsfilenames": True,
-        "restrictfilenames": False,        "http_headers": {
+        "restrictfilenames": False,
+        "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -563,7 +563,7 @@ def build_download_options(url: str, choice: str, job_dir: Path, progress_data: 
 
     if choice == "audio":
         # بدون تحويل MP3 حتى لا يحتاج ffmpeg
-        opts["format"] = "bestaudio/best"
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
 
     elif choice == "video":
         # مثل الأساس القديم: فيديو MP4 جاهز ومناسب لتجنب ffmpeg
@@ -692,7 +692,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🌐 المنصة: {extractor}\n"
             f"⏱️ المدة: {duration_text}\n"
             f"📦 الحجم التقريبي: {size}\n\n"
-            "اختر نوع التحميل:\n🎵 الصوت الأصلي = أفضل جودة صوت متاحة من المصدر"
+            "اختر نوع التحميل:"
         )
 
         try:
