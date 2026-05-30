@@ -81,17 +81,14 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_message = await query.edit_message_text("⏳ جاري تجهيز الطلب...")
     out_tmpl = str(job_dir / "%(title).80s [%(id)s].%(ext)s")
 
-    # إعدادات التمويه المتوافقة مع السيرفر بدون مكتبات خارجية
+    # استخدام عميل الأندرويد لحل مشكلة الـ DRM نهائياً وتجنب الحظر
     base_ydl_opts = {
         "outtmpl": out_tmpl,
         "quiet": True,
         "noplaylist": True,
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        },
         "extractor_args": {
             "youtube": {
-                "player_client": ["tv", "ios"],  # استخدام مشغلات يوتيوب الأكثر تسامحاً مع السيرفرات
+                "player_client": ["android"],  # هذا العميل يمنع مشاكل الحماية والتشفير الرقمي
                 "skip": ["webpage"]
             }
         }
