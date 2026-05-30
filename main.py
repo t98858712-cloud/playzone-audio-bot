@@ -386,7 +386,6 @@ def welcome_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📘 طريقة الاستخدام", callback_data="user_help"),
-            InlineKeyboardButton("📊 حالة البوت", callback_data="user_status"),
         ],
         [
             InlineKeyboardButton("🔗 أرسل رابط الآن", callback_data="send_link_hint"),
@@ -398,7 +397,6 @@ def admin_welcome_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📘 طريقة الاستخدام", callback_data="user_help"),
-            InlineKeyboardButton("📊 حالة البوت", callback_data="user_status"),
         ],
         [
             InlineKeyboardButton("🔗 أرسل رابط الآن", callback_data="send_link_hint"),
@@ -721,25 +719,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         err = short_error(e)
-
-        if "Sign in to confirm" in err or "not a bot" in err or "cookies" in err.lower():
-            await safe_edit(
-                status,
-                "❌ يوتيوب طلب تحقق من السيرفر.\n\n"
-                "تم استخدام إعدادات الكود القديم، لكن هذا الرابط يحتاج cookies.txt محدث بجانب main.py.\n\n"
-                "الحل:\n"
-                "1) ارفع cookies.txt بجانب main.py\n"
-                "2) اعمل Redeploy\n"
-                "3) جرّب الرابط مرة أخرى\n\n"
-                f"التفاصيل:\n{err}"
-            )
-            return
+        set_last_error(err)
+        logger.warning(f"فشل فحص الرابط للمستخدم {user_id}: {err}")
 
         await safe_edit(
             status,
-            "❌ تعذر فحص الرابط.\n\n"
-            "قد يكون الرابط غير مدعوم، أو يحتاج cookies.txt، أو أن المنصة تمنع التحميل حالياً.\n\n"
-            f"التفاصيل:\n{err}"
+            "❌ تعذر تجهيز الرابط.\n\n"
+            "جرّب رابطاً آخر أو حاول لاحقاً."
         )
 
 
@@ -779,17 +765,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "1️⃣ أرسل الرابط فقط.\n"
             "2️⃣ انتظر ظهور معلومات الملف.\n"
             "3️⃣ اختر: صوت أو فيديو أو ملف.\n"
-            "4️⃣ انتظر الإرسال.\n\n"
-            "💡 ملاحظة: إذا كان فيديو يوتيوب وطلب تحقق، يحتاج السيرفر cookies.txt محدث."
-        )
-        return
-
-    if data == "user_status":
-        await query.message.reply_text(
-            "📊 حالة البوت:\n\n"
-            f"🍪 cookies.txt: {'موجود ✅' if has_cookies_file() else 'غير موجود / اختياري ⚠️'}\n"
-            f"📥 التحميل النشط: {len(ACTIVE_USERS)}\n"
-            f"📦 حد الملف: {format_size(MAX_TELEGRAM_SIZE)}"
+            "4️⃣ انتظر الإرسال."
         )
         return
 
@@ -852,7 +828,8 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"📁 الملفات: {stats.get('file', 0)}\n"
             f"📦 الحجم المرسل: {format_size(stats.get('bytes', 0))}\n"
             f"📢 تنبيهات ناجحة: {stats.get('broadcast_sent', 0)}\n"
-            f"⚠️ تنبيهات فاشلة: {stats.get('broadcast_failed', 0)}"
+            f"⚠️ تنبيهات فاشلة: {stats.get('broadcast_failed', 0)}\n"
+            f"🧾 آخر خطأ: {safe_text(stats.get('last_error', 'لا يوجد'), 120) or 'لا يوجد'}"
         )
         return
 
@@ -1058,39 +1035,34 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
         stat_inc("failed", 1)
         err = short_error(e)
         set_last_error(err)
-
-        if "Sign in to confirm" in err or "not a bot" in err or "cookies" in err.lower():
-            await safe_edit(
-                status_message,
-                "❌ يوتيوب طلب تحقق من السيرفر.\n\n"
-                "استخدمت إعدادات الكود القديم، لكن هذا الرابط يحتاج cookies.txt محدث.\n\n"
-                "ارفع cookies.txt بجانب main.py ثم اعمل Redeploy.\n\n"
-                f"التفاصيل:\n{err}"
-            )
-            return
+        logger.warning(f"فشل التحميل للمستخدم {user_id}: {err}")
 
         await safe_edit(
             status_message,
             "❌ فشل التحميل.\n\n"
-            "الرابط قد يكون غير مدعوم، أو يحتاج cookies.txt، أو المنصة تمنع التحميل حالياً.\n\n"
-            f"التفاصيل:\n{err}"
+            "جرّب رابطاً آخر أو حاول لاحقاً."
         )
 
     except TimedOut:
         stat_inc("failed", 1)
         set_last_error("Telegram timeout")
-        await safe_edit(status_message, "❌ انتهت مهلة تيليجرام، جرّب مرة أخرى.")
+        await safe_edit(status_message, "❌ استغرق الطلب وقتاً طويلاً. جرّب مرة أخرى.")
 
     except NetworkError:
         stat_inc("failed", 1)
         set_last_error("Telegram network error")
-        await safe_edit(status_message, "❌ مشكلة اتصال، جرّب بعد قليل.")
+        await safe_edit(status_message, "❌ حدثت مشكلة اتصال. جرّب بعد قليل.")
 
     except Exception as e:
-        logger.exception("خطأ غير متوقع")
+        err = short_error(e)
+        logger.exception(f"خطأ غير متوقع للمستخدم {user_id}: {err}")
         stat_inc("failed", 1)
-        set_last_error(short_error(e))
-        await safe_edit(status_message, f"❌ حدث خطأ:\n{short_error(e)}")
+        set_last_error(err)
+        await safe_edit(
+            status_message,
+            "❌ حدث خطأ أثناء المعالجة.\n\n"
+            "جرّب مرة أخرى لاحقاً."
+        )
 
     finally:
         stop_event.set()
