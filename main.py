@@ -23,6 +23,7 @@ BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
 
 # حد تيليجرام للبوتات العادية 50MB
 MAX_TELEGRAM_SIZE = 50 * 1024 * 1024
+COOKIES_FILE = "cookies.txt"  # اسم ملف الكوكيز
 
 
 def make_job_dir(user_id: int) -> Path:
@@ -101,12 +102,28 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     out_tmpl = str(job_dir / "%(title).80s [%(id)s].%(ext)s")
 
+    # إعدادات مشتركة للتمويه وتخطي حظر يوتيوب
+    base_ydl_opts = {
+        "outtmpl": out_tmpl,
+        "quiet": True,
+        "noplaylist": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"],  # التمويه كإصدار أندرويد لتفادي الحظر
+                "skip": ["webpage"]
+            }
+        }
+    }
+
+    # التحقق من وجود ملف الكوكيز وتطبيقه تلقائياً
+    if os.path.exists(COOKIES_FILE):
+        base_ydl_opts["cookiefile"] = COOKIES_FILE
+        print("ℹ️ تم العثور على ملف الكوكيز وتطبيقه بنجاح.")
+
     if choice == "mp3":
         ydl_opts = {
+            **base_ydl_opts,
             "format": "bestaudio/best",
-            "outtmpl": out_tmpl,
-            "quiet": True,
-            "noplaylist": True,
             "postprocessors": [
                 {
                     "key": "FFmpegExtractAudio",
@@ -117,10 +134,8 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
     else:
         ydl_opts = {
+            **base_ydl_opts,
             "format": "best[ext=mp4][height<=480]/best[height<=480]/best",
-            "outtmpl": out_tmpl,
-            "quiet": True,
-            "noplaylist": True,
             "merge_output_format": "mp4",
         }
 
