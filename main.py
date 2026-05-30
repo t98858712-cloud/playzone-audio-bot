@@ -245,6 +245,28 @@ def is_youtube_url(url: str) -> bool:
     return "youtube.com" in url or "youtu.be" in url or "music.youtube.com" in url
 
 
+def platform_name_from_url(url: str) -> str:
+    try:
+        host = urlparse(url).netloc.lower().replace("www.", "")
+    except Exception:
+        return "رابط"
+
+    if "youtube" in host or "youtu.be" in host:
+        return "YouTube"
+    if "tiktok" in host:
+        return "TikTok"
+    if "instagram" in host:
+        return "Instagram"
+    if "facebook" in host or "fb.watch" in host:
+        return "Facebook"
+    if "x.com" in host or "twitter" in host:
+        return "X"
+    if "soundcloud" in host:
+        return "SoundCloud"
+
+    return host or "رابط"
+
+
 def has_cookies_file() -> bool:
     path = Path(COOKIES_FILE)
     return path.exists() and path.is_file() and path.stat().st_size > 0
@@ -586,7 +608,8 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
         "socket_timeout": 30,
         "cachedir": False,
         "windowsfilenames": True,
-        "restrictfilenames": False,        "http_headers": {
+        "restrictfilenames": False,
+        "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -694,8 +717,9 @@ def build_download_options(url: str, choice: str, job_dir: Path, progress_data: 
     opts = base_ydl_opts(job_dir, progress_data)
 
     if choice == "audio":
-        # أعلى جودة صوت متاحة من المصدر بدون تحويل
-        # يفضل Opus/WebM في يوتيوب لأنه غالباً الأفضل جودة
+        # ملف صوتي عالي الجودة:
+        # يفضل Opus/WebM من يوتيوب لأنه غالباً أفضل جودة صوت متاحة
+        # بدون تحويل وبدون ضغط إضافي
         opts["format"] = (
             "bestaudio[acodec*=opus][abr>=128]/"
             "bestaudio[acodec*=opus]/"
@@ -705,8 +729,8 @@ def build_download_options(url: str, choice: str, job_dir: Path, progress_data: 
         )
 
     elif choice == "voice":
-        # مقطع صوتي للاستماع السريع داخل تيليجرام
-        # نحاول اختيار m4a أولاً لأنه أكثر توافقاً، ثم الأفضل المتاح
+        # مقطع صوتي للتشغيل السريع داخل تيليجرام
+        # نفضل m4a للتوافق، ثم الأفضل المتاح
         opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
 
     elif choice == "video":
