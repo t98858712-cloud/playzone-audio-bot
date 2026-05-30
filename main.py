@@ -78,10 +78,10 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = query.from_user.id
     job_dir = make_job_dir(user_id)
-    status_message = await query.edit_message_text("⏳ جاري تجهيز الطلب واكتشاف السيرفر...")
+    status_message = await query.edit_message_text("⏳ جاري معالجة الطلب وفحص النظام...")
     out_tmpl = str(job_dir / "%(title).80s [%(id)s].%(ext)s")
 
-    # تهيئة إعدادات الأندرويد الأكثر استقراراً لتفادي الـ DRM والحظر
+    # إعدادات أندرويد لتفادي الحظر والـ DRM
     base_ydl_opts = {
         "outtmpl": out_tmpl,
         "quiet": True,
@@ -94,13 +94,20 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
     }
 
+    # محاولة كشف مسار ffmpeg الشائع في بيئات السحابية وإضافته تلقائياً لمنع الخطأ
+    possible_ffmpeg_paths = ["/usr/bin", "/usr/local/bin", "/opt/homebrew/bin", "/nix/store"]
+    for path in possible_ffmpeg_paths:
+        if os.path.exists(os.path.join(path, "ffmpeg")) or os.path.exists(path):
+            base_ydl_opts["ffmpeg_location"] = path
+            break
+
     if os.path.exists(COOKIES_FILE):
         base_ydl_opts["cookiefile"] = COOKIES_FILE
 
     if choice == "mp3":
         ydl_opts = {
             **base_ydl_opts, 
-            "format": "ba/b",  # سحب الصوت الأصلي المتاح بدون تعقيد
+            "format": "ba/b",
             "postprocessors": [{
                 "key": "FFmpegExtractAudio", 
                 "preferredcodec": "mp3", 
@@ -110,13 +117,13 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         ydl_opts = {
             **base_ydl_opts, 
-            "format": "worstvideo[ext=mp4]+ba[ext=m4a]/best[ext=mp4]/best", # اختيار صيغة MP4 جاهزة ومباشرة لتفادي مشاكل الدمج المعقدة
+            "format": "worstvideo[ext=mp4]+ba[ext=m4a]/best[ext=mp4]/best",
             "merge_output_format": "mp4"
         }
 
     loop = asyncio.get_running_loop()
     try:
-        await status_message.edit_text("📥 جاري التحميل والمعالجة باستخدام FFmpeg...")
+        await status_message.edit_text("📥 جاري التحميل والتحويل البرمجي...")
         info = await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(ydl_opts).extract_info(url, download=True))
         
         title = info.get("title", "ملف")
