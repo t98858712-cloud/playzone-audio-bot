@@ -382,6 +382,33 @@ def done_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🔁 أرسل رابط جديد", callback_data="done")],
     ])
 
+def welcome_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📘 طريقة الاستخدام", callback_data="user_help"),
+            InlineKeyboardButton("📊 حالة البوت", callback_data="user_status"),
+        ],
+        [
+            InlineKeyboardButton("🔗 أرسل رابط الآن", callback_data="send_link_hint"),
+        ],
+    ])
+
+
+def admin_welcome_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📘 طريقة الاستخدام", callback_data="user_help"),
+            InlineKeyboardButton("📊 حالة البوت", callback_data="user_status"),
+        ],
+        [
+            InlineKeyboardButton("🔗 أرسل رابط الآن", callback_data="send_link_hint"),
+        ],
+        [
+            InlineKeyboardButton("🛠 لوحة الأدمن", callback_data="admin_open"),
+        ],
+    ])
+
+
 
 def admin_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
@@ -570,10 +597,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "👋 أهلاً بك في بوت التحميل الشامل.\n\n"
-        "أرسل أي رابط فيديو أو صوت من منصة مدعومة، وسأعرض لك خيارات التحميل.\n\n"
+        "أرسل رابط فيديو أو صوت وسأجهزه لك بخيارات واضحة.\n\n"
         "يدعم غالباً:\n"
         "YouTube • TikTok • Instagram • Facebook • X • SoundCloud وغيرها.\n\n"
-        "أرسل الرابط الآن للبدء ✅"
+        "✅ الخطوة التالية: أرسل الرابط مباشرة.",
+        reply_markup=admin_welcome_keyboard() if is_admin(update.effective_user.id) else welcome_keyboard(),
+        disable_web_page_preview=True,
     )
 
 
@@ -581,7 +610,11 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(update.effective_user)
 
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("❌ هذا الأمر للأدمن فقط.")
+        await update.message.reply_text(
+            "❌ هذا الأمر للأدمن فقط.\n\n"
+            f"ID حسابك هو: {update.effective_user.id}\n"
+            "ضع هذا الرقم في Railway داخل ADMIN_IDS ثم اعمل Redeploy."
+        )
         return
 
     context.user_data.pop("awaiting_broadcast", None)
@@ -623,11 +656,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not is_valid_url(text):
         await update.message.reply_text(
-            "❌ أرسل رابطاً صحيحاً يبدأ بـ http أو https.\n\n"
-            "مثال:\n"
+            "❌ لم أتعرف على هذا كرابط.\n\n"
+            "أرسل رابطاً يبدأ بـ http أو https مثل:\n"
             "https://www.youtube.com/watch?v=...\n"
             "https://www.tiktok.com/...\n"
-            "https://www.instagram.com/..."
+            "https://www.instagram.com/...\n\n"
+            "أو اضغط زر طريقة الاستخدام.",
+            reply_markup=welcome_keyboard(),
+            disable_web_page_preview=True,
         )
         return
 
@@ -716,8 +752,46 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data or ""
 
+    if data == "admin_open":
+        if not is_admin(query.from_user.id):
+            await query.message.reply_text("❌ هذا الزر للأدمن فقط.")
+            return
+
+        context.user_data.pop("awaiting_broadcast", None)
+        context.user_data.pop("broadcast_text", None)
+
+        await query.message.reply_text(
+            "🛠 لوحة الإدارة الضرورية",
+            reply_markup=admin_keyboard(),
+        )
+        return
+
     if data == "done":
-        await query.answer("أرسل رابطاً جديداً الآن")
+        await query.message.reply_text("📩 أرسل الرابط الجديد الآن.")
+        return
+
+    if data == "user_help":
+        await query.message.reply_text(
+            "📘 طريقة الاستخدام:\n\n"
+            "1️⃣ أرسل الرابط فقط.\n"
+            "2️⃣ انتظر ظهور معلومات الملف.\n"
+            "3️⃣ اختر: صوت أو فيديو أو ملف.\n"
+            "4️⃣ انتظر الإرسال.\n\n"
+            "💡 ملاحظة: إذا كان فيديو يوتيوب وطلب تحقق، يحتاج السيرفر cookies.txt محدث."
+        )
+        return
+
+    if data == "user_status":
+        await query.message.reply_text(
+            "📊 حالة البوت:\n\n"
+            f"🍪 cookies.txt: {'موجود ✅' if has_cookies_file() else 'غير موجود / اختياري ⚠️'}\n"
+            f"📥 التحميل النشط: {len(ACTIVE_USERS)}\n"
+            f"📦 حد الملف: {format_size(MAX_TELEGRAM_SIZE)}"
+        )
+        return
+
+    if data == "send_link_hint":
+        await query.message.reply_text("🔗 أرسل الرابط الآن، وسأعرض لك خيارات التحميل.")
         return
 
     if data == "cancel":
@@ -974,7 +1048,7 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
         stat_inc("success", 1)
         stat_inc("bytes", file_size)
 
-        await safe_edit(status_message, "✅ تم إرسال الملف.", reply_markup=done_keyboard())
+        await safe_edit(status_message, "✅ تم إرسال الملف.\n\nيمكنك إرسال رابط جديد مباشرة.", reply_markup=done_keyboard())
 
     except yt_dlp.utils.DownloadError as e:
         stat_inc("failed", 1)
@@ -1032,8 +1106,11 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # لا نعرض سلاشات للمستخدم، فقط نوجهه للبداية
-    await update.message.reply_text("اضغط /start ثم أرسل رابط التحميل.")
+    await update.message.reply_text(
+        "اضغط /start ثم أرسل رابط التحميل.\n\n"
+        "لا تحتاج أي أوامر أخرى كمستخدم.",
+        reply_markup=welcome_keyboard(),
+    )
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
