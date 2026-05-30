@@ -78,30 +78,29 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = query.from_user.id
     job_dir = make_job_dir(user_id)
-    status_message = await query.edit_message_text("⏳ جاري تجاوز حماية يوتيوب والتحميل...")
+    status_message = await query.edit_message_text("⏳ جاري التحقق من نظام الكوكيز وبدء سحب الملف...")
     out_tmpl = str(job_dir / "%(title).80s.%(ext)s")
 
-    # إعدادات متطورة تحاكي متصفح سفاري حقيقي لكسر حظر سيرفرات Railway
+    # إعدادات أساسية تعتمد على ملف الكوكيز المرفوع لتخطي حظر الـ IP
     base_ydl_opts = {
         "outtmpl": out_tmpl,
         "quiet": True,
         "noplaylist": True,
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Sec-Fetch-Mode": "navigate",
-        },
         "extractor_args": {
             "youtube": {
-                "player_client": ["web", "mweb"], # التبديل إلى مشغلات الويب لكسر قيود تطبيق الأندرويد المكتشفة
+                "player_client": ["web", "android"],
                 "skip": ["webpage"]
             }
         }
     }
 
-    if os.path.exists(COOKIES_FILE) and os.path.getsize(COOKIES_FILE) > 100:
+    # التأكد من وجود الملف وقراءته
+    if os.path.exists(COOKIES_FILE):
         base_ydl_opts["cookiefile"] = COOKIES_FILE
+    else:
+        await status_message.edit_text("⚠️ تنبيه: لم يتم العثور على ملف cookies.txt على السيرفر! يرجى رفعه أولاً لتجنب الحظر.")
+        clean_job_dir(job_dir)
+        return
 
     if choice == "mp3":
         ydl_opts = {
@@ -116,17 +115,18 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     loop = asyncio.get_running_loop()
     try:
+        await status_message.edit_text("📥 جاري التحميل الآمن باستخدام حسابك...")
         info = await loop.run_in_executor(None, lambda: yt_dlp.YoutubeDL(ydl_opts).extract_info(url, download=True))
         
         title = info.get("title", "ملف")
         file_path = find_downloaded_file(job_dir)
 
         if not file_path or not file_path.exists():
-            await status_message.edit_text("❌ فشل معالجة الملف بعد التحميل.")
+            await status_message.edit_text("❌ فشل العثور على الملف بعد تحميله.")
             return
 
         if file_path.stat().st_size > MAX_TELEGRAM_SIZE:
-            await status_message.edit_text("❌ حجم الملف أكبر من 50MB حد تيليجرام.")
+            await status_message.edit_text("❌ حجم الملف أكبر من 50MB (حد تيليجرام للبوتات العادية).")
             return
 
         await status_message.edit_text("📤 جاري الرفع الفوري...")
@@ -138,7 +138,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_message.delete()
 
     except Exception as e:
-        await status_message.edit_text(f"❌ حدث خطأ أثناء المعالجة:\n{short_error(e)}")
+        await status_message.edit_text(f"❌ حدث خطأ أثناء المعالجة:\n{short_error(e)}\n\n💡 تأكد من أن كوكيز حسابك لم تنتهِ صلاحيتها.")
     finally:
         clean_job_dir(job_dir)
         context.user_data.pop("current_url", None)
