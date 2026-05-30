@@ -26,6 +26,7 @@ from telegram.ext import (
 # ==========================================================
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+
 BASE_DOWNLOAD_DIR = Path("./downloads")
 BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
 
@@ -44,6 +45,7 @@ PROGRESS_UPDATE_SECONDS = 3
 
 ADMIN_IDS_RAW = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS = set()
+
 for item in ADMIN_IDS_RAW.split(","):
     item = item.strip()
     if item.isdigit():
@@ -55,19 +57,22 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("PlayZoneBot")
+
+logger = logging.getLogger("PlayZoneFinalBot")
 
 
 # ==========================================================
-# حفظ بسيط للبيانات
+# تخزين بسيط
 # ==========================================================
 
 def load_json(path: Path, default):
     try:
         if not path.exists():
             return default
+
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
+
     except Exception:
         return default
 
@@ -78,6 +83,7 @@ def save_json(path: Path, data):
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         tmp.replace(path)
+
     except Exception as e:
         logger.warning(f"تعذر حفظ البيانات: {e}")
 
@@ -98,13 +104,15 @@ def register_user(user):
 
 def all_user_ids():
     data = load_json(USERS_FILE, {})
-    result = []
+    ids = []
+
     for key in data.keys():
         try:
-            result.append(int(key))
+            ids.append(int(key))
         except Exception:
             pass
-    return result
+
+    return ids
 
 
 def load_stats():
@@ -118,9 +126,12 @@ def load_stats():
         "bytes": 0,
         "last_error": "",
     }
+
     data = load_json(STATS_FILE, default)
+
     for k, v in default.items():
         data.setdefault(k, v)
+
     return data
 
 
@@ -141,7 +152,7 @@ def set_last_error(text: str):
 
 
 # ==========================================================
-# أدوات مساعدة
+# أدوات
 # ==========================================================
 
 def is_admin(user_id: int) -> bool:
@@ -151,6 +162,7 @@ def is_admin(user_id: int) -> bool:
 def safe_text(text, limit=3500):
     if not text:
         return ""
+
     text = str(text)
     return text[:limit] + "..." if len(text) > limit else text
 
@@ -164,11 +176,14 @@ def short_error(e: Exception) -> str:
 def safe_title(text: str, limit=90) -> str:
     if not text:
         return "ملف"
+
     text = str(text)
     text = re.sub(r"[\\/:*?\"<>|]+", "", text)
     text = re.sub(r"\s+", " ", text).strip()
+
     if len(text) > limit:
         text = text[:limit].strip()
+
     return text or "ملف"
 
 
@@ -187,8 +202,10 @@ def format_size(size_bytes) -> str:
 
     if gb >= 1:
         return f"{gb:.1f} GB"
+
     if mb >= 1:
         return f"{mb:.1f} MB"
+
     return f"{kb:.1f} KB"
 
 
@@ -204,6 +221,7 @@ def format_duration(seconds) -> str:
 
     if h:
         return f"{h}:{m:02d}:{s:02d}"
+
     return f"{m:02d}:{s:02d}"
 
 
@@ -235,7 +253,7 @@ def clean_job_dir(job_dir: Path):
         if job_dir and job_dir.exists():
             shutil.rmtree(job_dir)
     except Exception as e:
-        print(f"خطأ أثناء تنظيف الملفات: {e}")
+        logger.warning(f"خطأ أثناء تنظيف الملفات: {e}")
 
 
 def cleanup_old_downloads():
@@ -247,6 +265,7 @@ def cleanup_old_downloads():
                 continue
 
             age = now - item.stat().st_mtime
+
             if age < OLD_DOWNLOADS_EXPIRE_SECONDS:
                 continue
 
@@ -281,6 +300,7 @@ def find_downloaded_file(job_dir: Path):
 def estimate_size(info: dict) -> str:
     try:
         sizes = []
+
         for f in info.get("formats") or []:
             size = f.get("filesize") or f.get("filesize_approx")
             if size:
@@ -290,6 +310,7 @@ def estimate_size(info: dict) -> str:
             return format_size(max(sizes))
 
         return "غير معروف"
+
     except Exception:
         return "غير معروف"
 
@@ -304,9 +325,21 @@ def get_thumbnail(info: dict) -> str:
                 reverse=True,
             )[0]
             return best.get("url") or info.get("thumbnail") or ""
+
         return info.get("thumbnail") or ""
+
     except Exception:
         return ""
+
+
+def progress_bar(percent: float) -> str:
+    try:
+        percent = max(0, min(100, float(percent)))
+        filled = int(percent // 10)
+        empty = 10 - filled
+        return "█" * filled + "░" * empty
+    except Exception:
+        return "░" * 10
 
 
 async def safe_edit(message, text: str, reply_markup=None):
@@ -344,7 +377,7 @@ def download_keyboard() -> InlineKeyboardMarkup:
 
 def done_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ تم الإرسال", callback_data="done")],
+        [InlineKeyboardButton("🔁 أرسل رابط جديد", callback_data="done")],
     ])
 
 
@@ -395,7 +428,7 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
     if progress_data is not None:
         opts["progress_hooks"] = [progress_hook(progress_data)]
 
-    # cookies اختياري لكل المنصات، ومفيد جداً مع يوتيوب/إنستغرام/تيك توك أحياناً
+    # cookies اختياري، لكنه يفيد كثيراً مع بعض المنصات
     if has_cookies_file():
         opts["cookiefile"] = COOKIES_FILE
 
@@ -431,19 +464,23 @@ def progress_hook(progress_data: dict):
                 downloaded = d.get("downloaded_bytes") or 0
                 total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
                 speed = d.get("speed") or 0
+                eta = d.get("eta")
 
                 if total:
                     percent = downloaded / total * 100
+                    bar = progress_bar(percent)
                     progress_data["text"] = (
                         "📥 جاري التحميل...\n\n"
-                        f"📊 {percent:.1f}%\n"
+                        f"{bar} {percent:.1f}%\n\n"
                         f"📦 {format_size(downloaded)} / {format_size(total)}\n"
-                        f"⚡ {format_size(speed)}/s"
+                        f"⚡ {format_size(speed)}/s\n"
+                        f"⏱️ المتبقي: {eta if eta else 'غير معروف'} ثانية"
                     )
                 else:
                     progress_data["text"] = (
                         "📥 جاري التحميل...\n\n"
-                        f"📦 تم تحميل: {format_size(downloaded)}"
+                        f"📦 تم تحميل: {format_size(downloaded)}\n"
+                        f"⚡ {format_size(speed)}/s"
                     )
 
             elif status == "finished":
@@ -501,7 +538,7 @@ def download_sync(url: str, choice: str, job_dir: Path, progress_data: dict):
 
 
 # ==========================================================
-# أوامر المستخدم
+# أوامر المستخدم الضرورية
 # ==========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -510,10 +547,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "👋 أهلاً بك في بوت التحميل الشامل.\n\n"
-        "أرسل رابط فيديو أو صوت من أي منصة مدعومة.\n\n"
+        "أرسل أي رابط فيديو أو صوت من منصة مدعومة، وسأعرض لك خيارات التحميل.\n\n"
         "يدعم غالباً:\n"
         "YouTube • TikTok • Instagram • Facebook • X • SoundCloud وغيرها.\n\n"
-        "بعد إرسال الرابط سأعرض لك معلوماته وخيارات التحميل."
+        "الأوامر:\n"
+        "/help للمساعدة\n"
+        "/status حالة البوت"
     )
 
 
@@ -523,12 +562,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📘 طريقة الاستخدام:\n\n"
         "1️⃣ أرسل الرابط.\n"
-        "2️⃣ اختر: صوت أو فيديو أو ملف.\n"
+        "2️⃣ اختر نوع التحميل.\n"
         "3️⃣ انتظر حتى يصلك الملف.\n\n"
-        "ملاحظات:\n"
-        f"• حد الملف: {format_size(MAX_TELEGRAM_SIZE)}\n"
-        "• بعض المنصات قد تحتاج cookies.txt.\n"
-        "• لا يوجد اشتراك إجباري في هذه النسخة."
+        "الخيارات:\n"
+        "🎵 صوت\n"
+        "🎬 فيديو\n"
+        "📁 ملف\n\n"
+        f"📦 حد الملف: {format_size(MAX_TELEGRAM_SIZE)}\n"
+        "🍪 cookies.txt اختياري، لكنه يساعد مع بعض المنصات."
     )
 
 
@@ -564,6 +605,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = " ".join(context.args).strip()
+
     if not text:
         await update.message.reply_text("استخدم الأمر هكذا:\n/broadcast نص الرسالة")
         return
@@ -677,7 +719,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data or ""
 
     if data == "done":
-        await query.answer("تم")
+        await query.answer("أرسل رابطاً جديداً الآن")
         return
 
     if data == "cancel":
@@ -918,7 +960,7 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ أمر غير معروف. استخدم /start")
+    await update.message.reply_text("❌ أمر غير معروف. استخدم /help")
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -946,6 +988,7 @@ def main():
         .build()
     )
 
+    # السلاشات الضرورية فقط
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("status", status_command))
