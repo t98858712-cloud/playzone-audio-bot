@@ -414,6 +414,10 @@ def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
 # ==========================================================
 
 def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None):
+    """
+    الإعداد العام للمنصات.
+    ملاحظة: يوتيوب له إعداد خاص في apply_platform_tweaks مطابق للأساس القديم.
+    """
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -440,14 +444,17 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
     if progress_data is not None:
         opts["progress_hooks"] = [progress_hook(progress_data)]
 
-    # cookies اختياري، لكنه يفيد كثيراً مع بعض المنصات
-    if has_cookies_file():
-        opts["cookiefile"] = COOKIES_FILE
-
     return opts
 
 
 def apply_platform_tweaks(opts: dict, url: str):
+    """
+    هذا هو أساس إعداد يوتيوب القديم الذي كان يعمل:
+    - player_client web/android
+    - skip webpage
+    - cookies.txt ليوتيوب عند وجوده
+    أما باقي المنصات فتستخدم الإعداد العام.
+    """
     if is_youtube_url(url):
         opts["extractor_args"] = {
             "youtube": {
@@ -455,6 +462,15 @@ def apply_platform_tweaks(opts: dict, url: str):
                 "skip": ["webpage"],
             }
         }
+
+        if has_cookies_file():
+            opts["cookiefile"] = COOKIES_FILE
+
+    else:
+        # لباقي المنصات أيضاً نستفيد من cookies.txt إذا كان موجوداً
+        if has_cookies_file():
+            opts["cookiefile"] = COOKIES_FILE
+
     return opts
 
 
@@ -525,13 +541,8 @@ def build_download_options(url: str, choice: str, job_dir: Path, progress_data: 
         opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
 
     elif choice == "video":
-        # صيغة جاهزة قدر الإمكان لتجنب دمج يحتاج ffmpeg
-        opts["format"] = (
-            "best[ext=mp4][height<=720]/"
-            "best[ext=mp4]/"
-            "best[height<=720]/"
-            "best"
-        )
+        # مثل الأساس القديم: فيديو MP4 جاهز ومناسب لتجنب ffmpeg
+        opts["format"] = "best[ext=mp4][height<=480]/best[ext=mp4]/best"
 
     elif choice == "file":
         opts["format"] = "best"
@@ -670,11 +681,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     except Exception as e:
+        err = short_error(e)
+
+        if "Sign in to confirm" in err or "not a bot" in err or "cookies" in err.lower():
+            await safe_edit(
+                status,
+                "❌ يوتيوب طلب تحقق من السيرفر.\n\n"
+                "تم استخدام إعدادات الكود القديم، لكن هذا الرابط يحتاج cookies.txt محدث بجانب main.py.\n\n"
+                "الحل:\n"
+                "1) ارفع cookies.txt بجانب main.py\n"
+                "2) اعمل Redeploy\n"
+                "3) جرّب الرابط مرة أخرى\n\n"
+                f"التفاصيل:\n{err}"
+            )
+            return
+
         await safe_edit(
             status,
             "❌ تعذر فحص الرابط.\n\n"
             "قد يكون الرابط غير مدعوم، أو يحتاج cookies.txt، أو أن المنصة تمنع التحميل حالياً.\n\n"
-            f"التفاصيل:\n{short_error(e)}"
+            f"التفاصيل:\n{err}"
         )
 
 
@@ -952,12 +978,24 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
     except yt_dlp.utils.DownloadError as e:
         stat_inc("failed", 1)
-        set_last_error(short_error(e))
+        err = short_error(e)
+        set_last_error(err)
+
+        if "Sign in to confirm" in err or "not a bot" in err or "cookies" in err.lower():
+            await safe_edit(
+                status_message,
+                "❌ يوتيوب طلب تحقق من السيرفر.\n\n"
+                "استخدمت إعدادات الكود القديم، لكن هذا الرابط يحتاج cookies.txt محدث.\n\n"
+                "ارفع cookies.txt بجانب main.py ثم اعمل Redeploy.\n\n"
+                f"التفاصيل:\n{err}"
+            )
+            return
+
         await safe_edit(
             status_message,
             "❌ فشل التحميل.\n\n"
             "الرابط قد يكون غير مدعوم، أو يحتاج cookies.txt، أو المنصة تمنع التحميل حالياً.\n\n"
-            f"التفاصيل:\n{short_error(e)}"
+            f"التفاصيل:\n{err}"
         )
 
     except TimedOut:
