@@ -43,6 +43,12 @@ REQUEST_EXPIRE_SECONDS = 15 * 60
 OLD_DOWNLOADS_EXPIRE_SECONDS = 60 * 60
 PROGRESS_UPDATE_SECONDS = 3
 
+# تسريع تجربة المستخدم:
+# FAST_LINK_CHECK=True يعني لا نفحص الرابط قبل إظهار الأزرار.
+# هذا يجعل البوت يرد فوراً، ثم يتم الفحص أثناء التحميل.
+FAST_LINK_CHECK = os.getenv("FAST_LINK_CHECK", "true").lower() == "true"
+
+
 ADMIN_IDS_RAW = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS = set()
 
@@ -360,6 +366,69 @@ async def safe_edit(message, text: str, reply_markup=None):
         logger.warning(f"تعذر تعديل الرسالة: {e}")
 
 
+async def remember_ui_message(context: ContextTypes.DEFAULT_TYPE, message_id: int):
+    context.user_data["last_ui_message_id"] = message_id
+
+
+async def delete_previous_ui(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if not chat:
+        return
+
+    old_id = context.user_data.get("last_ui_message_id")
+    if not old_id:
+        return
+
+    try:
+        await context.bot.delete_message(chat_id=chat.id, message_id=int(old_id))
+    except Exception:
+        pass
+
+
+async def send_clean_message(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup=None):
+    """
+    يرسل واجهة واحدة نظيفة للمستخدم:
+    يحاول حذف آخر واجهة للبوت حتى لا تتكرر الرسائل.
+    """
+    if not update.message:
+        return None
+
+    await delete_previous_ui(update, context)
+    msg = await update.message.reply_text(
+        text,
+        reply_markup=reply_markup,
+        disable_web_page_preview=True,
+    )
+    await remember_ui_message(context, msg.message_id)
+    return msg
+
+
+async def edit_or_send(query, text: str, reply_markup=None):
+    """
+    عند الضغط على زر، نعدّل نفس الرسالة بدل إرسال واجهات متكررة.
+    """
+    try:
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            disable_web_page_preview=True,
+        )
+    except BadRequest as e:
+        if "Message is not modified" in str(e):
+            return
+        await query.message.reply_text(
+            text,
+            reply_markup=reply_markup,
+            disable_web_page_preview=True,
+        )
+    except Exception:
+        await query.message.reply_text(
+            text,
+            reply_markup=reply_markup,
+            disable_web_page_preview=True,
+        )
+
+
 # ==========================================================
 # الأزرار
 # ==========================================================
@@ -367,7 +436,7 @@ async def safe_edit(message, text: str, reply_markup=None):
 def download_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🎵 صوت", callback_data="download_audio"),
+            InlineKeyboardButton("🎵 صوت أصلي", callback_data="download_audio"),
             InlineKeyboardButton("🎬 فيديو", callback_data="download_video"),
         ],
         [
@@ -382,13 +451,14 @@ def done_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🔁 أرسل رابط جديد", callback_data="done")],
     ])
 
+def back_home_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    return admin_welcome_keyboard() if is_admin(user_id) else welcome_keyboard()
+
+
 def welcome_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📘 طريقة الاستخدام", callback_data="user_help"),
-        ],
-        [
-            InlineKeyboardButton("🔗 أرسل رابط الآن", callback_data="send_link_hint"),
         ],
     ])
 
@@ -397,9 +467,6 @@ def admin_welcome_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📘 طريقة الاستخدام", callback_data="user_help"),
-        ],
-        [
-            InlineKeyboardButton("🔗 أرسل رابط الآن", callback_data="send_link_hint"),
         ],
         [
             InlineKeyboardButton("🛠 لوحة الأدمن", callback_data="admin_open"),
@@ -447,14 +514,15 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "playlist_items": "1",
         "ignoreerrors": False,
         "retries": 5,
         "fragment_retries": 5,
         "continuedl": True,
         "socket_timeout": 30,
+        "cachedir": False,
         "windowsfilenames": True,
-        "restrictfilenames": False,
-        "http_headers": {
+        "restrictfilenames": False,        "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -563,7 +631,7 @@ def build_download_options(url: str, choice: str, job_dir: Path, progress_data: 
 
     if choice == "audio":
         # بدون تحويل MP3 حتى لا يحتاج ffmpeg
-        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
+        opts["format"] = "bestaudio/best"
 
     elif choice == "video":
         # مثل الأساس القديم: فيديو MP4 جاهز ومناسب لتجنب ffmpeg
@@ -593,19 +661,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cleanup_old_downloads()
     register_user(update.effective_user)
 
-    await update.message.reply_text(
+    await send_clean_message(
+        update,
+        context,
         "👋 أهلاً بك في بوت التحميل الشامل.\n\n"
-        "طريقة الاستخدام بسيطة جداً:\n"
-        "1️⃣ أرسل الرابط.\n"
-        "2️⃣ اختر صوت أو فيديو أو ملف.\n"
-        "3️⃣ انتظر التحميل والإرسال.\n\n"
+        "أرسل الرابط مباشرة، وستظهر خيارات التحميل فوراً.\n\n"
         "يدعم غالباً:\n"
         "YouTube • TikTok • Instagram • Facebook • X • SoundCloud وغيرها.\n\n"
         "✅ أرسل الرابط الآن للبدء.",
         reply_markup=admin_welcome_keyboard() if is_admin(update.effective_user.id) else welcome_keyboard(),
-        disable_web_page_preview=True,
     )
-
 
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(update.effective_user)
@@ -621,7 +686,9 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("awaiting_broadcast", None)
     context.user_data.pop("broadcast_text", None)
 
-    await update.message.reply_text(
+    await send_clean_message(
+        update,
+        context,
         "🛠 لوحة الإدارة الضرورية\n\nاختر ما تحتاجه فقط:",
         reply_markup=admin_keyboard(),
     )
@@ -656,18 +723,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not is_valid_url(text):
-        await update.message.reply_text(
+        await send_clean_message(
+            update,
+            context,
             "❌ لم أتعرف على هذا كرابط.\n\n"
-            "أرسل رابطاً يبدأ بـ http أو https مثل:\n"
-            "https://www.youtube.com/watch?v=...\n"
-            "https://www.tiktok.com/...\n"
-            "https://www.instagram.com/...\n\n"
-            "أو اضغط زر طريقة الاستخدام.",
-            reply_markup=welcome_keyboard(),
-            disable_web_page_preview=True,
+            "أرسل رابطاً يبدأ بـ http أو https.\n"
+            "مثال: https://www.youtube.com/watch?v=...",
+            reply_markup=admin_welcome_keyboard() if is_admin(user_id) else welcome_keyboard(),
         )
         return
 
+    # الوضع السريع:
+    # لا نستخدم yt-dlp هنا حتى لا يتأخر المستخدم.
+    # نخزن الرابط ونعرض خيارات التحميل فوراً.
+    if FAST_LINK_CHECK:
+        context.user_data["current_url"] = text
+        context.user_data["created_at"] = time.time()
+        stat_inc("requests", 1)
+
+        await send_clean_message(
+            update,
+            context,
+            "✅ تم استلام الرابط.\n\n"
+            "اختر نوع التحميل:",
+            reply_markup=download_keyboard(),
+        )
+        return
+
+    # الوضع القديم إذا عطلت FAST_LINK_CHECK من Railway
     status = await update.message.reply_text("🔍 جاري فحص الرابط...")
 
     try:
@@ -702,20 +785,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if thumb:
             try:
-                await update.message.reply_photo(
+                msg = await update.message.reply_photo(
                     photo=thumb,
                     caption=caption,
                     reply_markup=download_keyboard(),
                 )
+                await remember_ui_message(context, msg.message_id)
                 return
             except Exception:
                 pass
 
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             caption,
             reply_markup=download_keyboard(),
             disable_web_page_preview=True,
         )
+        await remember_ui_message(context, msg.message_id)
 
     except Exception as e:
         err = short_error(e)
@@ -749,34 +834,49 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("awaiting_broadcast", None)
         context.user_data.pop("broadcast_text", None)
 
-        await query.message.reply_text(
+        await edit_or_send(
+            query,
             "🛠 لوحة الإدارة الضرورية\n\nاختر ما تحتاجه فقط:",
             reply_markup=admin_keyboard(),
         )
         return
 
     if data == "done":
-        await query.message.reply_text("📩 أرسل الرابط الجديد الآن.")
+        await edit_or_send(
+            query,
+            "📩 أرسل الرابط الجديد الآن.\n\nأرسل الرابط مباشرة في المحادثة.",
+            reply_markup=back_home_keyboard(query.from_user.id),
+        )
         return
 
     if data == "user_help":
-        await query.message.reply_text(
+        await edit_or_send(
+            query,
             "📘 طريقة الاستخدام:\n\n"
             "1️⃣ أرسل الرابط فقط.\n"
-            "2️⃣ انتظر ظهور معلومات الملف.\n"
-            "3️⃣ اختر: صوت أو فيديو أو ملف.\n"
-            "4️⃣ انتظر الإرسال."
+            "2️⃣ اختر نوع التحميل.\n"
+            "3️⃣ انتظر إرسال الملف.\n\n"
+            "لا تحتاج أي أوامر أخرى.",
+            reply_markup=back_home_keyboard(query.from_user.id),
         )
         return
 
     if data == "send_link_hint":
-        await query.message.reply_text("🔗 أرسل الرابط الآن، وسأعرض لك خيارات التحميل.")
+        await edit_or_send(
+            query,
+            "🔗 أرسل الرابط الآن في المحادثة، وسأعرض لك خيارات التحميل.",
+            reply_markup=back_home_keyboard(query.from_user.id),
+        )
         return
 
     if data == "cancel":
         context.user_data.pop("current_url", None)
         context.user_data.pop("created_at", None)
-        await query.message.reply_text("✅ تم إلغاء الطلب. أرسل رابطاً جديداً متى أردت.")
+        await edit_or_send(
+            query,
+            "✅ تم إلغاء الطلب.\n\nأرسل رابطاً جديداً متى أردت.",
+            reply_markup=back_home_keyboard(query.from_user.id),
+        )
         return
 
     if data.startswith("admin_"):
@@ -927,7 +1027,7 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
     try:
         job_dir = make_job_dir(user_id)
-        status_message = await query.message.reply_text("⏳ جاري التحميل...")
+        status_message = await query.message.reply_text("⚡ جاري بدء التحميل...")
 
         progress_data = {"text": "⏳ جاري التحميل..."}
 
@@ -995,9 +1095,15 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
             f"📦 {format_size(file_size)}"
         )
 
+        upload_action = ChatAction.UPLOAD_DOCUMENT
+        if choice == "audio":
+            upload_action = ChatAction.UPLOAD_VOICE
+        elif choice == "video":
+            upload_action = ChatAction.UPLOAD_VIDEO
+
         await context.bot.send_chat_action(
             chat_id=query.message.chat_id,
-            action=ChatAction.UPLOAD_DOCUMENT,
+            action=upload_action,
         )
 
         with open(file_path, "rb") as f:
