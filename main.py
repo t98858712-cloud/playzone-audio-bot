@@ -215,7 +215,7 @@ def user_main_keyboard() -> ReplyKeyboardMarkup:
         [[KeyboardButton("📘 دليل الاستخدام")], [KeyboardButton("🔗 روابط PlayZone")]],
         resize_keyboard=True,
         is_persistent=True,
-        input_field_placeholder="أرسل رابط المقطع هنا...",
+        input_field_placeholder="أرسل الرابط هنا...",
     )
 
 def build_preview_keyboard(request_id: str) -> InlineKeyboardMarkup:
@@ -257,9 +257,8 @@ def build_start_text(first_name: str) -> str:
     return (
         f"أهلاً {esc(first_name)} 👋\n\n"
         "أرسل رابط فيديو أو أغنية، وسأعرض لك معاينة قبل التحميل.\n\n"
-        "المعاينة تتضمن:\n• صورة المقطع\n• الاسم والناشر\n• المدة والحجم التقريبي\n• أزرار تحميل واضحة للصوت أو الفيديو\n\n"
         "💚 دعمك يصنع الفرق\n\n"
-        f"تابع روابط PlayZone الرسمية وشاركها مع أصدقائك عبر البوت {BOT_USERNAME}،\n"
+        f"تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
         "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
         "ابدأ بإرسال الرابط مباشرة."
     )
