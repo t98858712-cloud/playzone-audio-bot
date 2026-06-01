@@ -331,7 +331,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# خيارات المحرك والتحميل التنزلي الذكي للڤيديو والصوت
+# خيارات المحرك ونظام الهبوط التدريجي التنزلي الكامل (الصوت والفيديو)
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
@@ -360,8 +360,8 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
     
     if mode == "audio":
-        # 🎯 تم التعديل: نظام هبوط تدريجي للصوت أيضاً لسحب أفضل جودة متوفرة والانتقال للأقل آلياً عند الفشل
-        opts["format"] = "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio/best"
+        # 🎯 تم التحديث بشكل متكامل وثابت: الهبوط التدريجي الاحترافي لملفات الصوت لمنع أي فشل
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio[ext=ogg]/bestaudio[ext=wav]/bestaudio/best"
         opts["postprocessors"] = [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
@@ -371,7 +371,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             "ffmpeg": ["-af", "loudnorm=I=-14:TP=-1.0:LRA=11"]
         }
     else:
-        # نظام الهبوط التدريجي للفيديو (720p -> 480p -> 360p)
+        # نظام الهبوط التدريجي الذكي لملفات الفيديو
         opts["format"] = (
             "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/"
             "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=480]/"
@@ -676,11 +676,8 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         duration = int(request.get("duration") or 0)
         caption = f"🎬 {esc(title)}\n- {esc(format_duration(duration))}"
 
-        # 🎯 تم التعديل: إزالة اسم وتوقيع البوت من نص المشاركة بناءً على طلبك
         share_text = f"🎬 {title}"
         share_link = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
-        
-        # 🎯 تم التعديل: تعديل اسم زر المشاركة ليصبح "مشاركة ✉️"
         media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("مشاركة ✉️", url=share_link)]])
 
         try:
@@ -755,7 +752,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تحديث وإطلاق النسخة الاحترافية لبوت PlayZone!")
+    logger.info("🚀 تم تحديث نظام الهبوط التدريجي للصوت والفيديو وبدء التشغيل الفوري لبوت PlayZone!")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
