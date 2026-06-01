@@ -337,7 +337,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# محرك الفئة العليا والتحميل السحابي التوربيني المتوازي
+# محرك الفئة العليا والتحميل السحابي التوربيني المتوازي والكوكيز المطور
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None):
@@ -346,9 +346,9 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "no_warnings": True,
         "noplaylist": True,
         "playlist_items": "1",
-        "retries": 8,
-        "fragment_retries": 8,
-        "socket_timeout": 25,
+        "retries": 10,
+        "fragment_retries": 10,
+        "socket_timeout": 30,
         "cachedir": False,
         # ميزة الفئة العليا: تشغيل التحميل المتوازي للملف لرفع السرعة لأقصى طاقة للسيرفر
         "concurrent_fragment_downloads": 10,
@@ -365,12 +365,25 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             }
         },
     }
+    
+    # فحص الكوكيز الذكي قبل التمرير للمحرك منعاً لانهيار البوت
+    cookies_path = Path(COOKIES_FILE)
+    if cookies_path.exists() and cookies_path.stat().st_size > 0:
+        try:
+            with open(cookies_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            if "Netscape" in content or ".youtube.com" in content:
+                opts["cookiefile"] = COOKIES_FILE
+                logger.info("🍪 [PlayZone]: تم دمج وفحص ملف الكوكيز المطور وهو يعمل الآن.")
+            else:
+                logger.warning("⚠️ [PlayZone]: ملف cookies.txt متوفر ولكن بنيته تالفة.")
+        except Exception as e:
+            logger.error(f"❌ خطأ أثناء معالجة ملف الكوكيز: {e}")
+
     if job_dir:
         opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
     if progress_data is not None:
         opts["progress_hooks"] = [download_hook(progress_data)]
-    if Path(COOKIES_FILE).exists() and Path(COOKIES_FILE).stat().st_size > 0:
-        opts["cookiefile"] = COOKIES_FILE
     return opts
 
 def extract_metadata(url: str):
@@ -388,7 +401,7 @@ def download_hook(progress_data: dict):
             if total:
                 percent = downloaded / total * 100
                 progress_data["text"] = (
-                    "⚡ <b>جاري سحب الملف سحابياً بأقصى سرعة...</b>\n\n"
+                    "⚡ <b>جاري سحب الملف سحابياً بأقصى سرعة (توربو)...</b>\n\n"
                     f"{make_progress_bar(percent)}  {percent:.1f}%\n"
                     f"📦 الحجم: {format_size(downloaded)} / {format_size(total)}\n"
                     f"🚀 السرعة الحالية: {format_size(speed)}/ث"
