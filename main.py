@@ -8,6 +8,7 @@ import asyncio
 import shutil
 import logging
 import threading
+import subprocess
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse, quote
@@ -331,7 +332,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# خيارات المحرك الحاسم للهبوط التدريجي المزدوج المستقل
+# خيارات المحرك وفصل معالجة الصوت جذرياً
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
@@ -360,14 +361,8 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
     
     if mode == "audio":
-        # ⭐ [الحل الذهبي الجذري للصوت]: الهبوط التدريجي المطلق
-        # يبدأ بسحب m4a النقي ثم mp3 ثم webm الأصلي ثم aac ثم ogg ثم أي دفق متاح على الإطلاق
-        opts["format"] = "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio[ext=webm]/bestaudio[ext=aac]/bestaudio[ext=ogg]/bestaudio/best"
-        opts["postprocessors"] = [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "320",
-        }]
+        # 🎯 [الحل الصارم]: نطلب الدفق الصوتي الأصلي الخام المتاح دون شروط دمج تمنع التحميل
+        opts["format"] = "bestaudio/best"
     else:
         # نظام الهبوط التدريجي الديناميكي المتكامل للفيديو
         opts["format"] = (
@@ -385,9 +380,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
                 content = f.read()
             if "Netscape" in content or ".youtube.com" in content:
                 opts["cookiefile"] = COOKIES_FILE
-                logger.info("🍪 [PlayZone]: تم تطبيق الكوكيز المطور بنجاح.")
-        except Exception as e:
-            logger.error(f"خطأ ملف الكوكيز: {e}")
+        except Exception: pass
 
     if job_dir:
         opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
@@ -438,6 +431,20 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
     opts = get_ydl_options(job_dir, progress_data, mode)
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
+
+# 🛠️ دالة التحويل المحلي الصارم باستخدام FFmpeg المستقل لمنع أخطاء السيرفرات
+def convert_to_mp3_local(input_file: Path, output_file: Path) -> bool:
+    try:
+        cmd = [
+            "ffmpeg", "-y", "-i", str(input_file),
+            "-vn", "-ar", "44100", "-ac", "2", "-b:a", "320k",
+            str(output_file)
+        ]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        return output_file.exists()
+    except Exception as e:
+        logger.error(f"فشل التحويل المحلي لـ MP3: {e}")
+        return False
 
 # ==========================================================
 # الأحداث وتفاعل المستخدم
@@ -641,11 +648,27 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, lambda: execute_download(url, mode, job_dir, progress_data))
 
-        # الفلترة والتأكد من وجود الملف النهائي على القرص
         files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
         if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
 
-        target_file = max(files, key=lambda p: p.stat().st_mtime)
+        raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
+
+        # ⚡ [المرحلة الثانية والحل الجذري للصوت]: إذا كان الطلب صوتياً، نقوم بالهندسة والتحويل المحلي فوراً
+        if mode == "audio":
+            with progress_lock:
+                progress_data["text"] = "⚙️ جاري التحويل المحلي الصارم لملف الصوت عالي الدقة (MP3)..."
+            
+            final_mp3_path = job_dir / "playzone_final_audio.mp3"
+            success = await loop.run_in_executor(None, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path))
+            
+            if success and final_mp3_path.exists():
+                target_file = final_mp3_path
+            else:
+                # خطة الطوارئ البديلة: إذا فشل التشفير لسبب ما، نرسل الملف الأصلي لكي لا ينقطع التحميل عن المستخدم
+                target_file = raw_downloaded_file
+        else:
+            target_file = raw_downloaded_file
+
         file_size = target_file.stat().st_size
 
         if file_size > MAX_TELEGRAM_SIZE:
@@ -751,7 +774,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تحديث نظام الهبوط التدريجي الحاسم لملفات الصوت وبدء التشغيل!")
+    logger.info("🚀 تم إطلاق نظام الفصل المعزول والتحويل المحلي الحاسم للصوت بنجاح!")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
