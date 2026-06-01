@@ -44,6 +44,11 @@ YTDLP_COOKIES_B64 = os.getenv("YTDLP_COOKIES_B64", "").strip()
 REQUEST_EXPIRE_SECONDS = 15 * 60
 OLD_DOWNLOADS_EXPIRE_SECONDS = 60 * 60
 PROGRESS_UPDATE_SECONDS = 3
+INFO_CACHE_TTL_SECONDS = int(os.getenv("INFO_CACHE_TTL_SECONDS", "1800"))
+MAX_PARALLEL_DOWNLOADS = int(os.getenv("MAX_PARALLEL_DOWNLOADS", "3"))
+YTDLP_CONCURRENT_FRAGMENTS = int(os.getenv("YTDLP_CONCURRENT_FRAGMENTS", "4"))
+DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_PARALLEL_DOWNLOADS)
+INFO_CACHE = {}
 
 # تسريع تجربة المستخدم:
 # FAST_LINK_CHECK=True يعني لا نفحص الرابط قبل إظهار الأزرار.
@@ -90,6 +95,8 @@ def save_json(path: Path, data):
         tmp = path.with_suffix(".tmp")
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
         tmp.replace(path)
 
     except Exception as e:
@@ -272,6 +279,46 @@ def platform_name_from_url(url: str) -> str:
 def has_cookies_file() -> bool:
     path = Path(COOKIES_FILE)
     return path.exists() and path.is_file() and path.stat().st_size > 0
+
+
+def info_cache_get(url: str):
+    """
+    كاش مؤقت لمعلومات الرابط حتى لا يعيد البوت فحص نفس الرابط أكثر من مرة خلال فترة قصيرة.
+    هذا يحسن السرعة ويقلل ضغط yt-dlp على السيرفر.
+    """
+    try:
+        item = INFO_CACHE.get(url)
+        if not item:
+            return None
+
+        created_at = item.get("created_at", 0)
+        if time.time() - created_at > INFO_CACHE_TTL_SECONDS:
+            INFO_CACHE.pop(url, None)
+            return None
+
+        return item.get("info")
+    except Exception:
+        return None
+
+
+def info_cache_set(url: str, info: dict):
+    try:
+        if not isinstance(info, dict):
+            return
+
+        INFO_CACHE[url] = {
+            "created_at": time.time(),
+            "info": info,
+        }
+
+        # منع تضخم الذاكرة إذا كثرت الروابط
+        if len(INFO_CACHE) > 100:
+            oldest = sorted(INFO_CACHE.items(), key=lambda x: x[1].get("created_at", 0))[:30]
+            for key, _ in oldest:
+                INFO_CACHE.pop(key, None)
+
+    except Exception:
+        pass
 
 
 def prepare_cookies_file():
@@ -647,6 +694,8 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
         "continuedl": True,
         "socket_timeout": 30,
         "cachedir": False,
+        "concurrent_fragment_downloads": YTDLP_CONCURRENT_FRAGMENTS,
+        "prefer_free_formats": False,
         "windowsfilenames": True,
         "restrictfilenames": False,
         "http_headers": {
@@ -698,6 +747,16 @@ def extract_info_sync(url: str):
 
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
+
+
+def extract_info_sync_cached(url: str):
+    cached = info_cache_get(url)
+    if cached:
+        return cached
+
+    info = extract_info_sync(url)
+    info_cache_set(url, info)
+    return info
 
 
 def progress_hook(progress_data: dict):
@@ -787,7 +846,10 @@ def download_sync(url: str, choice: str, job_dir: Path, progress_data: dict):
     opts = build_download_options(url, choice, job_dir, progress_data)
 
     with yt_dlp.YoutubeDL(opts) as ydl:
-        return ydl.extract_info(url, download=True)
+        info = ydl.extract_info(url, download=True)
+        if isinstance(info, dict):
+            info_cache_set(url, info)
+        return info
 
 
 # ==========================================================
@@ -912,20 +974,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    context.user_data["current_url"] = text
+    context.user_data["created_at"] = time.time()
+    context.user_data["preview_title"] = "ملف ميديا"
+    context.user_data["preview_author"] = ""
+    context.user_data["preview_platform"] = platform_name_from_url(text)
+    context.user_data["preview_duration"] = 0
+    stat_inc("requests", 1)
+
+    if FAST_LINK_CHECK:
+        await send_clean_message(
+            update,
+            context,
+            "✅ تم استلام الرابط.\n\n"
+            f"🌐 المنصة: {platform_name_from_url(text)}\n"
+            "📌 لم أستطع جلب الصورة، لكن يمكنك تجربة التحميل.\n\n"
+            "اختر نوع التحميل:",
+            reply_markup=download_keyboard(),
+        )
+        return
+
     status = await update.message.reply_text("🔍 جاري جلب الصورة ومعلومات الملف...")
 
     try:
         loop = asyncio.get_running_loop()
-        info = await loop.run_in_executor(None, lambda: extract_info_sync(text))
+        info = await loop.run_in_executor(None, lambda: extract_info_sync_cached(text))
 
-        context.user_data["current_url"] = text
-        context.user_data["created_at"] = time.time()
         context.user_data["preview_title"] = safe_title(info.get("title", "ملف ميديا"))
         context.user_data["preview_author"] = get_media_author(info)
         context.user_data["preview_platform"] = safe_title(info.get("extractor_key") or platform_name_from_url(text), 40)
         context.user_data["preview_duration"] = info.get("duration") or 0
-
-        stat_inc("requests", 1)
 
         try:
             await status.delete()
@@ -941,14 +1019,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # إذا فشل جلب الصورة أو التفاصيل، لا نوقف المستخدم.
         # نعرض خيارات التحميل مباشرة بدون صورة.
-        context.user_data["current_url"] = text
-        context.user_data["created_at"] = time.time()
-        context.user_data["preview_title"] = "ملف ميديا"
-        context.user_data["preview_author"] = ""
-        context.user_data["preview_platform"] = platform_name_from_url(text)
-        context.user_data["preview_duration"] = 0
-        stat_inc("requests", 1)
-
         await safe_edit(
             status,
             "✅ تم استلام الرابط.\n\n"
@@ -1187,10 +1257,11 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
         loop = asyncio.get_running_loop()
 
-        info = await loop.run_in_executor(
-            None,
-            lambda: download_sync(url, choice, job_dir, progress_data)
-        )
+        async with DOWNLOAD_SEMAPHORE:
+            info = await loop.run_in_executor(
+                None,
+                lambda: download_sync(url, choice, job_dir, progress_data)
+            )
 
         title = context.user_data.get("preview_title") or "ملف ميديا"
         duration = context.user_data.get("preview_duration") or None
@@ -1331,11 +1402,14 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
         logger.exception(f"خطأ غير متوقع للمستخدم {user_id}: {err}")
         stat_inc("failed", 1)
         set_last_error(err)
-        await safe_edit(
-            status_message,
-            "❌ حدث خطأ أثناء المعالجة.\n\n"
-            "جرّب مرة أخرى لاحقاً."
-        )
+        if status_message:
+            await safe_edit(
+                status_message,
+                "❌ حدث خطأ أثناء المعالجة.\n\n"
+                "جرّب مرة أخرى لاحقاً."
+            )
+        else:
+            await query.message.reply_text("❌ حدث خطأ أثناء المعالجة.\n\nجرّب مرة أخرى لاحقاً.")
 
     finally:
         stop_event.set()
