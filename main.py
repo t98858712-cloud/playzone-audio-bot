@@ -7,6 +7,7 @@ import uuid
 import asyncio
 import shutil
 import logging
+import threading
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse, quote
@@ -22,7 +23,7 @@ from telegram import (
     MenuButtonCommands,
 )
 from telegram.constants import ChatAction
-from telegram.error import BadRequest, TimedOut, NetworkError, RetryAfter, TelegramError
+from telegram.error import BadRequest, RetryAfter
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -47,15 +48,13 @@ DATA_DIR.mkdir(exist_ok=True)
 USERS_FILE = DATA_DIR / "users.json"
 STATS_FILE = DATA_DIR / "stats.json"
 
-# الحد الأقصى الافتراضي لتليجرام (يمكن رفعه لـ 2GB في حال تشغيل Local Bot API Server)
 MAX_TELEGRAM_SIZE = 50 * 1024 * 1024 
 COOKIES_FILE = "cookies.txt"
 
-PROGRESS_UPDATE_SECONDS = 1.5
+PROGRESS_UPDATE_SECONDS = 2.0  # زيادة المهلة لضمان استقرار الشبكة وعدم حظر البوت من تلغرام
 ACTIVE_USERS = set()
 
 BOT_USERNAME = "@MusicPlayZoneBot"
-BOT_LINK = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
 
 # روابط PlayZone الثابتة للدعم والمتابعة
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
@@ -70,6 +69,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+# قفل أمان لمنع التداخل بين الخيوط أثناء تحديثات النسبة
+progress_lock = threading.Lock()
+
 # ==========================================================
 # إدارة قاعدة البيانات والبيانات الإحصائية
 # ==========================================================
@@ -79,8 +81,7 @@ def load_json(path: Path, default):
         if not path.exists():
             return default
         with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if data is not None else default
+            return json.load(f) or default
     except Exception as e:
         logger.warning(f"فشل قراءة {path}: {e}")
         return default
@@ -95,8 +96,7 @@ def save_json(path: Path, data):
         logger.warning(f"فشل حفظ البيانات: {e}")
 
 def register_user(user):
-    if not user:
-        return
+    if not user: return
     data = load_json(USERS_FILE, {})
     old = data.get(str(user.id), {})
     data[str(user.id)] = {
@@ -116,8 +116,7 @@ def all_user_ids():
 def load_stats():
     default = {"requests": 0, "success": 0, "failed": 0, "bytes": 0, "broadcasts": 0}
     data = load_json(STATS_FILE, default)
-    for k, v in default.items():
-        data.setdefault(k, v)
+    for k, v in default.items(): data.setdefault(k, v)
     return data
 
 def stat_inc(key: str, value: int = 1):
@@ -137,8 +136,7 @@ def esc(text) -> str:
     return html.escape(str(text or ""), quote=False)
 
 def clean_title(text: str, limit=60) -> str:
-    if not text:
-        return "ملف ميديا"
+    if not text: return "ملف ميديا"
     text = re.sub(r"[\\/:*?\"<>|]+", "", str(text))
     text = re.sub(r"\s+", " ", text).strip()
     return text[:limit] + "..." if len(text) > limit else text
@@ -149,8 +147,7 @@ def format_size(size_bytes) -> str:
     if size_bytes <= 0: return "غير معروف"
     for unit in ["Bytes", "KB", "MB", "GB"]:
         if size_bytes < 1024.0:
-            if size_bytes == int(size_bytes): return f"{int(size_bytes)} {unit}"
-            return f"{size_bytes:.1f} {unit}"
+            return f"{int(size_bytes)} {unit}" if size_bytes == int(size_bytes) else f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024.0
     return f"{size_bytes:.1f} GB"
 
@@ -167,8 +164,7 @@ def is_valid_url(text: str) -> bool:
     try:
         parsed = urlparse(text.strip())
         return parsed.scheme in ["http", "https"] and bool(parsed.netloc)
-    except Exception:
-        return False
+    except Exception: return False
 
 def get_thumbnail(info: dict) -> str:
     try:
@@ -177,8 +173,7 @@ def get_thumbnail(info: dict) -> str:
             best = sorted(thumbs, key=lambda x: (x.get("width") or 0) * (x.get("height") or 0), reverse=True)[0]
             return best.get("url") or info.get("thumbnail") or ""
         return info.get("thumbnail") or ""
-    except Exception:
-        return ""
+    except Exception: return ""
 
 def get_artist(info: dict) -> str:
     for key in ["artist", "uploader", "channel", "creator"]:
@@ -312,7 +307,7 @@ def build_server_status_text() -> str:
     return f"📁 حالة السيرفر\n\n• مجلد التحميل: {BASE_DOWNLOAD_DIR}\n• الملفات المؤقتة: {file_count}\n• حجم الكاش: {format_size(total_size)}\n• العمليات الجارية: {len(ACTIVE_USERS)}"
 
 # ==========================================================
-# أدوات الرسائل الذكية
+# أدوات الرسائل الذكية الآمنة
 # ==========================================================
 
 async def safe_delete(message):
@@ -327,17 +322,19 @@ async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: 
             await message.edit_text(text=text, reply_markup=reply_markup, parse_mode=parse_mode, disable_web_page_preview=True)
     except BadRequest as e:
         if "not modified" not in str(e).lower(): raise
+    except Exception as e:
+        logger.debug(f"تخطي خطأ تحديث واجهة الرسالة: {e}")
 
 async def send_preview(update: Update, thumb: str, caption: str, keyboard: InlineKeyboardMarkup):
     if thumb and (thumb.startswith("http://") or thumb.startswith("https://")):
         try:
             return await update.message.reply_photo(photo=thumb, caption=caption, reply_markup=keyboard, parse_mode="HTML")
         except Exception as e:
-            logger.warning(f"تم تخطي إرسال غلاف المعاينة، الإرسال بالنص مباشرة: {e}")
+            logger.warning(f"تم تخطي غلاف المعاينة، الإرسال نصياً: {e}")
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# محرك الفئة العليا والتحميل السحابي التوربيني المتوازي والكوكيز المطور
+# حل مشكلة خيوط التحميل المتوازي (Thread-Safe Progress Mechanism)
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None):
@@ -350,8 +347,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "fragment_retries": 10,
         "socket_timeout": 30,
         "cachedir": False,
-        # ميزة الفئة العليا: تشغيل التحميل المتوازي للملف لرفع السرعة لأقصى طاقة للسيرفر
-        "concurrent_fragment_downloads": 10,
+        "concurrent_fragment_downloads": 5, # تم خفضها لـ 5 لضمان توازن المعالجة ومنع تجميد السيرفرات المتوسطة
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept": "*/*",
@@ -366,7 +362,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         },
     }
     
-    # فحص الكوكيز الذكي قبل التمرير للمحرك منعاً لانهيار البوت
     cookies_path = Path(COOKIES_FILE)
     if cookies_path.exists() and cookies_path.stat().st_size > 0:
         try:
@@ -374,11 +369,9 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
                 content = f.read()
             if "Netscape" in content or ".youtube.com" in content:
                 opts["cookiefile"] = COOKIES_FILE
-                logger.info("🍪 [PlayZone]: تم دمج وفحص ملف الكوكيز المطور وهو يعمل الآن.")
-            else:
-                logger.warning("⚠️ [PlayZone]: ملف cookies.txt متوفر ولكن بنيته تالفة.")
+                logger.info("🍪 [PlayZone]: تم تطبيق الكوكيز بنجاح الفحص.")
         except Exception as e:
-            logger.error(f"❌ خطأ أثناء معالجة ملف الكوكيز: {e}")
+            logger.error(f"خطأ ملف الكوكيز: {e}")
 
     if job_dir:
         opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
@@ -394,28 +387,31 @@ def extract_metadata(url: str):
 
 def download_hook(progress_data: dict):
     def hook(d):
-        if d.get("status") == "downloading":
-            downloaded = d.get("downloaded_bytes") or 0
-            total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
-            speed = d.get("speed") or 0
-            if total:
-                percent = downloaded / total * 100
-                progress_data["text"] = (
-                    "⚡ <b>جاري سحب الملف سحابياً بأقصى سرعة (توربو)...</b>\n\n"
-                    f"{make_progress_bar(percent)}  {percent:.1f}%\n"
-                    f"📦 الحجم: {format_size(downloaded)} / {format_size(total)}\n"
-                    f"🚀 السرعة الحالية: {format_size(speed)}/ث"
-                )
-            else:
-                progress_data["text"] = f"📥 جاري استقبال دفق البيانات: {format_size(downloaded)}"
-        elif d.get("status") == "finished":
-            progress_data["text"] = "⚙️ اكتمل سحب البيانات بنجاح، جاري هندسة الصوت والميكساج السحابي..."
+        # ميزة الفئة العليا: حماية القفل لمنع تداخل بيانات الـ Multi-threading
+        with progress_lock:
+            if d.get("status") == "downloading":
+                downloaded = d.get("downloaded_bytes") or 0
+                total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+                speed = d.get("speed") or 0
+                if total:
+                    percent = downloaded / total * 100
+                    progress_data["text"] = (
+                        "⚡ <b>جاري سحب الملف سحابياً بأقصى سرعة (توربو)...</b>\n\n"
+                        f"{make_progress_bar(percent)}  {percent:.1f}%\n"
+                        f"📦 الحجم: {format_size(downloaded)} / {format_size(total)}\n"
+                        f"🚀 السرعة: {format_size(speed)}/ث"
+                    )
+                else:
+                    progress_data["text"] = f"📥 جاري استقبال دفق البيانات: {format_size(downloaded)}"
+            elif d.get("status") == "finished":
+                progress_data["text"] = "⚙️ اكتمل سحب البيانات بنجاح، جاري هندسة الصوت والميكساج السحابي..."
     return hook
 
 async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event):
     last_text = ""
     while not stop_event.is_set():
-        text = progress_data.get("text", "")
+        with progress_lock:
+            text = progress_data.get("text", "")
         if text and text != last_text:
             try:
                 await edit_message_smart(message, text, reply_markup=None)
@@ -436,7 +432,6 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
             "ffmpeg": ["-af", "loudnorm=I=-14:TP=-1.0:LRA=11"]
         }
     else:
-        # ترقية الفئة العليا: إجبار الدمج إلى mp4 متكامل وصالح مباشرة لتجنب تلف صيغ تشغيل تليجرام
         opts["format"] = "best[ext=mp4][height<=720]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"
         opts["merge_output_format"] = "mp4"
 
@@ -482,7 +477,7 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
             await asyncio.sleep(int(e.retry_after) + 1)
         except Exception: fail += 1
     stat_inc("broadcasts")
-    await status.edit_text(f"✅ انتهت عملية الإذاعة السحابية.\n\n• تم الإرسال بنجاح: {sent}\n• فشل (حظر أو حساب مغلق): {fail}")
+    await status.edit_text(f"✅ انتهت عملية الإذاعة السحابية.\n\n• تم الإرسال بنجاح: {sent}\n• فشل: {fail}")
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
@@ -613,7 +608,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pending = ensure_pending_requests(context)
         request = pending.get(request_id)
         if not request:
-            await query.answer("انتهت جلسة هذا الطلب، يرجى إرسال الرابط من جديد.", show_alert=True)
+            await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
             return
         if uid in ACTIVE_USERS:
             await query.answer("لديك عملية معالجة نشطة حالياً.", show_alert=True)
@@ -625,7 +620,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     uid = query.from_user.id
     url = request.get("url")
     if not url:
-        await query.answer("خطأ برمي داخلي في بنيان الطلب.", show_alert=True)
+        await query.answer("خطأ في بنيان الطلب.", show_alert=True)
         return
 
     await query.answer("بدأت المعالجة فائقة السرعة...")
@@ -677,7 +672,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         title = request.get("title", "ملف ميديا")
         artist = request.get("artist", "غير معروف")
         duration = int(request.get("duration") or 0)
-        caption = f"🎬 {esc(title)}\n- {BOT_USERNAME}, {esc(format_duration(duration))}"
+        caption = f"🎬 {esc(title)}\n- {esc(format_duration(duration))}"
 
         share_text = f"🎬 {title}\nعبر البوت الاحترافي {BOT_USERNAME}"
         share_link = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
@@ -755,7 +750,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت رسمياً بأعلى فئة تحميل ومعالجة سحابية متوازية واستقرار تام!")
+    logger.info("🚀 تم إطلاق النسخة المستقرة والخالية من الأخطاء لبوت PlayZone!")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
