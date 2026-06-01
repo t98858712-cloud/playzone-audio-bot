@@ -9,8 +9,9 @@ from pathlib import Path
 from urllib.parse import urlparse, quote
 
 import yt_dlp
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, BotCommand, BotCommandScopeDefault, BotCommandScopeChat
 from telegram.constants import ChatAction
+from telegram.error import BadRequest, RetryAfter
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -39,39 +40,14 @@ MAX_TELEGRAM_SIZE = 50 * 1024 * 1024
 COOKIES_FILE = "cookies.txt"
 
 PROGRESS_UPDATE_SECONDS = 1.5
+
 ACTIVE_USERS = set()
 
-logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    level=logging.INFO,
+)
 logger = logging.getLogger("CleanDownloadBot")
-
-# ==========================================================
-# روابط المنصات المطلوبة للمتابعة
-# ==========================================================
-INSTAGRAM_LINK = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
-BOT_LINK = "https://t.me/P1ay_Z0ne_Bot"
-
-# ==========================================================
-# بوابة التحقق الذكية (دون أزرار إضافية)
-# ==========================================================
-
-async def check_user_requirements(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """
-    تقوم هذه الدالة بالفحص الصامت في الخلفية فور إرسال الرابط.
-    ملاحظة تقنية: الفحص التلقائي الحقيقي بنسبة 100% في تليجرام يتطلب (قناة أو مجموعة).
-    إذا قمت مستقبلاً بإنشاء قناة خاصة بالبوت، ضع معرفها هنا (مثال: @MyChannel) وسيفحصها البوت حقيقياً.
-    """
-    try:
-        # مثال للفحص الحقيقي إذا كانت قناة (مغلق حالياً لأن المستهدف بوت وحساب إنستا):
-        # member = await context.bot.get_chat_member(chat_id="@Your_Channel_Username", user_id=user_id)
-        # if member.status in ["left", "kicked"]: return False
-        
-        # نظام تتبع ذكي مؤقت للمستخدمين لضمان زيارة الحسابات ومتابعتها
-        user_data = context.user_data.get("verified_follower", False)
-        if not user_data:
-            return False
-        return True
-    except:
-        return True
 
 # ==========================================================
 # إدارة قاعدة البيانات والبيانات الإحصائية
@@ -192,22 +168,15 @@ def user_main_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط مباشرة هنا..."
     )
 
-def build_gate_keyboard() -> InlineKeyboardMarkup:
-    """لوحة المتابعة الإجبارية النظيفة دون أزرار تحقق إضافية مضللة"""
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📸 متابعة حساب الإنستغرام", url=INSTAGRAM_LINK)],
-        [InlineKeyboardButton("🤖 تشغيل بوت PlayZone الرسمي", url=BOT_LINK)],
-        [InlineKeyboardButton("✅ تم المتابعة (اضغط للتفعيل الدائم)", callback_data="unlock_gate")]
-    ])
-
 def build_preview_keyboard(url: str, title: str) -> InlineKeyboardMarkup:
+    # صناعة رابط مشاركة تيليجرام مباشر ونظيف دون تكديس
     share_text = f"🎙 استمع وشاهد: {title}"
     share_url = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
     
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🎵 تحميل بصيغة MP3", callback_data="down_audio"),
          InlineKeyboardButton("🎬 تحميل بصيغة MP4", callback_data="down_video")],
-        [InlineKeyboardButton("🔗 مشاركة المقطع", url=share_url)],
+        [InlineKeyboardButton("🔗 مشاركة المقطع مع صديق", url=share_url)],
         [InlineKeyboardButton("❌ إلغاء الطلب", callback_data="cancel_request")]
     ])
 
@@ -220,7 +189,7 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
     ])
 
 # ==========================================================
-# محرك التحميل السحابي
+# محرك التحميل السحابي (Fast Backend)
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None):
@@ -320,16 +289,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(f"✅ تم انتهاء البث.\n👍 ناجح: {sent}\n👎 فشل: {fail}")
         return
 
-    # بوابه التحقق الصامتة قبل المعالجة (دون تكديس أزرار)
-    if not await check_user_requirements(uid, context):
-        await update.message.reply_text(
-            "⚠️ **شروط استخدام البوت المجاني:**\n\n"
-            "لضمان استمرارية عمل السيرفرات بكفاءة وسرعة عالية، يرجى دعم منصاتنا ومتابعتها أولاً عبر الأزرار أدناه 👇\n\n"
-            "*(بعد إتمام المتابعة، أعد إرسال رابط التحميل الخاص بك مباشرة وسيعمل فوراً بدون أزرار فحص معقدة)*",
-            reply_markup=build_gate_keyboard(), parse_mode="Markdown"
-        )
-        return
-
     if uid in ACTIVE_USERS:
         await update.message.reply_text("⏳ يرجى الانتظار، هناك عملية تحميل جارية لحسابك حالياً.")
         return
@@ -338,11 +297,13 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("❌ الرابط المرسل غير صحيح، يرجى إرسال رابط مباشر وصالح.")
         return
 
+    # فحص الرسالة لمنع التكديس والتنظيف التلقائي
     status = await update.message.reply_text("🔍 جاري قراءة بيانات الرابط...")
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, lambda: extract_metadata(text))
 
+        # استخراج البيانات المتناسقة دون مبالغة لفظية
         title = clean_title(info.get("title"))
         artist = get_artist(info)
         duration = format_duration(info.get("duration"))
@@ -351,6 +312,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         sizes = [f.get("filesize") or f.get("filesize_approx") or 0 for f in info.get("formats", [])]
         est_size = format_size(max(sizes)) if sizes else "غير معروف"
 
+        # حفظ الجلسة للخطوة القادمة
         context.user_data["current_url"] = text
         context.user_data["meta_title"] = title
         context.user_data["meta_artist"] = artist
@@ -366,7 +328,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
         thumb = get_thumbnail(info)
-        await status.delete()
+        await status.delete() # حذف رسالة الفحص لمنع تراكم الرسائل
 
         if thumb:
             await update.message.reply_photo(photo=thumb, caption=caption, reply_markup=build_preview_keyboard(text, title), parse_mode="Markdown")
@@ -387,13 +349,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     uid = query.from_user.id
 
-    if data == "unlock_gate":
-        context.user_data["verified_follower"] = True
-        await query.answer("🎉 تم التحقق والتفعيل بنجاح! أرسل روابطك الآن.", show_alert=True)
-        try: await query.message.delete()
-        except: pass
-        return
-
+    # معالجة أزرار الآدمن أولاً لضمان الخصوصية والأمان
     if data.startswith("adm_") and is_admin(uid):
         await query.answer()
         stats = load_stats()
@@ -440,11 +396,13 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     updater_task = asyncio.create_task(run_progress_updates(query, progress_data, stop_event))
 
     try:
+        # كتم كرت الأزرار أثناء التحميل لمنع التلاعب المزدوج
         await query.message.edit_reply_markup(reply_markup=None)
         
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, lambda: execute_download(url, modes[data], job_dir, progress_data))
         
+        # البحث عن الملف الناتج
         files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
         if not files: raise RuntimeError()
         target_file = max(files, key=lambda p: p.stat().st_mtime)
@@ -474,13 +432,13 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         stat_inc("success")
         stat_inc("bytes", f_size)
-        try: await query.message.delete()
+        try: await query.message.delete() # مسح كرت المعاينة والصورة بعد الإرسال لصفر تكديس في الشات
         except: pass
 
     except Exception as e:
         stat_inc("failed")
         logger.error(f"خطأ تحميل: {e}")
-        try: await query.message.edit_caption(caption="❌ فشل تحميل المقطع، قد يكون محمي أو غير متاح حالياً.")
+        try: await query.message.edit_caption(caption="❌ فشل تحميل المقطع، قد يكون محمي أو غير متاح في بلد السيرفر حالياً.")
         except: pass
     finally:
         stop_event.set()
@@ -504,7 +462,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🤖 انطلق البوت بنظام بوابة التحقق الصامتة والسرعة العالية...")
+    logger.info("🤖 انطلق البوت بنظام الواجهات النظيفة والسرعة العالية...")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
