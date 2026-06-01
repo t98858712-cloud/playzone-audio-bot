@@ -256,7 +256,7 @@ def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
 def build_start_text(first_name: str) -> str:
     return (
         f"أهلاً {esc(first_name)} 👋\n\n"
-        "أرسل رابط فيديو أو أغنية، وسأعرض لك معاينة قبل التحميل.\n\n"
+        "أرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n"
         "💚 دعمك يصنع الفرق\n\n"
         f"تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
         "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
