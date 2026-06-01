@@ -5,6 +5,7 @@ import time
 import asyncio
 import shutil
 import logging
+import base64
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -37,7 +38,8 @@ USERS_FILE = DATA_DIR / "users.json"
 STATS_FILE = DATA_DIR / "stats.json"
 
 MAX_TELEGRAM_SIZE = 50 * 1024 * 1024
-COOKIES_FILE = "cookies.txt"
+COOKIES_FILE = str(DATA_DIR / "cookies.txt")
+YTDLP_COOKIES_B64 = os.getenv("YTDLP_COOKIES_B64", "").strip()
 
 REQUEST_EXPIRE_SECONDS = 15 * 60
 OLD_DOWNLOADS_EXPIRE_SECONDS = 60 * 60
@@ -270,6 +272,25 @@ def platform_name_from_url(url: str) -> str:
 def has_cookies_file() -> bool:
     path = Path(COOKIES_FILE)
     return path.exists() and path.is_file() and path.stat().st_size > 0
+
+
+def prepare_cookies_file():
+    """
+    يقرأ cookies.txt من Railway Variable بصيغة Base64
+    ويحفظه داخل data/cookies.txt.
+    لا ترفع cookies.txt إلى GitHub إذا كان المستودع عام.
+    """
+    if not YTDLP_COOKIES_B64:
+        return
+
+    try:
+        decoded = base64.b64decode(YTDLP_COOKIES_B64)
+        cookie_path = Path(COOKIES_FILE)
+        cookie_path.parent.mkdir(parents=True, exist_ok=True)
+        cookie_path.write_bytes(decoded)
+        logger.info("✅ تم تجهيز cookies.txt من Railway Variables")
+    except Exception as e:
+        logger.warning(f"تعذر تجهيز cookies.txt: {e}")
 
 
 def make_job_dir(user_id: int) -> Path:
@@ -613,7 +634,7 @@ def broadcast_confirm_keyboard() -> InlineKeyboardMarkup:
 def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None):
     """
     الإعداد العام للمنصات.
-    ملاحظة: يوتيوب له إعداد خاص في apply_platform_tweaks مطابق للأساس القديم.
+    ملاحظة: يوتيوب له إعداد خاص في apply_platform_tweaks.
     """
     opts = {
         "quiet": True,
@@ -633,7 +654,8 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
-            )
+            ),
+            "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
         },
     }
 
@@ -648,17 +670,14 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
 
 def apply_platform_tweaks(opts: dict, url: str):
     """
-    هذا هو أساس إعداد يوتيوب القديم الذي كان يعمل:
-    - player_client web/android
-    - skip webpage
-    - cookies.txt ليوتيوب عند وجوده
-    أما باقي المنصات فتستخدم الإعداد العام.
+    إعدادات محسنة لـ YouTube وباقي المنصات.
+    إذا ظهرت رسالة Sign in to confirm you're not a bot
+    فالحل الأساسي هو cookies.txt صالح.
     """
     if is_youtube_url(url):
         opts["extractor_args"] = {
             "youtube": {
-                "player_client": ["web", "android"],
-                "skip": ["webpage"],
+                "player_client": ["android", "ios", "web"],
             }
         }
 
@@ -666,7 +685,6 @@ def apply_platform_tweaks(opts: dict, url: str):
             opts["cookiefile"] = COOKIES_FILE
 
     else:
-        # لباقي المنصات أيضاً نستفيد من cookies.txt إذا كان موجوداً
         if has_cookies_file():
             opts["cookiefile"] = COOKIES_FILE
 
@@ -753,7 +771,7 @@ def build_download_options(url: str, choice: str, job_dir: Path, progress_data: 
         opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
 
     elif choice == "video":
-        # مثل الأساس القديم: فيديو MP4 جاهز ومناسب لتجنب ffmpeg
+        # فيديو MP4 جاهز ومناسب لتجنب ffmpeg
         opts["format"] = "best[ext=mp4][height<=480]/best[ext=mp4]/best"
 
     elif choice == "file":
@@ -1071,7 +1089,7 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
     if data == "admin_cookies":
         await query.message.reply_text(
             f"🍪 cookies.txt: {'موجود ✅' if has_cookies_file() else 'غير موجود ⚠️'}\n\n"
-            "وجوده اختياري، لكنه يساعد مع بعض المنصات."
+            "وجوده اختياري، لكنه يساعد مع بعض المنصات التي تسمح لك بالوصول للمحتوى."
         )
         return
 
@@ -1284,11 +1302,19 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
         set_last_error(err)
         logger.warning(f"فشل التحميل للمستخدم {user_id}: {err}")
 
-        await safe_edit(
-            status_message,
-            "❌ فشل التحميل.\n\n"
-            "جرّب رابطاً آخر أو حاول لاحقاً."
-        )
+        if "Sign in to confirm" in err or "not a bot" in err or "cookies" in err.lower():
+            await safe_edit(
+                status_message,
+                "❌ تعذر التحميل من YouTube حالياً.\n\n"
+                "السبب: YouTube طلب تسجيل دخول أو cookies بسبب حماية التحقق.\n\n"
+                "جرّب رابطاً آخر، أو أعد المحاولة لاحقاً."
+            )
+        else:
+            await safe_edit(
+                status_message,
+                "❌ فشل التحميل.\n\n"
+                "جرّب رابطاً آخر أو حاول لاحقاً."
+            )
 
     except TimedOut:
         stat_inc("failed", 1)
@@ -1376,6 +1402,7 @@ def main():
     if not TOKEN:
         raise RuntimeError("لم يتم العثور على TELEGRAM_TOKEN في Railway Variables.")
 
+    prepare_cookies_file()
     cleanup_old_downloads()
 
     app = (
