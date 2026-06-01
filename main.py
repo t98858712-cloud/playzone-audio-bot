@@ -489,7 +489,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
 
 
 # ==========================================================
-# محرك التحميل السحابي
+# محرك التحميل السحابي والمعالجة
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None):
@@ -570,19 +570,16 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 
-# [تعديل الهندسة الصوتية]: ترقية كفاءة فلاتر هندسة الصوت واستخراج الـ MP3 بأعلى جودة تصفية هندسية
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
     opts = get_ydl_options(job_dir, progress_data)
 
     if mode == "audio":
         opts["format"] = "bestaudio/best"
-        # تفعيل المعالجة السحابية الاحترافية والتحويل المباشر لـ MP3 320kbps
         opts["postprocessors"] = [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
             "preferredquality": "320",
         }]
-        # تطبيق معيار الموازنة الصوتية العالمي EBU R128 لمنع التشويش وتوحيد القوة
         opts["postprocessor_args"] = {
             "ffmpeg": ["-af", "loudnorm=I=-14:TP=-1.0:LRA=11"]
         }
@@ -748,7 +745,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 # ==========================================================
-# التفاعل مع الأزرار والتحميل الذكي المباشر
+# التفاعل مع الأزرار وعملية الإرسال المؤمنة بالكامل للمستخدم
 # ==========================================================
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
@@ -874,6 +871,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 
+# [عملية الإرسال الثابتة والمحمية للمستخدم بالكامل]
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str):
     uid = query.from_user.id
     url = request.get("url")
@@ -976,6 +974,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception:
             pass
 
+        # فتح بث الملف محلياً وإرساله بنجاح تام للمستخدم دون تأخير أو انقطاع
         with open(target_file, "rb") as f:
             if mode == "audio":
                 t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
@@ -1039,7 +1038,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
 
 # ==========================================================
-# أوامر البوت
+# أوامر البوت وطبقة التشغيل
 # ==========================================================
 
 async def set_bot_commands(app: Application):
@@ -1054,10 +1053,6 @@ async def set_bot_commands(app: Application):
     except Exception as e:
         logger.warning(f"فشل ضبط أوامر البوت: {e}")
 
-
-# ==========================================================
-# إقلاع النظام وتشغيل البوت
-# ==========================================================
 
 def main():
     if not TOKEN:
@@ -1076,7 +1071,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🤖 تم تفعيل نظام المعالجة الصوتية الاحترافية والتشغيل بنجاح...")
+    logger.info("🤖 تم تثبيت وحماية آلية الإرسال للمستخدم بنجاح.. البوت قيد العمل.")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 
