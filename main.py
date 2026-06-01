@@ -52,7 +52,8 @@ COOKIES_FILE = "cookies.txt"
 PROGRESS_UPDATE_SECONDS = 1.5
 ACTIVE_USERS = set()
 
-BOT_USERNAME = "@er_rbot"  # تم تعديله ليتطابق مع الصورة المرفقة وعملك
+# تم التحديث إلى اليوزر الجديد المطلوب
+BOT_USERNAME = "@MusicPlayZoneBot"
 BOT_LINK = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
 
 # ==========================================================
@@ -342,11 +343,13 @@ def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+# تحديث نص الواجهة بالكامل للنص المطلوب
 def build_playzone_links_text() -> str:
     return (
-        "🔗 روابط PlayZone الرسمية\n\n"
-        "تابع المنصات الرسمية للدعم والتحديثات.\n"
-        "يمكنك فتح أي رابط من الأزرار أدناه."
+        "💚 دعمك يصنع الفرق\n\n"
+        "تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
+        "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
+        "🔗 اضغط زر: روابط PlayZone"
     )
 
 
@@ -375,6 +378,7 @@ def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
     )
 
 
+# تحديث نص البدء لإدراج النص المطلوب بدقة وعناية
 def build_start_text(first_name: str) -> str:
     return (
         f"أهلاً {esc(first_name)} 👋\n\n"
@@ -384,7 +388,10 @@ def build_start_text(first_name: str) -> str:
         "• الاسم والناشر\n"
         "• المدة والحجم التقريبي\n"
         "• أزرار تحميل واضحة للصوت أو الفيديو\n\n"
-        "لروابط PlayZone الرسمية اضغط زر: 🔗 روابط PlayZone\n\n"
+        "💚 دعمك يصنع الفرق\n\n"
+        "تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
+        "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
+        "🔗 اضغط زر: روابط PlayZone\n\n"
         "ابدأ بإرسال الرابط مباشرة."
     )
 
@@ -400,7 +407,6 @@ def build_guide_text() -> str:
     )
 
 
-# تم تعديل دالة بناء كابشن المعاينة لتطابق الصورة المرفقة بالملي ثانية وحجم الملف
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
     return (
         f"🎬 <b>{esc(title)}</b>\n"
@@ -744,7 +750,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
 
         trim_old_pending_requests(context)
 
-        # تعديل الكابشن ليتوافق مع الصورة تماماً
         caption = build_preview_caption(title, artist, duration, est_size)
         keyboard = build_preview_keyboard(request_id, text, title)
 
@@ -963,16 +968,10 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         artist = request.get("artist", "غير معروف")
         duration = int(request.get("duration") or 0)
 
-        # 1. إرسال نص النص "• تم الارسال •" المنفصل قبل الأغنية كما في الصورة حرفياً
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text="• تم الارسال •",
-            parse_mode="HTML"
-        )
+        # [تعديل] تمت إزالة رسالة "تم الارسال" المنفصلة نهائياً بناءً على طلبك
 
-        # 2. بناء كابشن الملف المستلم المنسق ليتطابق مع تصميم الصورة تماماً وحرفياً
+        # [تعديل] تحديث تنسيق الكابشن وإزالة النص القديم مع اعتماد المعرف الجديد
         caption = (
-            f"<b>بوت تنزيل اغاني من يوتيوب</b>\n"
             f"🎬 {esc(title)}\n"
             f"- {BOT_USERNAME}, {esc(format_duration(duration))}"
         )
@@ -1044,7 +1043,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 async def set_bot_commands(app: Application):
-    # تم إزالة أمر /admin من هنا لكي لا يظهر في الـ Slash أو كـ اختصار للمستخدم (تمت إزالة سلاش الأدمن)
     commands = [
         BotCommand("start", "بدء استخدام البوت"),
         BotCommand("links", "روابط PlayZone الرسمية"),
@@ -1074,12 +1072,11 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
-    # هاندلر الأدمن شغال فقط عند الكتابة يدوياً ومحمي بالـ ID في دالة الفحص
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🤖 انطلق بوت PlayZone للتحميل بواجهة محسنة تماثل الصورة بالكامل...")
+    logger.info("🤖 تم بدء تشغيل البوت باليوزر والنصوص الجديدة بنجاح...")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 
