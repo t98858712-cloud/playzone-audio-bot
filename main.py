@@ -7,6 +7,7 @@ import uuid
 import asyncio
 import shutil
 import logging
+import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse, quote
 
@@ -52,7 +53,6 @@ COOKIES_FILE = "cookies.txt"
 PROGRESS_UPDATE_SECONDS = 1.5
 ACTIVE_USERS = set()
 
-# تم التحديث إلى اليوزر الجديد المطلوب
 BOT_USERNAME = "@MusicPlayZoneBot"
 BOT_LINK = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
 
@@ -209,28 +209,6 @@ def is_valid_url(text: str) -> bool:
         return False
 
 
-def get_platform(url: str) -> str:
-    try:
-        host = urlparse(url).netloc.lower().replace("www.", "")
-    except Exception:
-        return "رابط مباشر"
-
-    if "youtube" in host or "youtu.be" in host:
-        return "YouTube"
-    if "tiktok" in host:
-        return "TikTok"
-    if "instagram" in host:
-        return "Instagram"
-    if "facebook" in host or "fb.watch" in host:
-        return "Facebook"
-    if "soundcloud" in host:
-        return "SoundCloud"
-    if "x.com" in host or "twitter" in host:
-        return "X / Twitter"
-
-    return host.split(".")[0].capitalize()
-
-
 def get_thumbnail(info: dict) -> str:
     try:
         thumbs = info.get("thumbnails") or []
@@ -311,17 +289,13 @@ def user_main_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
-def build_preview_keyboard(request_id: str, url: str, title: str) -> InlineKeyboardMarkup:
-    share_text = f"🎧 {title}\nعبر {BOT_USERNAME}"
-    share_url = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
-
+def build_preview_keyboard(request_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton("🎵 صوت MP3", callback_data=f"aud:{request_id}"),
                 InlineKeyboardButton("🎬 فيديو MP4", callback_data=f"vid:{request_id}"),
             ],
-            [InlineKeyboardButton("🔗 مشاركة", url=share_url)],
             [InlineKeyboardButton("❌ إلغاء", callback_data=f"cancel:{request_id}")],
         ]
     )
@@ -343,13 +317,11 @@ def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-# تحديث نص الواجهة بالكامل للنص المطلوب
 def build_playzone_links_text() -> str:
     return (
         "💚 دعمك يصنع الفرق\n\n"
         "تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
-        "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
-        "🔗 اضغط زر: روابط PlayZone"
+        "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل."
     )
 
 
@@ -378,7 +350,6 @@ def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-# تحديث نص البدء لإدراج النص المطلوب بدقة وعناية
 def build_start_text(first_name: str) -> str:
     return (
         f"أهلاً {esc(first_name)} 👋\n\n"
@@ -391,7 +362,6 @@ def build_start_text(first_name: str) -> str:
         "💚 دعمك يصنع الفرق\n\n"
         "تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
         "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
-        "🔗 اضغط زر: روابط PlayZone\n\n"
         "ابدأ بإرسال الرابط مباشرة."
     )
 
@@ -402,8 +372,7 @@ def build_guide_text() -> str:
         "1) انسخ رابط المقطع من المنصة.\n"
         "2) أرسله هنا في البوت.\n"
         "3) انتظر المعاينة.\n"
-        "4) اختر: صوت MP3 أو فيديو MP4.\n\n"
-        "ملاحظة: إذا كان المقطع خاصاً أو محمياً قد لا يتم تحميله."
+        "4) اختر: صوت MP3 أو فيديو MP4."
     )
 
 
@@ -580,7 +549,7 @@ def download_hook(progress_data: dict):
                 progress_data["text"] = f"📥 جاري استقبال البيانات: {format_size(downloaded)}"
 
         elif d.get("status") == "finished":
-            progress_data["text"] = "⚙️ اكتمل التحميل، جاري تجهيز الملف..."
+            progress_data["text"] = "⚙️ اكتمل التحميل، جاري معالجة الصوت احترافياً..."
 
     return hook
 
@@ -601,11 +570,22 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 
+# [تعديل الهندسة الصوتية]: ترقية كفاءة فلاتر هندسة الصوت واستخراج الـ MP3 بأعلى جودة تصفية هندسية
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
     opts = get_ydl_options(job_dir, progress_data)
 
     if mode == "audio":
-        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
+        opts["format"] = "bestaudio/best"
+        # تفعيل المعالجة السحابية الاحترافية والتحويل المباشر لـ MP3 320kbps
+        opts["postprocessors"] = [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "320",
+        }]
+        # تطبيق معيار الموازنة الصوتية العالمي EBU R128 لمنع التشويش وتوحيد القوة
+        opts["postprocessor_args"] = {
+            "ffmpeg": ["-af", "loudnorm=I=-14:TP=-1.0:LRA=11"]
+        }
     else:
         opts["format"] = "best[ext=mp4][height<=720][filesize<48M]/best"
 
@@ -745,13 +725,14 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             "title": title,
             "artist": artist,
             "duration": duration_raw,
+            "thumb_url": thumb,
             "created_at": int(time.time()),
         }
 
         trim_old_pending_requests(context)
 
         caption = build_preview_caption(title, artist, duration, est_size)
-        keyboard = build_preview_keyboard(request_id, text, title)
+        keyboard = build_preview_keyboard(request_id)
 
         await safe_delete(status)
         await send_preview(update, thumb, caption, keyboard)
@@ -901,7 +882,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         await query.answer("حدث خطأ في الطلب. أرسل الرابط مرة أخرى.", show_alert=True)
         return
 
-    await query.answer("بدأ التحميل...")
+    await query.answer("بدأ التحميل والميكساج...")
     ACTIVE_USERS.add(uid)
 
     job_dir = BASE_DOWNLOAD_DIR / f"{uid}_{int(time.time())}"
@@ -933,7 +914,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         ]
 
         if not files:
-            raise RuntimeError("لم يتم العثور على الملف بعد التحميل")
+            raise RuntimeError("لم يتم العثور على الملف بعد المعالجة")
 
         target_file = max(files, key=lambda p: p.stat().st_mtime)
         file_size = target_file.stat().st_size
@@ -952,6 +933,16 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             )
             return
 
+        thumb_url = request.get("thumb_url")
+        local_thumb = None
+        if thumb_url:
+            try:
+                local_thumb = job_dir / "audio_disk_thumb.jpg"
+                urllib.request.urlretrieve(thumb_url, local_thumb)
+            except Exception as te:
+                logger.warning(f"فشل تحميل غلاف الألبوم الدائري: {te}")
+                local_thumb = None
+
         stop_event.set()
         try:
             await updater_task
@@ -960,7 +951,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
         await edit_message_smart(
             query.message,
-            "📤 جاري إرسال الملف...",
+            "📤 جاري هندسة الصوت وإرسال الملف...",
             reply_markup=None,
         )
 
@@ -968,13 +959,14 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         artist = request.get("artist", "غير معروف")
         duration = int(request.get("duration") or 0)
 
-        # [تعديل] تمت إزالة رسالة "تم الارسال" المنفصلة نهائياً بناءً على طلبك
-
-        # [تعديل] تحديث تنسيق الكابشن وإزالة النص القديم مع اعتماد المعرف الجديد
         caption = (
             f"🎬 {esc(title)}\n"
             f"- {BOT_USERNAME}, {esc(format_duration(duration))}"
         )
+
+        share_text = f"🎬 {title}\nعبر البوت {BOT_USERNAME}"
+        share_link = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
+        media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✉️ مشاركة", url=share_link)]])
 
         try:
             await context.bot.send_chat_action(
@@ -986,15 +978,22 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
         with open(target_file, "rb") as f:
             if mode == "audio":
-                await context.bot.send_audio(
-                    chat_id=query.message.chat_id,
-                    audio=f,
-                    title=title,
-                    performer=artist,
-                    duration=duration,
-                    caption=caption,
-                    parse_mode="HTML",
-                )
+                t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
+                try:
+                    await context.bot.send_audio(
+                        chat_id=query.message.chat_id,
+                        audio=f,
+                        title=title,
+                        performer=artist,
+                        duration=duration,
+                        caption=caption,
+                        thumbnail=t_file,       
+                        reply_markup=media_keyboard, 
+                        parse_mode="HTML",
+                    )
+                finally:
+                    if t_file:
+                        t_file.close()
             else:
                 await context.bot.send_video(
                     chat_id=query.message.chat_id,
@@ -1002,6 +1001,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                     caption=caption,
                     supports_streaming=True,
                     duration=duration,
+                    reply_markup=media_keyboard, 
                     parse_mode="HTML",
                 )
 
@@ -1017,7 +1017,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         try:
             await edit_message_smart(
                 query.message,
-                "❌ فشل تحميل المقطع.\nقد يكون محمياً أو غير متاح حالياً.",
+                "❌ فشل معالجة وتحميل المقطع.\nتأكد من سلامة الخادم ثم أعد المحاولة.",
                 reply_markup=None,
             )
         except Exception:
@@ -1076,7 +1076,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🤖 تم بدء تشغيل البوت باليوزر والنصوص الجديدة بنجاح...")
+    logger.info("🤖 تم تفعيل نظام المعالجة الصوتية الاحترافية والتشغيل بنجاح...")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 
