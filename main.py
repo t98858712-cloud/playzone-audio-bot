@@ -433,7 +433,6 @@ def base_ydl_opts(job_dir: Path | None = None, progress_data: dict | None = None
         "cachedir": False,
         "windowsfilenames": True,
         "restrictfilenames": False,
-        # عملاء متطورين لتخطي الـ Bot Detection الخاص بيوتيوب والمنصات الأخرى
         "extractor_args": {
             "youtube": {
                 "player_client": ["ios", "android", "web_safari"],
@@ -490,7 +489,7 @@ def progress_hook(progress_data: dict):
                         f"⚡ {format_size(speed)}/s"
                     )
             elif status == "finished":
-                progress_data["text"] = "⚙️ تم التحميل، جاري تجهيز الملف وتدفيقه لتيليجرام..."
+                progress_data["text"] = "⚙️ تم التحميل، جاري تجهيز الملف وإرساله لك..."
         except Exception:
             pass
     return hook
@@ -507,7 +506,6 @@ async def progress_updater(status_message, progress_data: dict, stop_event: asyn
 def build_download_options(url: str, choice: str, job_dir: Path, progress_data: dict):
     opts = base_ydl_opts(job_dir, progress_data)
     
-    # فلترة ذكية ومباشرة لمنع تخطي الـ 50 ميجابايت وتسريع وقت المعالجة والتحميل
     if choice == "audio":
         opts["format"] = "bestaudio[ext=m4a]/bestaudio[filesize<49M]/bestaudio/best"
     elif choice == "voice":
@@ -536,8 +534,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await send_clean_message(
         update, context,
-        "👋 أهلاً بك في بوت التحميل الشامل السريع.\n\n"
-        "أرسل الرابط مباشرة، وستظهر خيارات التحميل فوراً دون قيود.\n\n"
+        "👋 أهلاً بك في بوت التحميل السريع.\n\n"
+        "أرسل أي رابط مباشرة، وستظهر لك خيارات التحميل فوراً.\n\n"
         "✅ أرسل الرابط الآن للبدء.",
         reply_markup=admin_welcome_keyboard() if is_admin(update.effective_user.id) else welcome_keyboard(),
     )
@@ -550,12 +548,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(update.effective_user)
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text(f"❌ هذا الأمر للأدمن فقط.\n\nID حسابك هو: {update.effective_user.id}")
+        await update.message.reply_text(f"❌ هذا الأمر مخصص للإدارة فقط.\n\nID حسابك هو: {update.effective_user.id}")
         return
 
     context.user_data.pop("awaiting_broadcast", None)
     context.user_data.pop("broadcast_text", None)
-    await send_clean_message(update, context, "🛠 لوحة الإدارة الضرورية\n\nاختر ما تحتاجه فقط:", reply_markup=admin_keyboard())
+    await send_clean_message(update, context, "🛠 لوحة الإدارة\n\nاختر الإجراء المطلوب:", reply_markup=admin_keyboard())
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
@@ -585,14 +583,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if user_id in ACTIVE_USERS:
-        await update.message.reply_text("⏳ لديك تحميل يعمل الآن، انتظر حتى ينتهي.")
+        await update.message.reply_text("⏳ لديك عملية تحميل جارية حالياً، يرجى الانتظار حتى تنتهي.")
         return
 
     if not is_valid_url(text):
-        await send_clean_message(update, context, "❌ لم أتعرف على هذا كرابط صحيح.\nأرسل رابطاً يبدأ بـ http أو https.", reply_markup=back_home_keyboard(user_id))
+        await send_clean_message(update, context, "❌ عذراً، هذا الرابط غير صحيح.\nيرجى إرسال رابط يبدأ بـ http أو https.", reply_markup=back_home_keyboard(user_id))
         return
 
-    status = await update.message.reply_text("🔍 جاري تجاوز الحماية وجلب معلومات الملف بأعلى سرعة...")
+    status = await update.message.reply_text("🔍 جاري قراءة الرابط وجلب معلومات الملف...")
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, lambda: extract_info_sync(text))
@@ -614,10 +612,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         set_last_error(err)
         logger.warning(f"فشل الفحص الأولي للمستخدم {user_id}: {err}")
 
-        # المعالجة الفورية السريعة في حالة تعطل الـ Extract الأولي (استمر في السماح بالتحميل)
         context.user_data["current_url"] = text
         context.user_data["created_at"] = time.time()
-        context.user_data["preview_title"] = "ملف ميديا مجهول"
+        context.user_data["preview_title"] = "ملف ميديا"
         context.user_data["preview_author"] = "غير معروف"
         context.user_data["preview_platform"] = platform_name_from_url(text)
         context.user_data["preview_duration"] = 0
@@ -625,7 +622,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await safe_edit(
             status,
-            f"✅ تم استقبال الرابط بنجاح (وضع التجاوز السريع).\n\n🌐 المنصة: {platform_name_from_url(text)}\n⚙️ سيتم تخطي الفحص والبدء في التحميل والرفع المباشر.\n\nاختر صيغة التحميل المطلوبة:",
+            f"✅ تم استلام الرابط بنجاح.\n\n🌐 المنصة: {platform_name_from_url(text)}\n\nاختر صيغة التحميل المطلوبة للبدء مباشرة:",
             reply_markup=download_keyboard()
         )
 
@@ -641,17 +638,17 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data or ""
     if data == "admin_open":
         if not is_admin(query.from_user.id): return
-        await edit_or_send(query, "🛠 لوحة الإدارة الضرورية\n\nاختر ما تحتاجه فقط:", reply_markup=admin_keyboard())
+        await edit_or_send(query, "🛠 لوحة الإدارة\n\nاختر الإجراء المطلوب:", reply_markup=admin_keyboard())
         return
     if data == "done":
-        await edit_or_send(query, "📩 أرسل الرابط الجديد الآن في الشات مباشرة.", reply_markup=back_home_keyboard(query.from_user.id))
+        await edit_or_send(query, "📩 يمكنك إرسال رابط جديد الآن مباشرة.", reply_markup=back_home_keyboard(query.from_user.id))
         return
     if data == "user_help":
-        await edit_or_send(query, "📘 طريقة الاستخدام:\n\n1️⃣ أرسل الرابط مباشرة.\n2️⃣ اختر نوع الملف (فيديو أو صوت).\n3️⃣ انتظر ثوانٍ وسيصلك الملف مفعلاً.", reply_markup=back_home_keyboard(query.from_user.id))
+        await edit_or_send(query, "📘 طريقة الاستخدام:\n\n1️⃣ أرسل رابط المقطع أو الملف مباشرة.\n2️⃣ اختر نوع التحميل المطلوب (فيديو أو صوت).\n3️⃣ انتظر لحظات وسيصلك الملف مباشرة.", reply_markup=back_home_keyboard(query.from_user.id))
         return
     if data == "cancel":
         context.user_data.pop("current_url", None)
-        await edit_or_send(query, "✅ تم إلغاء الطلب بنجاح. أرسل رابطاً جديداً في أي وقت.", reply_markup=back_home_keyboard(query.from_user.id))
+        await edit_or_send(query, "✅ تم إلغاء الطلب بنجاح. يمكنك إرسال رابط جديد في أي وقت.", reply_markup=back_home_keyboard(query.from_user.id))
         return
     if data.startswith("admin_"):
         await handle_admin_button(update, context)
@@ -667,7 +664,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     created_at = context.user_data.get("created_at", 0)
 
     if not url or time.time() - created_at > REQUEST_EXPIRE_SECONDS:
-        await query.message.reply_text("⏱️ انتهت صلاحية الطلب القديم. الرجاء إرسال الرابط من جديد.")
+        await query.message.reply_text("⏱️ انتهت صلاحية الطلب. يرجى إرسال الرابط من جديد.")
         return
 
     await process_download(update, context, url, choices[data])
@@ -686,21 +683,21 @@ async def handle_admin_button(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"❌ فاشلة: {stats.get('failed', 0)}\n"
             f"🎵 ملفات صوتية: {stats.get('audio', 0)}\n"
             f"🎬 مقاطع فيديو: {stats.get('video', 0)}\n"
-            f"📦 الحجم المستهلك: {format_size(stats.get('bytes', 0))}\n"
-            f"🧾 آخر خطأ مسجل: {safe_text(stats.get('last_error', 'لا يوجد'))}"
+            f"📦 الحجم الإجمالي: {format_size(stats.get('bytes', 0))}\n"
+            f"🧾 آخر خطأ: {safe_text(stats.get('last_error', 'لا يوجد'))}"
         )
     elif data == "admin_users":
         await query.message.reply_text(f"👥 عدد المستخدمين المسجلين: {len(all_user_ids())}")
     elif data == "admin_active":
-        await query.message.reply_text(f"📥 العمليات النشطة حالياً: {len(ACTIVE_USERS)}")
+        await query.message.reply_text(f"📥 العمليات الجارية حالياً: {len(ACTIVE_USERS)}")
     elif data == "admin_cookies":
-        await query.message.reply_text(f"🍪 حالة ملف cookies.txt: {'يعمل ومتصل ✅' if has_cookies_file() else 'غير مرفوع ⚠️'}")
+        await query.message.reply_text(f"🍪 حالة ملف الارتباط: {'متصل ومفعّل ✅' if has_cookies_file() else 'غير مفعّل ⚠️'}")
     elif data == "admin_clean":
         cleanup_old_downloads()
-        await query.message.reply_text("✅ تم تفريغ الكاش وتنظيف السيرفر تماماً.")
+        await query.message.reply_text("✅ تم تنظيف الملفات المؤقتة بنجاح.")
     elif data == "admin_broadcast":
         context.user_data["awaiting_broadcast"] = True
-        await query.message.reply_text("📢 اكتب الآن رسالة الإذاعة الجماعية ليتم تعميمها...")
+        await query.message.reply_text("📢 أرسل الآن نص الرسالة الجماعية ليتم تعميمها...")
 
 async def handle_broadcast_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -708,13 +705,13 @@ async def handle_broadcast_button(update: Update, context: ContextTypes.DEFAULT_
 
     if query.data == "broadcast_cancel":
         context.user_data.pop("broadcast_text", None)
-        await query.message.reply_text("❌ تم إلغاء الإذاعة.")
+        await query.message.reply_text("❌ تم إلغاء الإرسال الجماعي.")
         return
 
     text = context.user_data.get("broadcast_text")
     if not text: return
 
-    await query.message.reply_text("📢 جاري معالجة وبث الرسائل لجميع المشتركين...")
+    await query.message.reply_text("📢 جاري إرسال الرسائل لجميع المشتركين...")
     sent, failed = 0, 0
     for uid in all_user_ids():
         try:
@@ -727,14 +724,14 @@ async def handle_broadcast_button(update: Update, context: ContextTypes.DEFAULT_
     stat_inc("broadcast_sent", sent)
     stat_inc("broadcast_failed", failed)
     context.user_data.pop("broadcast_text", None)
-    await query.message.reply_text(f"✅ اكتملت الإذاعة بنجاح.\n\n👍 أرسلت إلى: {sent}\n👎 فشلت عند: {failed}")
+    await query.message.reply_text(f"✅ اكتمل الإرسال الجماعي بنجاح.\n\n👍 تم إرسالها إلى: {sent}\n👎 فشلت عند: {failed}")
 
 async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str, choice: str):
     query = update.callback_query
     user_id = query.from_user.id
 
     if user_id in ACTIVE_USERS:
-        await query.message.reply_text("⏳ عملياتك السابقة لا تزال قيد التحميل. انتظر دقيقة.")
+        await query.message.reply_text("⏳ يرجى الانتظار حتى تنتهي عمليتك السابقة.")
         return
 
     ACTIVE_USERS.add(user_id)
@@ -745,8 +742,8 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
     try:
         job_dir = make_job_dir(user_id)
-        status_message = await query.message.reply_text("⚡ جاري استدعاء السيرفر وتخطي الحظر...")
-        progress_data = {"text": "⏳ جاري تهيئة الاتصال برابط الملف..."}
+        status_message = await query.message.reply_text("⚡ جاري الاتصال وتجهيز الرابط...")
+        progress_data = {"text": "⏳ جاري بدء عملية التحميل..."}
 
         updater_task = asyncio.create_task(progress_updater(status_message, progress_data, stop_event))
         await context.bot.send_chat_action(chat_id=query.message.chat_id, action=ChatAction.TYPING)
@@ -767,18 +764,18 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
         file_path = find_downloaded_file(job_dir)
         if not file_path or not file_path.exists():
-            raise RuntimeError("لم يتم العثور على الملف بعد تحميله بنجاح.")
+            raise RuntimeError("لم يتم العثور على الملف.")
 
         file_size = file_path.stat().st_size
         if file_size > MAX_TELEGRAM_SIZE:
-            await safe_edit(status_message, f"❌ حجم الملف ({format_size(file_size)}) تخطى الحد الأقصى للبوتات العادية (50MB).\n\n💡 يرجى اختيار جودة صوتية أو رابط بمقطع أقصر.")
+            await safe_edit(status_message, f"❌ حجم الملف ({format_size(file_size)}) تجاوز الحد المسموح به (50MB).\n\n💡 يرجى اختيار مقطع بحجم أصغر أو مدة أقصر.")
             stat_inc("failed", 1)
             return
 
         stop_event.set()
         if updater_task: await updater_task
 
-        await safe_edit(status_message, "📤 جاري تشفير ورفع الملف إلى تيليجرام الآن...")
+        await safe_edit(status_message, "📤 جاري إرسال الملف إليك الآن...")
 
         caption = f"✅ تم التحميل بنجاح\n📌 {title}\n🌐 {extractor}\n⏱️ {format_duration(duration)}\n📦 الحجم: {format_size(file_size)}"
         upload_action = ChatAction.UPLOAD_VIDEO if choice == "video" else ChatAction.UPLOAD_VOICE
@@ -801,13 +798,13 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
 
         stat_inc("success", 1)
         stat_inc("bytes", file_size)
-        await safe_edit(status_message, "✅ تم إرسال الملف بنجاح المطلق!", reply_markup=done_keyboard())
+        await safe_edit(status_message, "✅ تم إرسال الملف بنجاح!", reply_markup=done_keyboard())
 
     except Exception as e:
         stat_inc("failed", 1)
         err = short_error(e)
         set_last_error(err)
-        await safe_edit(status_message, f"❌ حدث خطأ غير متوقع أثناء معالجة المنصة.\n\nالوصف: {err}\n\nجرّب رابطاً آخراً.")
+        await safe_edit(status_message, f"❌ عذراً، واجهنا مشكلة أثناء جلب الملف من هذه المنصة.\n\nيرجى المحاولة مرة أخرى أو تجربة رابط آخر.")
     finally:
         stop_event.set()
         if updater_task:
@@ -817,16 +814,16 @@ async def process_download(update: Update, context: ContextTypes.DEFAULT_TYPE, u
         ACTIVE_USERS.discard(user_id)
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("اضغط /start ثم أرسل رابط التحميل مباشرة، لا تحتاج لأي أوامر معقدة.", reply_markup=welcome_keyboard())
+    await update.message.reply_text("يرجى إرسال رابط التحميل مباشرة، دون الحاجة لاستخدام أوامر إضافية.", reply_markup=welcome_keyboard())
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.exception("Telegram Exception Handler captured:", exc_info=context.error)
 
 async def setup_bot_commands(app):
-    await app.bot.set_my_commands([BotCommand("start", "بدء تشغيل وتحديث البوت")], scope=BotCommandScopeDefault())
+    await app.bot.set_my_commands([BotCommand("start", "تشغيل البوت")], scope=BotCommandScopeDefault())
     for admin_id in ADMIN_IDS:
         try:
-            await app.bot.set_my_commands([BotCommand("start", "بدء تشغيل البوت"), BotCommand("admin", "لوحة الإدارة")], scope=BotCommandScopeChat(chat_id=admin_id))
+            await app.bot.set_my_commands([BotCommand("start", "تشغيل البوت"), BotCommand("admin", "لوحة الإدارة")], scope=BotCommandScopeChat(chat_id=admin_id))
         except Exception:
             pass
 
@@ -847,7 +844,7 @@ def main():
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
     app.add_error_handler(error_handler)
 
-    logger.info("🚀 البوت المطور جاهز ومستقر الآن للعمل بأعلى سرعة...")
+    logger.info("🚀 البوت جاهز للعمل الآن...")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
