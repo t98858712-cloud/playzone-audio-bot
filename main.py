@@ -7,7 +7,6 @@ import uuid
 import asyncio
 import shutil
 import logging
-import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse, quote
 
@@ -31,11 +30,6 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
-
-try:
-    from PIL import Image
-except Exception:
-    Image = None
 
 # ==========================================================
 # الإعدادات الأساسية والمصادر
@@ -352,69 +346,6 @@ def build_playzone_links_text() -> str:
         "تابع المنصات الرسمية للدعم والتحديثات.\n"
         "يمكنك فتح أي رابط من الأزرار أدناه."
     )
-
-
-def build_final_share_keyboard(request: dict) -> InlineKeyboardMarkup:
-    title = request.get("title", "ملف ميديا")
-    url = request.get("url", BOT_LINK)
-    share_text = f"🎧 {title}\nعبر {BOT_USERNAME}"
-    share_url = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
-
-    return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("✉️ مشاركة", url=share_url)]]
-    )
-
-
-def safe_media_filename(title: str, suffix: str) -> str:
-    name = clean_title(title, 45)
-    name = re.sub(r"[^\w\s\-\.\u0600-\u06FF]+", "", name).strip()
-    if not name:
-        name = "PlayZone"
-    return f"{name}{suffix}"
-
-
-def prepare_thumbnail_file(thumb_url: str, job_dir: Path) -> Path | None:
-    """
-    تجهيز صورة مصغرة لرسالة الصوت/الفيديو.
-    تيليجرام يفضل أن تكون JPEG، أقل من 200KB، وأبعادها لا تتجاوز 320x320.
-    إذا لم تتوفر Pillow أو فشل التحويل، يتم إرجاع None بدون تعطيل التحميل.
-    """
-    if not thumb_url or Image is None:
-        return None
-
-    raw_path = job_dir / "thumb_raw"
-    jpg_path = job_dir / "thumb.jpg"
-
-    try:
-        req = urllib.request.Request(
-            thumb_url,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-
-        with urllib.request.urlopen(req, timeout=10) as response:
-            data = response.read(2 * 1024 * 1024)
-
-        if not data:
-            return None
-
-        raw_path.write_bytes(data)
-
-        with Image.open(raw_path) as img:
-            img = img.convert("RGB")
-            img.thumbnail((320, 320))
-
-            quality = 85
-            while quality >= 45:
-                img.save(jpg_path, "JPEG", quality=quality, optimize=True)
-                if jpg_path.stat().st_size <= 200 * 1024:
-                    return jpg_path
-                quality -= 10
-
-        return jpg_path if jpg_path.exists() else None
-
-    except Exception as e:
-        logger.warning(f"فشل تجهيز صورة الملف: {e}")
-        return None
 
 
 def admin_main_keyboard() -> InlineKeyboardMarkup:
@@ -821,7 +752,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             "artist": artist,
             "duration": duration_raw,
             "platform": platform,
-            "thumb": thumb,
             "created_at": int(time.time()),
         }
 
@@ -1046,11 +976,11 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         duration = int(request.get("duration") or 0)
         platform = request.get("platform", "منصة خارجية")
 
-        caption = f"🎬 <b>{esc(title)}</b>"
-
-        final_keyboard = build_final_share_keyboard(request)
-        thumb_path = prepare_thumbnail_file(request.get("thumb", ""), job_dir)
-        filename = safe_media_filename(title, target_file.suffix)
+        caption = (
+            f"✅ تم التحميل\n"
+            f"• {esc(title)}\n"
+            f"• المصدر: {esc(platform)}"
+        )
 
         try:
             await context.bot.send_chat_action(
@@ -1060,60 +990,26 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception:
             pass
 
-        if mode == "audio":
-            with open(target_file, "rb") as audio_file:
-                if thumb_path and thumb_path.exists():
-                    with open(thumb_path, "rb") as thumb_file:
-                        await context.bot.send_audio(
-                            chat_id=query.message.chat_id,
-                            audio=audio_file,
-                            title=title,
-                            performer=artist,
-                            duration=duration,
-                            caption=caption,
-                            parse_mode="HTML",
-                            thumbnail=thumb_file,
-                            reply_markup=final_keyboard,
-                            filename=filename,
-                        )
-                else:
-                    await context.bot.send_audio(
-                        chat_id=query.message.chat_id,
-                        audio=audio_file,
-                        title=title,
-                        performer=artist,
-                        duration=duration,
-                        caption=caption,
-                        parse_mode="HTML",
-                        reply_markup=final_keyboard,
-                        filename=filename,
-                    )
-        else:
-            with open(target_file, "rb") as video_file:
-                if thumb_path and thumb_path.exists():
-                    with open(thumb_path, "rb") as thumb_file:
-                        await context.bot.send_video(
-                            chat_id=query.message.chat_id,
-                            video=video_file,
-                            caption=caption,
-                            supports_streaming=True,
-                            duration=duration,
-                            parse_mode="HTML",
-                            thumbnail=thumb_file,
-                            reply_markup=final_keyboard,
-                            filename=filename,
-                        )
-                else:
-                    await context.bot.send_video(
-                        chat_id=query.message.chat_id,
-                        video=video_file,
-                        caption=caption,
-                        supports_streaming=True,
-                        duration=duration,
-                        parse_mode="HTML",
-                        reply_markup=final_keyboard,
-                        filename=filename,
-                    )
+        with open(target_file, "rb") as f:
+            if mode == "audio":
+                await context.bot.send_audio(
+                    chat_id=query.message.chat_id,
+                    audio=f,
+                    title=title,
+                    performer=artist,
+                    duration=duration,
+                    caption=caption,
+                    parse_mode="HTML",
+                )
+            else:
+                await context.bot.send_video(
+                    chat_id=query.message.chat_id,
+                    video=f,
+                    caption=caption,
+                    supports_streaming=True,
+                    duration=duration,
+                    parse_mode="HTML",
+                )
 
         stat_inc("success")
         stat_inc("bytes", file_size)
