@@ -757,7 +757,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 async def set_bot_commands(app: Application):
-    commands = [BotCommand("start", "بدء استخدام البوت ومزاياه"), BotCommand("links", "روابط قنوات ودعم PlayZone")]
+    commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
     try:
         await app.bot.set_my_commands(commands)
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
