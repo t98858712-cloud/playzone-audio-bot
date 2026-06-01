@@ -695,7 +695,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
         title = request.get("title", "ملف ميديا")
         duration = int(request.get("duration") or 0)
-        caption = f"🎬 {esc(title)}\n- @MusicPlayZoneBot، {esc(format_duration(duration))}"
+        caption = f"- @MusicPlayZoneBot، {esc(format_duration(duration))}"
 
         share_text = f"🎬 {title}"
         share_link = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
