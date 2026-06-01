@@ -51,12 +51,12 @@ STATS_FILE = DATA_DIR / "stats.json"
 MAX_TELEGRAM_SIZE = 50 * 1024 * 1024 
 COOKIES_FILE = "cookies.txt"
 
-PROGRESS_UPDATE_SECONDS = 2.0  # زيادة المهلة لضمان استقرار الشبكة وعدم حظر البوت من تلغرام
+PROGRESS_UPDATE_SECONDS = 2.0  
 ACTIVE_USERS = set()
 
-BOT_USERNAME = "@MusicPlayZoneBot"
+# 🎯 تحديث معرف البوت الرسمي والروابط الخاصة به بناءً على طلبك
+BOT_USERNAME = "@P1ay_Z0ne_Bot"
 
-# روابط PlayZone الثابتة للدعم والمتابعة
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
 FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
 INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
@@ -69,7 +69,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# قفل أمان لمنع التداخل بين الخيوط أثناء تحديثات النسبة
 progress_lock = threading.Lock()
 
 # ==========================================================
@@ -78,8 +77,7 @@ progress_lock = threading.Lock()
 
 def load_json(path: Path, default):
     try:
-        if not path.exists():
-            return default
+        if not path.exists(): return default
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f) or default
     except Exception as e:
@@ -261,7 +259,7 @@ def build_start_text(first_name: str) -> str:
         "أرسل رابط فيديو أو أغنية، وسأعرض لك معاينة قبل التحميل.\n\n"
         "المعاينة تتضمن:\n• صورة المقطع\n• الاسم والناشر\n• المدة والحجم التقريبي\n• أزرار تحميل واضحة للصوت أو الفيديو\n\n"
         "💚 دعمك يصنع الفرق\n\n"
-        "تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
+        f"تابع روابط PlayZone الرسمية وشاركها مع أصدقائك عبر البوت {BOT_USERNAME}،\n"
         "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
         "ابدأ بإرسال الرابط مباشرة."
     )
@@ -323,7 +321,7 @@ async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: 
     except BadRequest as e:
         if "not modified" not in str(e).lower(): raise
     except Exception as e:
-        logger.debug(f"تخطي خطأ تحديث واجهة الرسالة: {e}")
+        logger.debug(f"تخطي تحديث الرسالة: {e}")
 
 async def send_preview(update: Update, thumb: str, caption: str, keyboard: InlineKeyboardMarkup):
     if thumb and (thumb.startswith("http://") or thumb.startswith("https://")):
@@ -334,10 +332,10 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# حل مشكلة خيوط التحميل المتوازي (Thread-Safe Progress Mechanism)
+# خيارات المحرك والتحميل التنزلي الذكي (Quality Fallback Cascade)
 # ==========================================================
 
-def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None):
+def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -347,7 +345,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "fragment_retries": 10,
         "socket_timeout": 30,
         "cachedir": False,
-        "concurrent_fragment_downloads": 5, # تم خفضها لـ 5 لضمان توازن المعالجة ومنع تجميد السيرفرات المتوسطة
+        "concurrent_fragment_downloads": 5, 
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept": "*/*",
@@ -362,6 +360,27 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         },
     }
     
+    # 🎯 إعداد جودة الميديا مع نظام الهبوط التدريجي التلقائي لحماية استقرار التحميل
+    if mode == "audio":
+        opts["format"] = "bestaudio/best"
+        opts["postprocessors"] = [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "320",
+        }]
+        opts["postprocessor_args"] = {
+            "ffmpeg": ["-af", "loudnorm=I=-14:TP=-1.0:LRA=11"]
+        }
+    else:
+        # 🚀 قفزة هندسية لعام 2026: محاولة جلب الـ 720p أولاً، فإن لم تتوفر يهبط المحرك تدريجياً لـ 480p ثم 360p ثم الأقل
+        opts["format"] = (
+            "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/"
+            "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=480]/"
+            "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=360]/"
+            "bestvideo+bestaudio/best"
+        )
+        opts["merge_output_format"] = "mp4"
+
     cookies_path = Path(COOKIES_FILE)
     if cookies_path.exists() and cookies_path.stat().st_size > 0:
         try:
@@ -369,7 +388,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
                 content = f.read()
             if "Netscape" in content or ".youtube.com" in content:
                 opts["cookiefile"] = COOKIES_FILE
-                logger.info("🍪 [PlayZone]: تم تطبيق الكوكيز بنجاح الفحص.")
+                logger.info("🍪 [PlayZone]: تم تطبيق الكوكيز المطور بنجاح.")
         except Exception as e:
             logger.error(f"خطأ ملف الكوكيز: {e}")
 
@@ -380,14 +399,13 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     return opts
 
 def extract_metadata(url: str):
-    opts = get_ydl_options()
+    opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
 def download_hook(progress_data: dict):
     def hook(d):
-        # ميزة الفئة العليا: حماية القفل لمنع تداخل بيانات الـ Multi-threading
         with progress_lock:
             if d.get("status") == "downloading":
                 downloaded = d.get("downloaded_bytes") or 0
@@ -420,21 +438,7 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
-    opts = get_ydl_options(job_dir, progress_data)
-    if mode == "audio":
-        opts["format"] = "bestaudio/best"
-        opts["postprocessors"] = [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "320",
-        }]
-        opts["postprocessor_args"] = {
-            "ffmpeg": ["-af", "loudnorm=I=-14:TP=-1.0:LRA=11"]
-        }
-    else:
-        opts["format"] = "best[ext=mp4][height<=720]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"
-        opts["merge_output_format"] = "mp4"
-
+    opts = get_ydl_options(job_dir, progress_data, mode)
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
@@ -750,7 +754,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم إطلاق النسخة المستقرة والخالية من الأخطاء لبوت PlayZone!")
+    logger.info("🚀 تم إطلاق النسخة الاحترافية الخالية من القيود لبوت PlayZone!")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
