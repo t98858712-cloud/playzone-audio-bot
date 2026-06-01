@@ -52,8 +52,8 @@ COOKIES_FILE = "cookies.txt"
 PROGRESS_UPDATE_SECONDS = 1.5
 ACTIVE_USERS = set()
 
-BOT_USERNAME = "@P1ay_Z0ne_Bot"
-BOT_LINK = "https://t.me/P1ay_Z0ne_Bot"
+BOT_USERNAME = "@er_rbot"  # تم تعديله ليتطابق مع الصورة المرفقة وعملك
+BOT_LINK = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
 
 # ==========================================================
 # روابط PlayZone الثابتة للدعم والمتابعة
@@ -63,7 +63,7 @@ WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
 FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
 INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
 THREADS_PLAYZONE = "https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ=="
-TELEGRAM_BOT_PLAYZONE = "https://t.me/P1ay_Z0ne_Bot"
+TELEGRAM_BOT_PLAYZONE = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -167,7 +167,7 @@ def clean_title(text: str, limit=60) -> str:
 
 def format_size(size_bytes) -> str:
     try:
-        size_bytes = int(size_bytes)
+        size_bytes = float(size_bytes)
     except Exception:
         return "غير معروف"
 
@@ -176,6 +176,8 @@ def format_size(size_bytes) -> str:
 
     for unit in ["Bytes", "KB", "MB", "GB"]:
         if size_bytes < 1024.0:
+            if size_bytes == int(size_bytes):
+                return f"{int(size_bytes)} {unit}"
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024.0
 
@@ -189,7 +191,7 @@ def format_duration(seconds) -> str:
         return "غير معروف"
 
     if seconds <= 0:
-        return "غير معروف"
+        return "00:00"
 
     h = seconds // 3600
     m = (seconds % 3600) // 60
@@ -398,14 +400,12 @@ def build_guide_text() -> str:
     )
 
 
-def build_preview_caption(title: str, artist: str, duration: str, est_size: str, platform: str) -> str:
+# تم تعديل دالة بناء كابشن المعاينة لتطابق الصورة المرفقة بالملي ثانية وحجم الملف
+def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
     return (
-        f"🎧 <b>{esc(title)}</b>\n\n"
-        f"👤 الناشر: {esc(artist)}\n"
-        f"⏱ المدة: {esc(duration)}\n"
-        f"📦 الحجم التقريبي: {esc(est_size)}\n"
-        f"🌐 المنصة: {esc(platform)}\n\n"
-        "اختر نوع التحميل:"
+        f"🎬 <b>{esc(title)}</b>\n"
+        f"<b>{esc(artist)}</b>\n"
+        f"⏱ {esc(duration)} - 💾 {esc(est_size)}"
     )
 
 
@@ -474,10 +474,6 @@ async def safe_delete(message):
 
 
 async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: str = "HTML"):
-    """
-    تعدل نفس الرسالة سواء كانت صورة بمعاينة أو رسالة نصية.
-    هذا يمنع أخطاء edit_caption عندما لا تكون الرسالة صورة.
-    """
     try:
         if getattr(message, "photo", None) or getattr(message, "video", None) or getattr(message, "document", None):
             await message.edit_caption(
@@ -493,17 +489,11 @@ async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: 
                 disable_web_page_preview=True,
             )
     except BadRequest as e:
-        # تجاهل خطأ "message is not modified"
         if "not modified" not in str(e).lower():
             raise
 
 
 async def send_preview(update: Update, thumb: str, caption: str, keyboard: InlineKeyboardMarkup):
-    """
-    إرسال المعاينة بأقل عدد رسائل:
-    - إذا توفرت صورة: صورة + كابشن + أزرار
-    - إذا لم تتوفر: رسالة واحدة + أزرار
-    """
     if thumb:
         try:
             return await update.message.reply_photo(
@@ -525,7 +515,6 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
 
 # ==========================================================
 # محرك التحميل السحابي
-# ملاحظة: لم يتم تغيير طريقة المعالجة الأساسية للتحميل
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None):
@@ -738,7 +727,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         artist = get_artist(info)
         duration_raw = info.get("duration") or 0
         duration = format_duration(duration_raw)
-        platform = get_platform(text)
         est_size_raw = get_largest_estimated_size(info)
         est_size = format_size(est_size_raw)
         thumb = get_thumbnail(info)
@@ -751,13 +739,13 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             "title": title,
             "artist": artist,
             "duration": duration_raw,
-            "platform": platform,
             "created_at": int(time.time()),
         }
 
         trim_old_pending_requests(context)
 
-        caption = build_preview_caption(title, artist, duration, est_size, platform)
+        # تعديل الكابشن ليتوافق مع الصورة تماماً
+        caption = build_preview_caption(title, artist, duration, est_size)
         keyboard = build_preview_keyboard(request_id, text, title)
 
         await safe_delete(status)
@@ -974,12 +962,19 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         title = request.get("title", "ملف ميديا")
         artist = request.get("artist", "غير معروف")
         duration = int(request.get("duration") or 0)
-        platform = request.get("platform", "منصة خارجية")
 
+        # 1. إرسال نص النص "• تم الارسال •" المنفصل قبل الأغنية كما في الصورة حرفياً
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text="• تم الارسال •",
+            parse_mode="HTML"
+        )
+
+        # 2. بناء كابشن الملف المستلم المنسق ليتطابق مع تصميم الصورة تماماً وحرفياً
         caption = (
-            f"✅ تم التحميل\n"
-            f"• {esc(title)}\n"
-            f"• المصدر: {esc(platform)}"
+            f"<b>بوت تنزيل اغاني من يوتيوب</b>\n"
+            f"🎬 {esc(title)}\n"
+            f"- {BOT_USERNAME}, {esc(format_duration(duration))}"
         )
 
         try:
@@ -1049,19 +1044,15 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 async def set_bot_commands(app: Application):
+    # تم إزالة أمر /admin من هنا لكي لا يظهر في الـ Slash أو كـ اختصار للمستخدم (تمت إزالة سلاش الأدمن)
     commands = [
         BotCommand("start", "بدء استخدام البوت"),
         BotCommand("links", "روابط PlayZone الرسمية"),
-        BotCommand("admin", "لوحة الإدارة"),
     ]
 
     try:
         await app.bot.set_my_commands(commands)
-
-        # تثبيت زر Menu الرسمي بجانب خانة الكتابة لفتح قائمة الأوامر
-        # من القائمة يستطيع المستخدم الوصول إلى /links دائماً
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-
     except Exception as e:
         logger.warning(f"فشل ضبط أوامر البوت: {e}")
 
@@ -1083,11 +1074,12 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
+    # هاندلر الأدمن شغال فقط عند الكتابة يدوياً ومحمي بالـ ID في دالة الفحص
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🤖 انطلق بوت PlayZone للتحميل بواجهة محسنة ولوحة إدارة كاملة...")
+    logger.info("🤖 انطلق بوت PlayZone للتحميل بواجهة محسنة تماثل الصورة بالكامل...")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 
