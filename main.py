@@ -331,7 +331,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# خيارات المحرك ونظام الهبوط التدريجي التنزلي الكامل (الصوت والفيديو)
+# خيارات المحرك الحاسم للهبوط التدريجي المزدوج (صوت وفيديو)
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
@@ -360,18 +360,16 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
     
     if mode == "audio":
-        # 🎯 تم التحديث بشكل متكامل وثابت: الهبوط التدريجي الاحترافي لملفات الصوت لمنع أي فشل
-        opts["format"] = "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio[ext=ogg]/bestaudio[ext=wav]/bestaudio/best"
+        # 🚀 الحل النهائي الجذري: سحب أي دفق صوتي متاح بأي حاوية (m4a, mp3, webm, aac, ogg) لمنع السقوط
+        # مع ترك عملية التحويل والدمج كخطوة معزولة ومستقلة لتفادي أخطاء خوادم يوتيوب والمنصات.
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio[ext=webm]/bestaudio[ext=aac]/bestaudio/best"
         opts["postprocessors"] = [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
             "preferredquality": "320",
         }]
-        opts["postprocessor_args"] = {
-            "ffmpeg": ["-af", "loudnorm=I=-14:TP=-1.0:LRA=11"]
-        }
     else:
-        # نظام الهبوط التدريجي الذكي لملفات الفيديو
+        # نظام الهبوط التدريجي الديناميكي المتكامل للفيديو
         opts["format"] = (
             "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/"
             "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=480]/"
@@ -643,6 +641,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, lambda: execute_download(url, mode, job_dir, progress_data))
 
+        # الفلترة الذكية للملف النهائي المستخرج
         files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
         if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
 
@@ -752,7 +751,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تحديث نظام الهبوط التدريجي للصوت والفيديو وبدء التشغيل الفوري لبوت PlayZone!")
+    logger.info("🚀 تم تحديث البوت وإطلاق الحل النهائي لمشاكل دفق الصوت والفيديو بنجاح!")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
