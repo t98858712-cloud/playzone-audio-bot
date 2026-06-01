@@ -54,7 +54,6 @@ COOKIES_FILE = "cookies.txt"
 PROGRESS_UPDATE_SECONDS = 2.0  
 ACTIVE_USERS = set()
 
-# 🎯 تحديث معرف البوت الرسمي والروابط الخاصة به بناءً على طلبك
 BOT_USERNAME = "@P1ay_Z0ne_Bot"
 
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
@@ -332,7 +331,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# خيارات المحرك والتحميل التنزلي الذكي (Quality Fallback Cascade)
+# خيارات المحرك والتحميل التنزلي الذكي للڤيديو والصوت
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
@@ -360,9 +359,9 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         },
     }
     
-    # 🎯 إعداد جودة الميديا مع نظام الهبوط التدريجي التلقائي لحماية استقرار التحميل
     if mode == "audio":
-        opts["format"] = "bestaudio/best"
+        # 🎯 تم التعديل: نظام هبوط تدريجي للصوت أيضاً لسحب أفضل جودة متوفرة والانتقال للأقل آلياً عند الفشل
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio/best"
         opts["postprocessors"] = [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
@@ -372,7 +371,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             "ffmpeg": ["-af", "loudnorm=I=-14:TP=-1.0:LRA=11"]
         }
     else:
-        # 🚀 قفزة هندسية لعام 2026: محاولة جلب الـ 720p أولاً، فإن لم تتوفر يهبط المحرك تدريجياً لـ 480p ثم 360p ثم الأقل
+        # نظام الهبوط التدريجي للفيديو (720p -> 480p -> 360p)
         opts["format"] = (
             "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/"
             "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=480]/"
@@ -627,7 +626,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         await query.answer("خطأ في بنيان الطلب.", show_alert=True)
         return
 
-    await query.answer("بدأت المعالجة فائقة السرعة...")
+    await query.answer("بدأت المعالجة فورا...")
     ACTIVE_USERS.add(uid)
 
     job_dir = BASE_DOWNLOAD_DIR / f"{uid}_{int(time.time())}"
@@ -674,13 +673,15 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         await edit_message_smart(query.message, "📤 اكتمل الميكساج السحابي بنجاح، جاري إرسال الملف الفوري إليك...", reply_markup=None)
 
         title = request.get("title", "ملف ميديا")
-        artist = request.get("artist", "غير معروف")
         duration = int(request.get("duration") or 0)
         caption = f"🎬 {esc(title)}\n- {esc(format_duration(duration))}"
 
-        share_text = f"🎬 {title}\nعبر البوت الاحترافي {BOT_USERNAME}"
+        # 🎯 تم التعديل: إزالة اسم وتوقيع البوت من نص المشاركة بناءً على طلبك
+        share_text = f"🎬 {title}"
         share_link = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
-        media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✉️ مشاركة المقطع", url=share_link)]])
+        
+        # 🎯 تم التعديل: تعديل اسم زر المشاركة ليصبح "مشاركة ✉️"
+        media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("مشاركة ✉️", url=share_link)]])
 
         try:
             action = ChatAction.UPLOAD_AUDIO if mode == "audio" else ChatAction.UPLOAD_VIDEO
@@ -695,7 +696,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                         chat_id=query.message.chat_id,
                         audio=f,
                         title=title,
-                        performer=artist,
+                        performer=request.get("artist", "غير معروف"),
                         duration=duration,
                         caption=caption,
                         thumbnail=t_file,       
@@ -721,7 +722,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
     except Exception as e:
         stat_inc("failed")
-        logger.error(f"فشل نظام الفئة العليا في المعالجة أو الإرسال: {e}")
+        logger.error(f"فشل نظام المعالجة أو الإرسال: {e}")
         try:
             await edit_message_smart(query.message, "❌ فشل سحب أو تحميل المقطع.\nقد يكون الرابط تالفاً أو تم حظر الاتصال مؤقتاً من خادم المنصة.", reply_markup=None)
         except Exception: pass
@@ -754,7 +755,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم إطلاق النسخة الاحترافية الخالية من القيود لبوت PlayZone!")
+    logger.info("🚀 تم تحديث وإطلاق النسخة الاحترافية لبوت PlayZone!")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
