@@ -273,7 +273,12 @@ def build_guide_text() -> str:
     )
 
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
-    return f"🎬 <b>{esc(title)}</b>\n<b>{esc(artist)}</b>\n⏱ {esc(duration)} - 💾 {esc(est_size)}"
+    return (
+        f"🎬 <b>{esc(title)}</b>\n"
+        f"👤 {esc(artist)}\n"
+        f"⏱ المدة: {esc(duration)}\n"
+        f"💾 الحجم المتوقع: {esc(est_size)}"
+    )
 
 def build_admin_stats_text() -> str:
     stats = load_stats()
@@ -719,7 +724,10 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
         title = request.get("title", "ملف ميديا")
         duration = int(request.get("duration") or 0)
-        caption = f"- @MusicPlayZoneBot، {esc(format_duration(duration))}"
+        caption = (
+            f"🎧 تم التحميل بواسطة @MusicPlayZoneBot\n"
+            f"⏱ المدة: {esc(format_duration(duration))}"
+        )
 
         share_text = f"🎬 {title}"
         share_link = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
