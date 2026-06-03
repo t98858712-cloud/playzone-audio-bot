@@ -239,7 +239,7 @@ def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
     )
 
 def build_playzone_links_text() -> str:
-    return "💚 ادعم PlayZone\n\nتابع روابطنا الرسمية وشاركها مع أصدقائك.\nدعمك يساعدنا على الاستمرار وتطوير الخدمة."
+    return "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل."
 
 def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -256,11 +256,11 @@ def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
 def build_start_text(first_name: str) -> str:
     return (
         f"أهلاً {esc(first_name)} 👋\n\n"
-        "أرسل رابط فيديو أو صوت، وسيظهر لك اسم المقطع قبل التحميل.\n\n"
-        "اختر الصيغة المناسبة:\n"
-        "🎵 صوت MP3\n"
-        "🎬 فيديو MP4\n\n"
-        "للبدء، أرسل الرابط الآن."
+        "أرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n"
+        "💚 دعمك يصنع الفرق\n\n"
+        f"تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
+        "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
+        "ابدأ بإرسال الرابط مباشرة."
     )
 
 def build_guide_text() -> str:
