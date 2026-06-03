@@ -69,6 +69,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.WARNING)
+logging.getLogger("telegram.ext").setLevel(logging.WARNING)
+
 progress_lock = threading.Lock()
 
 # ==========================================================
