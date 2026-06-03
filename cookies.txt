@@ -1,6 +1,0 @@
-# Netscape HTTP Cookie File
-# http://curl.haxx.se/rfc/cookie_spec.html
-# This is a generated file by PlayZone Enterprise System! Do not edit.
-
-.youtube.com	TRUE	/	TRUE	1824984000	VISITOR_INFO1_LIVE	abcde12345
-.youtube.com	TRUE	/	TRUE	1824984000	LOGIN_INFO	xyz9876543
