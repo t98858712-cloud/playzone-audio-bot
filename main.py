@@ -622,7 +622,7 @@ def convert_to_mp3_local(input_file: Path, output_file: Path) -> bool:
         cmd = [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-i", str(input_file),
-            "-vn", "-ar", "44100", "-ac", "2", "-b:a", "192k",
+            "-vn", "-ar", "44100", "-ac", "2", "-b:a", "320k",
             str(output_file),
         ]
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
