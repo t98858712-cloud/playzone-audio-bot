@@ -462,7 +462,7 @@ def convert_to_mp3_local(input_file: Path, output_file: Path) -> bool:
     try:
         cmd = [
             "ffmpeg", "-y", "-threads", "0", "-i", str(input_file),
-            "0", "-vn", "-ar", "44100", "-ac", "2", "-b:a", "320k",
+            "-vn", "-ar", "44100", "-ac", "2", "-b:a", "320k",
             "-map", "a:0?", "-async", "1", str(output_file)
         ]
         result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
@@ -641,7 +641,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pending = ensure_pending_requests(context)
         request = pending.get(request_id)
         if not request:
-            await query.answer("انتهت جلسة هذا الطلا، يرجى إعادة إرسال الرابط.", show_alert=True)
+            await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
             return
         if uid in ACTIVE_USERS:
             await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
@@ -802,8 +802,8 @@ async def set_bot_commands(app: Application):
 def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
     
-    # تأمين شبكة اتصالات البوت ضد مشاكل اختناق الرفع والتحميل السحابي على Railway
-    request = HTTPXRequest(connect_timeout=60, read_timeout=60, write_timeout=120, pool_size=100)
+    # [تم الإصلاح هنا]: تأمين شبكة اتصالات البوت وحذف التوجيه pool_size المتعارض مع إصدار الحزمة الجديد
+    request = HTTPXRequest(connect_timeout=60, read_timeout=60, write_timeout=120)
     app = Application.builder().token(TOKEN).request(request).post_init(set_bot_commands).build()
 
     app.add_handler(CommandHandler("start", start))
