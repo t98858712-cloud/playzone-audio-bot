@@ -239,7 +239,7 @@ def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
     )
 
 def build_playzone_links_text() -> str:
-    return "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل."
+    return "💚 ادعم PlayZone\n\nتابع روابطنا الرسمية وشاركها مع أصدقائك.\nدعمك يساعدنا على الاستمرار وتطوير الخدمة."
 
 def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -256,11 +256,11 @@ def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
 def build_start_text(first_name: str) -> str:
     return (
         f"أهلاً {esc(first_name)} 👋\n\n"
-        "أرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n"
-        "💚 دعمك يصنع الفرق\n\n"
-        f"تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
-        "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
-        "ابدأ بإرسال الرابط مباشرة."
+        "أرسل رابط فيديو أو صوت، وسيظهر لك اسم المقطع قبل التحميل.\n\n"
+        "اختر الصيغة المناسبة:\n"
+        "🎵 صوت MP3\n"
+        "🎬 فيديو MP4\n\n"
+        "للبدء، أرسل الرابط الآن."
     )
 
 def build_guide_text() -> str:
@@ -273,12 +273,7 @@ def build_guide_text() -> str:
     )
 
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
-    return (
-        f"🎬 <b>{esc(title)}</b>\n"
-        f"👤 {esc(artist)}\n"
-        f"⏱ المدة: {esc(duration)}\n"
-        f"💾 الحجم المتوقع: {esc(est_size)}"
-    )
+    return f"🎬 <b>{esc(title)}</b>\n<b>{esc(artist)}</b>\n⏱ {esc(duration)} - 💾 {esc(est_size)}"
 
 def build_admin_stats_text() -> str:
     stats = load_stats()
@@ -724,10 +719,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
         title = request.get("title", "ملف ميديا")
         duration = int(request.get("duration") or 0)
-        caption = (
-            f"🎧 تم التحميل بواسطة @MusicPlayZoneBot\n"
-            f"⏱ المدة: {esc(format_duration(duration))}"
-        )
+        caption = f"- @MusicPlayZoneBot، {esc(format_duration(duration))}"
 
         share_text = f"🎬 {title}"
         share_link = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
