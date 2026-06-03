@@ -15,6 +15,27 @@ from pathlib import Path
 from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
 
+# ==========================================================
+# تثبيت تلقائي للمكتبة الناقصة عند تشغيل Railway
+# ملاحظة: هذا الحل داخل main.py فقط لأن ملف requirements.txt غير معدل.
+# ==========================================================
+
+def ensure_runtime_package(import_name: str, package_name: str):
+    try:
+        __import__(import_name)
+    except ModuleNotFoundError:
+        print(f"Installing missing package: {package_name}", flush=True)
+        subprocess.check_call([
+            os.sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--no-cache-dir",
+            package_name,
+        ])
+
+ensure_runtime_package("telegram", "python-telegram-bot==21.11.1")
+
 import yt_dlp
 from telegram import (
     Update,
@@ -981,7 +1002,6 @@ async def set_bot_commands(app: Application):
     commands = [
         BotCommand("start", "بدء استخدام البوت"),
         BotCommand("links", "دعم روابط PlayZone"),
-        BotCommand("admin", "لوحة الإدارة"),
     ]
     try:
         await app.bot.set_my_commands(commands)
@@ -989,8 +1009,6 @@ async def set_bot_commands(app: Application):
     except Exception as e:
         logger.warning(f"فشل تهيئة أوامر قائمة تليجرام: {e}")
 
-
-# ... (الكود كما هو دون تغيير)
 
 def main():
     if not TOKEN:
@@ -1012,7 +1030,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
-    # لا تضف أي CommandHandler لـ "admin"
+    app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
