@@ -222,8 +222,8 @@ def build_preview_keyboard(request_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("🎵 صوت MP3", callback_data=f"aud:{request_id}"),
-                InlineKeyboardButton("🎬 فيديو MP4", callback_data=f"vid:{request_id}"),
+                InlineKeyboardButton("🎵 تحميل صوت", callback_data=f"aud:{request_id}"),
+                InlineKeyboardButton("🎬 تحميل فيديو", callback_data=f"vid:{request_id}"),
             ],
             [InlineKeyboardButton("❌ إلغاء", callback_data=f"cancel:{request_id}")],
         ]
@@ -264,19 +264,33 @@ def build_start_text(first_name: str) -> str:
     )
 
 def build_guide_text() -> str:
-    return "📘 دليل الاستخدام\n\n1) انسخ رابط المقطع من المنصة.\n2) أرسله هنا في البوت.\n3) انتظر المعاينة.\n4) اختر: صوت MP3 أو فيديو MP4."
+    return (
+        "📘 طريقة الاستخدام\n\n"
+        "1) انسخ رابط المقطع.\n"
+        "2) أرسله هنا في البوت.\n"
+        "3) انتظر ظهور المعاينة.\n"
+        "4) اختر التحميل صوت أو فيديو."
+    )
 
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
-    return f"🎬 <b>{esc(title)}</b>\n<b>{esc(artist)}</b>\n⏱ {esc(duration)} - 💾 {esc(est_size)}"
+    return (
+        f"🎬 <b>{esc(title)}</b>\n"
+        f"👤 {esc(artist)}\n"
+        f"⏱ المدة: {esc(duration)}\n"
+        f"💾 الحجم المتوقع: {esc(est_size)}"
+    )
 
 def build_admin_stats_text() -> str:
     stats = load_stats()
     users_count = len(all_user_ids())
     return (
         "📊 إحصائيات البوت\n\n"
-        f"• الطلبات: {stats.get('requests', 0)}\n• الناجحة: {stats.get('success', 0)}\n"
-        f"• الفاشلة: {stats.get('failed', 0)}\n• المستخدمون: {users_count}\n"
-        f"• البيانات المرسلة: {format_size(stats.get('bytes', 0))}\n• الإذاعات: {stats.get('broadcasts', 0)}"
+        f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
+        f"• التحميلات الناجحة: {stats.get('success', 0)}\n"
+        f"• العمليات الفاشلة: {stats.get('failed', 0)}\n"
+        f"• عدد المستخدمين: {users_count}\n"
+        f"• حجم الملفات المرسلة: {format_size(stats.get('bytes', 0))}\n"
+        f"• عدد الإذاعات: {stats.get('broadcasts', 0)}"
     )
 
 def build_admin_users_text(limit: int = 10) -> str:
@@ -301,7 +315,13 @@ def build_server_status_text() -> str:
                 file_count += 1
                 total_size += p.stat().st_size
     except Exception: pass
-    return f"📁 حالة السيرفر\n\n• مجلد التحميل: {BASE_DOWNLOAD_DIR}\n• الملفات المؤقتة: {file_count}\n• حجم الكاش: {format_size(total_size)}\n• العمليات الجارية: {len(ACTIVE_USERS)}"
+    return (
+        "📁 حالة السيرفر\n\n"
+        f"• مجلد التحميل: {BASE_DOWNLOAD_DIR}\n"
+        f"• الملفات المؤقتة: {file_count}\n"
+        f"• حجم الملفات المؤقتة: {format_size(total_size)}\n"
+        f"• العمليات النشطة: {len(ACTIVE_USERS)}"
+    )
 
 # ==========================================================
 # أدوات الرسائل الذكية الآمنة
@@ -403,15 +423,18 @@ def download_hook(progress_data: dict):
                 if total:
                     percent = downloaded / total * 100
                     progress_data["text"] = (
-                        "⚡ <b>جاري سحب الملف سحابياً بأقصى سرعة (توربو)...</b>\n\n"
+                        "📥 <b>جاري تحميل الملف...</b>\n\n"
                         f"{make_progress_bar(percent)}  {percent:.1f}%\n"
                         f"📦 الحجم: {format_size(downloaded)} / {format_size(total)}\n"
                         f"🚀 السرعة: {format_size(speed)}/ث"
                     )
                 else:
-                    progress_data["text"] = f"📥 جاري استقبال دفق البيانات: {format_size(downloaded)}"
+                    progress_data["text"] = (
+                        f"📥 جاري تحميل البيانات...\n\n"
+                        f"📦 تم تحميل: {format_size(downloaded)}"
+                    )
             elif d.get("status") == "finished":
-                progress_data["text"] = "⚙️ اكتمل سحب البيانات بنجاح، جاري هندسة الصوت والميكساج السحابي..."
+                progress_data["text"] = "⚙️ اكتمل التحميل، جاري تجهيز الملف..."
     return hook
 
 async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event):
@@ -461,7 +484,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
-    await update.message.reply_text("🛠 لوحة الإدارة العليا", reply_markup=admin_main_keyboard())
+    await update.message.reply_text("🛠 لوحة الإدارة", reply_markup=admin_main_keyboard())
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(update.effective_user)
@@ -473,7 +496,7 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
     if not users:
         await update.message.reply_text("لا يوجد مستخدمون مسجلون.")
         return
-    status = await update.message.reply_text("📢 جاري معالجة وإرسال الإذاعة الجماعية...")
+    status = await update.message.reply_text("📢 جاري إرسال الرسالة للمستخدمين...")
     sent, fail = 0, 0
     for user_id in users:
         try:
@@ -484,7 +507,7 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
             await asyncio.sleep(int(e.retry_after) + 1)
         except Exception: fail += 1
     stat_inc("broadcasts")
-    await status.edit_text(f"✅ انتهت عملية الإذاعة السحابية.\n\n• تم الإرسال بنجاح: {sent}\n• فشل: {fail}")
+    await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
@@ -502,13 +525,13 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         await handle_broadcast_text(update, context, text)
         return
     if uid in ACTIVE_USERS:
-        await update.message.reply_text("⏳ لديك عملية معالجة جارية حالياً، يرجى انتظار انتهائها.")
+        await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
         return
     if not is_valid_url(text):
-        await update.message.reply_text("❌ يرجى إرسال رابط ميديا صحيح يبدأ بـ http أو https.")
+        await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
         return
 
-    status = await update.message.reply_text("🔍 جاري فحص الرابط وجلب البيانات الفنية للمعاينة...")
+    status = await update.message.reply_text("🔍 جاري فحص الرابط وتجهيز المعاينة...")
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, lambda: extract_metadata(text))
@@ -541,7 +564,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         stat_inc("requests")
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة السحابية: {e}")
-        await status.edit_text("❌ عذراً، تعذر تحليل وقراءة هذا الرابط.\nتأكد أن المقطع عام، غير محمي، أو أعد المحاولة لاحقاً.")
+        await status.edit_text("❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة وغير محذوف، ثم حاول مرة أخرى.")
 
 # ==========================================================
 # معالجة الأزرار التفاعلية وعمليات الإرسال المستقرة
@@ -566,7 +589,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard())
         return
     if data == "adm_clean":
-        await query.answer("جاري جرف الكاش...")
+        await query.answer("جاري تنظيف الملفات المؤقتة...")
         removed = 0
         try:
             for item in BASE_DOWNLOAD_DIR.iterdir():
@@ -575,14 +598,14 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
                     else: item.unlink()
                     removed += 1
                 except Exception: pass
-            await query.message.edit_text(f"🧹 تم تفريغ مجلد الكاش بالكامل.\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard())
+            await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard())
         except Exception:
-            await query.message.edit_text("⚠️ فشل تنظيف بعض الملفات النشطة قيد التحميل.", reply_markup=admin_main_keyboard())
+            await query.message.edit_text("⚠️ تعذر حذف بعض الملفات لأنها قيد الاستخدام حالياً.", reply_markup=admin_main_keyboard())
         return
     if data == "adm_bc":
         context.user_data["bc_active"] = True
         await query.answer()
-        await query.message.edit_text("📢 قم بإرسال نص الرسالة الإذاعية الآن:", reply_markup=admin_broadcast_keyboard())
+        await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard())
         return
     if data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
@@ -598,7 +621,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("adm_"):
         if not is_admin(uid):
-            await query.answer("صلاحية إدارة عليا فقط.", show_alert=True)
+            await query.answer("صلاحية إدارة فقط.", show_alert=True)
             return
         await handle_admin_callbacks(query, context)
         return
@@ -618,7 +641,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
             return
         if uid in ACTIVE_USERS:
-            await query.answer("لديك عملية معالجة نشطة حالياً.", show_alert=True)
+            await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
             return
         await start_download_from_callback(query, context, request, mode)
         return
@@ -627,17 +650,17 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     uid = query.from_user.id
     url = request.get("url")
     if not url:
-        await query.answer("خطأ في بنيان الطلب.", show_alert=True)
+        await query.answer("حدث خطأ في الطلب.", show_alert=True)
         return
 
-    await query.answer("بدأت المعالجة فورا...")
+    await query.answer("بدأ التحميل...")
     ACTIVE_USERS.add(uid)
 
     job_dir = BASE_DOWNLOAD_DIR / f"{uid}_{int(time.time())}"
     job_dir.mkdir(parents=True, exist_ok=True)
 
     stop_event = asyncio.Event()
-    progress_data = {"text": "⏳ جاري تخصيص مسار المعالجة وربط خوادم الميديا..."}
+    progress_data = {"text": "⏳ جاري تجهيز التحميل..."}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
     try:
@@ -655,7 +678,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         # ⚡ [المرحلة الثانية والحل الجذري للصوت]: إذا كان الطلب صوتياً، نقوم بالهندسة والتحويل المحلي فوراً
         if mode == "audio":
             with progress_lock:
-                progress_data["text"] = "⚙️ جاري التحويل المحلي الصارم لملف الصوت عالي الدقة (MP3)..."
+                progress_data["text"] = "🎵 جاري تحويل الملف إلى MP3..."
             
             final_mp3_path = job_dir / "playzone_final_audio.mp3"
             success = await loop.run_in_executor(None, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path))
@@ -674,7 +697,13 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             stop_event.set()
             try: await updater_task
             except Exception: pass
-            await edit_message_smart(query.message, f"❌ حجم الملف المستخرج ({format_size(file_size)}) يتخطى حدود البوت الأساسية (50MB).", reply_markup=None)
+            await edit_message_smart(
+                query.message,
+                f"❌ حجم الملف كبير جداً.\n\n"
+                f"الحجم: {format_size(file_size)}\n"
+                f"الحد المسموح: 50MB",
+                reply_markup=None
+            )
             return
 
         thumb_url = request.get("thumb_url")
@@ -691,15 +720,18 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         try: await updater_task
         except Exception: pass
 
-        await edit_message_smart(query.message, "📤 اكتمل الميكساج السحابي بنجاح، جاري إرسال الملف الفوري إليك...", reply_markup=None)
+        await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
 
         title = request.get("title", "ملف ميديا")
         duration = int(request.get("duration") or 0)
-        caption = f"- @MusicPlayZoneBot، {esc(format_duration(duration))}"
+        caption = (
+            f"🎧 تم التحميل بواسطة @MusicPlayZoneBot\n"
+            f"⏱ المدة: {esc(format_duration(duration))}"
+        )
 
         share_text = f"🎬 {title}"
         share_link = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
-        media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("مشاركة ✉️", url=share_link)]])
+        media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📤 مشاركة", url=share_link)]])
 
         try:
             action = ChatAction.UPLOAD_AUDIO if mode == "audio" else ChatAction.UPLOAD_VIDEO
@@ -742,7 +774,13 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         stat_inc("failed")
         logger.error(f"فشل نظام المعالجة أو الإرسال: {e}")
         try:
-            await edit_message_smart(query.message, "❌ فشل سحب أو تحميل المقطع.\nقد يكون الرابط تالفاً أو تم حظر الاتصال مؤقتاً من خادم المنصة.", reply_markup=None)
+            await edit_message_smart(
+                query.message,
+                "❌ فشل تحميل المقطع.\n\n"
+                "قد يكون الرابط غير متاح، أو توجد مشكلة مؤقتة في المنصة.\n"
+                "حاول لاحقاً أو أرسل رابطاً آخر.",
+                reply_markup=None
+            )
         except Exception: pass
     finally:
         stop_event.set()
