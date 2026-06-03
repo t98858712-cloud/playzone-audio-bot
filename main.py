@@ -13,10 +13,6 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse, quote
 
-# تحميل المتغيرات البيئية من ملف .env لتأمين التوكن
-from dotenv import load_dotenv
-load_dotenv()
-
 import yt_dlp
 from telegram import (
     Update,
@@ -72,6 +68,11 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger("PlayZoneEnterpriseBot")
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.WARNING)
+logging.getLogger("telegram.ext").setLevel(logging.WARNING)
 
 progress_lock = threading.Lock()
 
@@ -284,9 +285,12 @@ def build_admin_stats_text() -> str:
     users_count = len(all_user_ids())
     return (
         "📊 إحصائيات البوت\n\n"
-        f"• الطلبات: {stats.get('requests', 0)}\n• الناجحة: {stats.get('success', 0)}\n"
-        f"• الفاشلة: {stats.get('failed', 0)}\n• المستخدمون: {users_count}\n"
-        f"• البيانات المرسلة: {format_size(stats.get('bytes', 0))}\n• الإذاعات: {stats.get('broadcasts', 0)}"
+        f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
+        f"• التحميلات الناجحة: {stats.get('success', 0)}\n"
+        f"• العمليات الفاشلة: {stats.get('failed', 0)}\n"
+        f"• عدد المستخدمين: {users_count}\n"
+        f"• حجم الملفات المرسلة: {format_size(stats.get('bytes', 0))}\n"
+        f"• عدد الإذاعات: {stats.get('broadcasts', 0)}"
     )
 
 def build_admin_users_text(limit: int = 10) -> str:
@@ -311,7 +315,13 @@ def build_server_status_text() -> str:
                 file_count += 1
                 total_size += p.stat().st_size
     except Exception: pass
-    return f"📁 حالة السيرفر\n\n• مجلد التحميل: {BASE_DOWNLOAD_DIR}\n• الملفات المؤقتة: {file_count}\n• حجم الكاش: {format_size(total_size)}\n• العمليات الجارية: {len(ACTIVE_USERS)}"
+    return (
+        "📁 حالة السيرفر\n\n"
+        f"• مجلد التحميل: {BASE_DOWNLOAD_DIR}\n"
+        f"• الملفات المؤقتة: {file_count}\n"
+        f"• حجم الملفات المؤقتة: {format_size(total_size)}\n"
+        f"• العمليات النشطة: {len(ACTIVE_USERS)}"
+    )
 
 # ==========================================================
 # أدوات الرسائل الذكية الآمنة
@@ -370,8 +380,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
     
     if mode == "audio":
+        # 🎯 [الحل الصارم]: نطلب الدفق الصوتي الأصلي الخام المتاح دون شروط دمج تمنع التحميل
         opts["format"] = "bestaudio/best"
     else:
+        # نظام الهبوط التدريجي الديناميكي المتكامل للفيديو
         opts["format"] = (
             "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/"
             "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=480]/"
@@ -442,6 +454,7 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
+# 🛠️ دالة التحويل المحلي الصارم باستخدام FFmpeg المستقل لمنع أخطاء السيرفرات
 def convert_to_mp3_local(input_file: Path, output_file: Path) -> bool:
     try:
         cmd = [
@@ -471,7 +484,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
-    await update.message.reply_text("🛠 لوحة الإدارة العليا", reply_markup=admin_main_keyboard())
+    await update.message.reply_text("🛠 لوحة الإدارة", reply_markup=admin_main_keyboard())
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user(update.effective_user)
@@ -483,7 +496,7 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
     if not users:
         await update.message.reply_text("لا يوجد مستخدمون مسجلون.")
         return
-    status = await update.message.reply_text("📢 جاري معالجة وإرسال الإذاعة الجماعية...")
+    status = await update.message.reply_text("📢 جاري إرسال الرسالة للمستخدمين...")
     sent, fail = 0, 0
     for user_id in users:
         try:
@@ -494,7 +507,7 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
             await asyncio.sleep(int(e.retry_after) + 1)
         except Exception: fail += 1
     stat_inc("broadcasts")
-    await status.edit_text(f"✅ انتهت عملية الإذاعة السحابية.\n\n• تم الإرسال بنجاح: {sent}\n• فشل: {fail}")
+    await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
@@ -576,7 +589,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard())
         return
     if data == "adm_clean":
-        await query.answer("جاري جرف الكاش...")
+        await query.answer("جاري تنظيف الملفات المؤقتة...")
         removed = 0
         try:
             for item in BASE_DOWNLOAD_DIR.iterdir():
@@ -585,14 +598,14 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
                     else: item.unlink()
                     removed += 1
                 except Exception: pass
-            await query.message.edit_text(f"🧹 تم تفريغ مجلد الكاش بالكامل.\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard())
+            await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard())
         except Exception:
-            await query.message.edit_text("⚠️ فشل تنظيف بعض الملفات النشطة قيد التحميل.", reply_markup=admin_main_keyboard())
+            await query.message.edit_text("⚠️ تعذر حذف بعض الملفات لأنها قيد الاستخدام حالياً.", reply_markup=admin_main_keyboard())
         return
     if data == "adm_bc":
         context.user_data["bc_active"] = True
         await query.answer()
-        await query.message.edit_text("📢 قم بإرسال نص الرسالة الإذاعية الآن:", reply_markup=admin_broadcast_keyboard())
+        await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard())
         return
     if data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
@@ -608,7 +621,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("adm_"):
         if not is_admin(uid):
-            await query.answer("صلاحية إدارة عليا فقط.", show_alert=True)
+            await query.answer("صلاحية إدارة فقط.", show_alert=True)
             return
         await handle_admin_callbacks(query, context)
         return
@@ -637,7 +650,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     uid = query.from_user.id
     url = request.get("url")
     if not url:
-        await query.answer("خطأ في بنيان الطلب.", show_alert=True)
+        await query.answer("حدث خطأ في الطلب.", show_alert=True)
         return
 
     await query.answer("بدأ التحميل...")
@@ -662,6 +675,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
         raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
+        # ⚡ [المرحلة الثانية والحل الجذري للصوت]: إذا كان الطلب صوتياً، نقوم بالهندسة والتحويل المحلي فوراً
         if mode == "audio":
             with progress_lock:
                 progress_data["text"] = "🎵 جاري تحويل الملف إلى MP3..."
@@ -672,6 +686,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             if success and final_mp3_path.exists():
                 target_file = final_mp3_path
             else:
+                # خطة الطوارئ البديلة: إذا فشل التشفير لسبب ما، نرسل الملف الأصلي لكي لا ينقطع التحميل عن المستخدم
                 target_file = raw_downloaded_file
         else:
             target_file = raw_downloaded_file
