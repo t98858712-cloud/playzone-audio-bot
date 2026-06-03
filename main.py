@@ -990,6 +990,8 @@ async def set_bot_commands(app: Application):
         logger.warning(f"فشل تهيئة أوامر قائمة تليجرام: {e}")
 
 
+# ... (الكود كما هو دون تغيير)
+
 def main():
     if not TOKEN:
         raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
@@ -1010,7 +1012,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
-    app.add_handler(CommandHandler("admin", admin_panel))
+    # لا تضف أي CommandHandler لـ "admin"
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
