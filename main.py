@@ -273,9 +273,7 @@ def build_guide_text() -> str:
     )
 
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
-    return f"🎬 <b>{esc(title)}</b>
-<b>{esc(artist)}</b>
-⏱ {esc(duration)} - 💾 {esc(est_size)}"
+    return f"🎬 <b>{esc(title)}</b>\n<b>{esc(artist)}</b>\n⏱ {esc(duration)} - 💾 {esc(est_size)}"
 
 def build_admin_stats_text() -> str:
     stats = load_stats()
