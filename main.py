@@ -1,4 +1,3 @@
-هل كودي هذا به مشاكل
 import os
 import re
 import time
