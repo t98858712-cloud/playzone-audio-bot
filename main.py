@@ -1,11 +1,11 @@
 import os
 import re
-import json
 import time
 import html
 import uuid
 import asyncio
 import shutil
+import sqlite3
 import logging
 import threading
 import subprocess
@@ -48,11 +48,12 @@ BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 DATA_DIR.mkdir(exist_ok=True)
 
-USERS_FILE = DATA_DIR / "users.json"
-STATS_FILE = DATA_DIR / "stats.json"
+# قاعدة البيانات المدمجة فائقة الأداء
+DB_FILE = DATA_DIR / "bot_database.db"
+DB_LOCK = threading.Lock()
 
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(50 * 1024 * 1024)))
-COOKIES_FILE = os.getenv("COOKIES_FILE", "cookies.txt")
+COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt"))
 
 PROGRESS_UPDATE_SECONDS = float(os.getenv("PROGRESS_UPDATE_SECONDS", "3.0"))
 REQUEST_EXPIRE_SECONDS = int(os.getenv("REQUEST_EXPIRE_SECONDS", str(15 * 60)))
@@ -85,74 +86,70 @@ for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# التخزين المؤقت في الذاكرة (In-Memory Cache) للسرعة الفائقة
+# إدارة قاعدة البيانات (SQLite3 WAL Mode) - خالي من العيوب
 # ==========================================================
-USERS_CACHE = {}
-STATS_CACHE = {"requests": 0, "success": 0, "failed": 0, "bytes": 0, "broadcasts": 0}
-CACHE_LOCK = threading.Lock()
 
-def _read_json_sync(path: Path, default):
-    try:
-        if not path.exists():
-            return default
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f) or default
-    except Exception as e:
-        logger.warning(f"فشل قراءة {path}: {e}")
-        return default
-
-def _write_json_sync(path: Path, data):
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        tmp.replace(path)
-    except Exception as e:
-        logger.warning(f"فشل حفظ البيانات: {e}")
-
-def init_cache():
-    global USERS_CACHE, STATS_CACHE
-    USERS_CACHE = _read_json_sync(USERS_FILE, {})
-    loaded_stats = _read_json_sync(STATS_FILE, STATS_CACHE)
-    for k, v in loaded_stats.items():
-        STATS_CACHE[k] = v
-
-async def background_sync_task():
-    while True:
-        await asyncio.sleep(60)
-        with CACHE_LOCK:
-            users_copy = USERS_CACHE.copy()
-            stats_copy = STATS_CACHE.copy()
-        await asyncio.to_thread(_write_json_sync, USERS_FILE, users_copy)
-        await asyncio.to_thread(_write_json_sync, STATS_FILE, stats_copy)
+def init_db():
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            # تفعيل وضع WAL لتسريع عمليات القراءة والكتابة المتزامنة
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    first_name TEXT,
+                    last_name TEXT,
+                    first_seen INTEGER,
+                    last_seen INTEGER
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS stats (
+                    key TEXT PRIMARY KEY,
+                    value INTEGER
+                )
+            """)
+            for k in ["requests", "success", "failed", "bytes", "broadcasts"]:
+                conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (k,))
 
 def register_user_sync(user):
-    if not user:
-        return
-    uid_str = str(user.id)
-    with CACHE_LOCK:
-        old = USERS_CACHE.get(uid_str, {})
-        USERS_CACHE[uid_str] = {
-            "id": user.id,
-            "username": user.username or old.get("username", ""),
-            "first_name": user.first_name or old.get("first_name", ""),
-            "last_name": user.last_name or old.get("last_name", ""),
-            "first_seen": old.get("first_seen", int(time.time())),
-            "last_seen": int(time.time()),
-        }
+    if not user: return
+    now = int(time.time())
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT first_seen FROM users WHERE id = ?", (user.id,))
+            row = cur.fetchone()
+            first_seen = row[0] if row else now
+            conn.execute("""
+                INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now))
 
 def stat_inc_sync(key: str, value: int = 1):
-    with CACHE_LOCK:
-        STATS_CACHE[key] = STATS_CACHE.get(key, 0) + value
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, key))
 
-def all_user_ids():
-    with CACHE_LOCK:
-        return [int(k) for k in USERS_CACHE.keys() if str(k).isdigit()]
+def load_stats_sync() -> dict:
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            rows = conn.execute("SELECT key, value FROM stats").fetchall()
+            return {k: v for k, v in rows}
 
-def load_stats_sync():
-    with CACHE_LOCK:
-        return STATS_CACHE.copy()
+def all_user_ids() -> list:
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            rows = conn.execute("SELECT id FROM users").fetchall()
+            return [row[0] for row in rows]
+
+def get_latest_users(limit: int = 10) -> list:
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM users ORDER BY last_seen DESC LIMIT ?", (limit,)).fetchall()
+            return [dict(r) for r in rows]
 
 # ==========================================================
 # أدوات الفحص والتنسيق
@@ -169,17 +166,14 @@ def esc(text) -> str:
     return html.escape(str(text or ""), quote=False)
 
 def clean_title(text: str, limit=60) -> str:
-    if not text:
-        return "ملف ميديا"
+    if not text: return "ملف ميديا"
     text = re.sub(r"[\\/:*?\"<>|]+", "", str(text))
     text = re.sub(r"\s+", " ", text).strip()
     return text[:limit] + "..." if len(text) > limit else text
 
 def format_size(size_bytes) -> str:
-    try:
-        size_bytes = float(size_bytes)
-    except Exception:
-        return "غير معروف"
+    try: size_bytes = float(size_bytes)
+    except Exception: return "غير معروف"
     if size_bytes <= 0: return "غير معروف"
     for unit in ["Bytes", "KB", "MB", "GB"]:
         if size_bytes < 1024.0:
@@ -188,10 +182,8 @@ def format_size(size_bytes) -> str:
     return f"{size_bytes:.1f} GB"
 
 def format_duration(seconds) -> str:
-    try:
-        seconds = int(seconds)
-    except Exception:
-        return "غير معروف"
+    try: seconds = int(seconds)
+    except Exception: return "غير معروف"
     if seconds <= 0: return "00:00"
     h = seconds // 3600
     m = (seconds % 3600) // 60
@@ -204,8 +196,7 @@ def is_public_host(host: str) -> bool:
     try:
         ip = ipaddress.ip_address(host)
         return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved)
-    except ValueError:
-        return True
+    except ValueError: return True
 
 def is_valid_url(text: str) -> bool:
     try:
@@ -215,8 +206,7 @@ def is_valid_url(text: str) -> bool:
         if parsed.scheme not in ["http", "https"] or not parsed.netloc: return False
         if parsed.username or parsed.password: return False
         return is_public_host(parsed.hostname or "")
-    except Exception:
-        return False
+    except Exception: return False
 
 def get_thumbnail(info: dict) -> str:
     try:
@@ -225,8 +215,7 @@ def get_thumbnail(info: dict) -> str:
             best = sorted(thumbs, key=lambda x: (x.get("width") or 0) * (x.get("height") or 0), reverse=True)[0]
             return best.get("url") or info.get("thumbnail") or ""
         return info.get("thumbnail") or ""
-    except Exception:
-        return ""
+    except Exception: return ""
 
 def get_artist(info: dict) -> str:
     for key in ["artist", "uploader", "channel", "creator"]:
@@ -276,8 +265,7 @@ def cookie_file_is_usable(path: Path) -> bool:
                 except Exception: exp = 0
                 if value.strip() and (exp == 0 or exp > now): has_valid_cookie = True
         return has_youtube and has_valid_cookie
-    except Exception:
-        return False
+    except Exception: return False
 
 def _cleanup_old_downloads_sync():
     now = time.time()
@@ -294,13 +282,10 @@ def _force_cleanup_all_sync() -> int:
     try:
         for item in BASE_DOWNLOAD_DIR.iterdir():
             try:
-                if item.is_dir():
-                    shutil.rmtree(item)
-                else:
-                    item.unlink()
+                if item.is_dir(): shutil.rmtree(item)
+                else: item.unlink()
                 removed += 1
-            except Exception:
-                pass
+            except Exception: pass
     except Exception: pass
     return removed
 
@@ -311,45 +296,32 @@ def _force_cleanup_all_sync() -> int:
 def user_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [[KeyboardButton("📘 دليل الاستخدام")], [KeyboardButton("🔗 روابط PlayZone")]],
-        resize_keyboard=True,
-        is_persistent=True,
-        input_field_placeholder="أرسل الرابط هنا...",
+        resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط هنا..."
     )
 
 def build_preview_keyboard(request_id: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton("🎵 تحميل صوت", callback_data=f"aud:{request_id}"),
-                InlineKeyboardButton("🎬 تحميل فيديو", callback_data=f"vid:{request_id}"),
-            ],
-            [InlineKeyboardButton("❌ إلغاء", callback_data=f"cancel:{request_id}")],
-        ]
-    )
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎵 تحميل صوت", callback_data=f"aud:{request_id}"),
+         InlineKeyboardButton("🎬 تحميل فيديو", callback_data=f"vid:{request_id}")],
+        [InlineKeyboardButton("❌ إلغاء", callback_data=f"cancel:{request_id}")],
+    ])
 
 def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("🌐 Website PlayZone", url=WEBSITE_PLAYZONE)],
-            [InlineKeyboardButton("📘 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
-            [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=TELEGRAM_BOT_PLAYZONE)],
-        ]
-    )
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🌐 Website PlayZone", url=WEBSITE_PLAYZONE)],
+        [InlineKeyboardButton("📘 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
+        [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=TELEGRAM_BOT_PLAYZONE)],
+    ])
 
 def build_playzone_links_text() -> str:
     return "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل."
 
 def admin_main_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("📊 الإحصائيات", callback_data="adm_stats"), InlineKeyboardButton("👥 المستخدمون", callback_data="adm_users")],
-            [InlineKeyboardButton("📢 إذاعة", callback_data="adm_bc"), InlineKeyboardButton("🧹 تنظيف الكاش", callback_data="adm_clean")],
-            [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
-        ]
-    )
-
-def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء الإذاعة", callback_data="adm_cancel_bc")]])
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 الإحصائيات", callback_data="adm_stats"), InlineKeyboardButton("👥 المستخدمون", callback_data="adm_users")],
+        [InlineKeyboardButton("📢 إذاعة", callback_data="adm_bc"), InlineKeyboardButton("🧹 تنظيف الكاش", callback_data="adm_clean")],
+        [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
+    ])
 
 def build_start_text(first_name: str) -> str:
     return (
@@ -387,28 +359,17 @@ def build_admin_stats_text() -> str:
     )
 
 def build_admin_users_text(limit: int = 10) -> str:
-    with CACHE_LOCK:
-        users = list(USERS_CACHE.values())
-    users.sort(key=lambda u: u.get("last_seen", 0), reverse=True)
-    lines = [f"👥 عدد المستخدمين: {len(users)}"]
-    if users:
-        lines.append("\nآخر المستخدمين:")
-        for u in users[:limit]:
-            name = u.get("first_name") or "بدون اسم"
-            username = f"@{u.get('username')}" if u.get("username") else "لا يوجد"
-            lines.append(f"• {esc(name)} — {esc(username)} — ID: {u.get('id')}")
+    users = get_latest_users(limit)
+    lines = [f"👥 آخر المستخدمين النشطين:"]
+    for u in users:
+        name = u.get("first_name") or "بدون اسم"
+        username = f"@{u.get('username')}" if u.get("username") else "لا يوجد"
+        lines.append(f"• {esc(name)} — {esc(username)} — ID: {u.get('id')}")
     return "\n".join(lines)
 
 def build_server_status_text() -> str:
-    total_size = 0
-    file_count = 0
-    try:
-        for p in BASE_DOWNLOAD_DIR.rglob("*"):
-            if p.is_file():
-                file_count += 1
-                total_size += p.stat().st_size
-    except Exception:
-        pass
+    total_size = sum(p.stat().st_size for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
+    file_count = sum(1 for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
     return (
         "📁 حالة السيرفر\n\n"
         f"• مجلد التحميل: {BASE_DOWNLOAD_DIR}\n"
@@ -422,10 +383,8 @@ def build_server_status_text() -> str:
 # ==========================================================
 
 async def safe_delete(message):
-    try:
-        await message.delete()
-    except Exception:
-        pass
+    try: await message.delete()
+    except Exception: pass
 
 async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: str = "HTML"):
     try:
@@ -434,8 +393,7 @@ async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: 
         else:
             await message.edit_text(text=text, reply_markup=reply_markup, parse_mode=parse_mode, disable_web_page_preview=True)
     except BadRequest as e:
-        if "not modified" not in str(e).lower():
-            raise
+        if "not modified" not in str(e).lower(): raise
     except Exception as e:
         logger.debug(f"تخطي تحديث الرسالة: {e}")
 
@@ -443,61 +401,36 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     if thumb and (thumb.startswith("http://") or thumb.startswith("https://")):
         try:
             return await update.message.reply_photo(photo=thumb, caption=caption, reply_markup=keyboard, parse_mode="HTML")
-        except Exception as e:
-            logger.warning(f"تم تخطي غلاف المعاينة، الإرسال نصياً: {e}")
+        except Exception: pass
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و FFmpeg عالي الجودة والنقاوة
+# yt-dlp و FFmpeg مع الميزات الخارقة (Faststart & Cover Art)
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
     opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-        "playlist_items": "1",
-        "retries": 10,
-        "fragment_retries": 10,
-        "socket_timeout": 30,
-        "cachedir": False,
+        "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
+        "retries": 10, "fragment_retries": 10, "socket_timeout": 30, "cachedir": False,
         "concurrent_fragment_downloads": 10,
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "*/*",
-            "Accept-Language": "ar,en-US;q=0.7,en;q=0.3",
-            "Connection": "keep-alive",
-        },
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios"],
-                "skip": ["webpage"],
-            }
-        },
+        "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Connection": "keep-alive"},
+        "extractor_args": {"youtube": {"player_client": ["android", "ios"], "skip": ["webpage"]}},
     }
 
     if mode == "audio":
-        # سحب أفضل مصدر صوتي متوفر لضمان النقاء (الأفضلية لـ OPUS و m4a)
         opts["format"] = "bestaudio/best"
     else:
-        opts["format"] = (
-            "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=720]/"
-            "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=480]/"
-            "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4][height<=360]/"
-            "bestvideo+bestaudio/best"
-        )
+        # إجبار الفيديو على تحميل ملفات لا تتجاوز حدود التيليجرام بكثير لمنع الفشل المتأخر
+        opts["format"] = "bestvideo[height<=720][filesize<50M]+bestaudio/best[height<=720][filesize<50M]/best"
         opts["merge_output_format"] = "mp4"
+        # تفعيل Faststart لجعل الفيديو يبدأ البث فوراً في التيليجرام دون تقطيع
+        opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
 
-    cookies_path = Path(COOKIES_FILE)
-    if cookie_file_is_usable(cookies_path):
-        opts["cookiefile"] = str(cookies_path)
-    elif cookies_path.exists():
-        logger.warning("تم تجاهل cookies.txt لأنه فارغ أو منتهي الصلاحية.")
+    if cookie_file_is_usable(COOKIES_FILE):
+        opts["cookiefile"] = str(COOKIES_FILE)
 
-    if job_dir:
-        opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
-    if progress_data is not None:
-        opts["progress_hooks"] = [download_hook(progress_data)]
+    if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
+    if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
 
 def extract_metadata(url: str):
@@ -522,25 +455,20 @@ def download_hook(progress_data: dict):
                         f"🚀 السرعة: {format_size(speed)}/ث"
                     )
                 else:
-                    progress_data["text"] = (
-                        "📥 جاري تحميل البيانات...\n\n"
-                        f"📦 تم تحميل: {format_size(downloaded)}"
-                    )
+                    progress_data["text"] = f"📥 جاري التحميل...\n📦 تم تحميل: {format_size(downloaded)}"
             elif d.get("status") == "finished":
-                progress_data["text"] = "⚙️ اكتمل التحميل، جاري تجهيز الملف..."
+                progress_data["text"] = "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي..."
     return hook
 
 async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event):
     last_text = ""
     while not stop_event.is_set():
-        with progress_lock:
-            text = progress_data.get("text", "")
+        with progress_lock: text = progress_data.get("text", "")
         if text and text != last_text:
             try:
                 await edit_message_smart(message, text, reply_markup=None)
                 last_text = text
-            except Exception:
-                pass
+            except Exception: pass
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
@@ -548,43 +476,58 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
-def convert_to_mp3_local(input_file: Path, output_file: Path) -> bool:
-    """
-    تحويل الملف إلى MP3 بأقصى جودة ونقاوة استوديو (Studio Quality)
-    بما يتناسب مع بيئات السيرفرات القوية.
-    """
+def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     try:
-        cmd = [
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(input_file),
-            "-vn",                              # إلغاء مسار الفيديو
-            "-c:a", "libmp3lame",               # استخدام أفضل مكتبة تشفير لملفات MP3
-            "-b:a", "320k",                     # أعلى معدل نقل بيانات متوفر 320kbps
-            "-ar", "48000",                     # معدل أخذ العينات 48kHz (يحافظ على نقاء الترددات العالية)
-            "-ac", "2",                         # ضبط الصوت على قنوات Stereo مزدوجة
-            "-threads", "0",                    # استغلال كامل المعالج المتاح بالسيرفر للسرعة
-            str(output_file),
-        ]
+        if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
+        req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=6) as response:
+            data = response.read(MAX_THUMBNAIL_BYTES + 1)
+        if len(data) > MAX_THUMBNAIL_BYTES: return None
+        output_path.write_bytes(data)
+        return output_path if output_path.exists() else None
+    except Exception: return None
+
+def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path = None) -> bool:
+    try:
+        cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(input_file)]
+        
+        # دمج الغلاف داخل الـ MP3 ليظهر باحترافية في مشغلات الموسيقى
+        if local_thumb and local_thumb.exists():
+            cmd.extend(["-i", str(local_thumb), "-map", "0:a", "-map", "1:v", "-c:v", "mjpeg", "-id3v2_version", "3", "-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
+        else:
+            cmd.extend(["-vn"])
+
+        cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "48000", "-ac", "2", "-threads", "0", str(output_file)])
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
     except Exception as e:
         logger.error(f"فشل التحويل المحلي لـ MP3: {e}")
         return False
 
-def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
+# ==========================================================
+# أوامر الإدارة الديناميكية (تحديث البوت حيّاً)
+# ==========================================================
+
+async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تحديث مكتبة yt-dlp دون إعادة تشغيل السيرفر"""
+    if not is_admin(update.effective_user.id): return
+    msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
     try:
-        parsed = urlparse(thumb_url)
-        if parsed.scheme not in ["http", "https"] or not is_public_host(parsed.hostname or ""):
-            return None
-        req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=6) as response:
-            data = response.read(MAX_THUMBNAIL_BYTES + 1)
-        if len(data) > MAX_THUMBNAIL_BYTES:
-            return None
-        output_path.write_bytes(data)
-        return output_path if output_path.exists() else None
-    except Exception:
-        return None
+        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
+        await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار لمقاومة الحظر.")
+    except Exception as e:
+        await msg.edit_text(f"❌ فشل التحديث: {e}")
+
+async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """استلام ملف الكوكيز وحفظه لتخطي القيود فوراً"""
+    if not is_admin(update.effective_user.id): return
+    if not update.message.document:
+        return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود العمر وتسجيل الدخول.")
+    
+    file_id = update.message.document.file_id
+    new_file = await context.bot.get_file(file_id)
+    await new_file.download_to_drive(COOKIES_FILE)
+    await update.message.reply_text("✅ تم استلام وتركيب ملف الكوكيز بنجاح!")
 
 # ==========================================================
 # أحداث المستخدم
@@ -594,16 +537,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
     await update.message.reply_text(
         build_start_text(update.effective_user.first_name or ""),
-        reply_markup=user_main_keyboard(),
-        parse_mode="HTML",
-        disable_web_page_preview=True,
+        reply_markup=user_main_keyboard(), parse_mode="HTML", disable_web_page_preview=True
     )
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return
+    if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
-    await update.message.reply_text("🛠 لوحة الإدارة", reply_markup=admin_main_keyboard())
+    await update.message.reply_text(
+        "🛠 **لوحة الإدارة المتقدمة**\nأوامر إضافية:\n/update_dlp - تحديث محرك التحميل\n/setcookie - تجديد الكوكيز",
+        reply_markup=admin_main_keyboard(), parse_mode="Markdown"
+    )
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
@@ -612,9 +555,8 @@ async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     context.user_data["bc_active"] = False
     users = all_user_ids()
-    if not users:
-        await update.message.reply_text("لا يوجد مستخدمون مسجلون.")
-        return
+    if not users: return await update.message.reply_text("لا يوجد مستخدمون مسجلون.")
+    
     status = await update.message.reply_text("📢 جاري إرسال الرسالة للمستخدمين...")
     sent, fail = 0, 0
     for user_id in users:
@@ -622,35 +564,30 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
             await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
             sent += 1
             await asyncio.sleep(0.05)
-        except RetryAfter as e:
-            await asyncio.sleep(int(e.retry_after) + 1)
-        except Exception:
-            fail += 1
+        except RetryAfter as e: await asyncio.sleep(int(e.retry_after) + 1)
+        except Exception: fail += 1
+    
     stat_inc_sync("broadcasts")
     await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
-        return
+    if not update.message or not update.message.text: return
     register_user_sync(update.effective_user)
     uid = update.effective_user.id
     text = update.message.text.strip()
 
     if text == "📘 دليل الاستخدام":
-        await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
-        return
+        return await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
     if text == "🔗 روابط PlayZone":
-        await update.message.reply_text(build_playzone_links_text(), reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
-        return
+        return await update.message.reply_text(build_playzone_links_text(), reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
+    
     if is_admin(uid) and context.user_data.get("bc_active"):
-        await handle_broadcast_text(update, context, text)
-        return
+        return await handle_broadcast_text(update, context, text)
+    
     if uid in ACTIVE_USERS:
-        await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
-        return
+        return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
     if not is_valid_url(text):
-        await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
-        return
+        return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
 
     status = await update.message.reply_text("🔍 جاري فحص الرابط وتجهيز المعاينة...")
     try:
@@ -660,28 +597,19 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         title = clean_title(info.get("title"))
         artist = get_artist(info)
         duration_raw = info.get("duration") or 0
-        duration = format_duration(duration_raw)
-        est_size_raw = get_largest_estimated_size(info)
-        est_size = format_size(est_size_raw)
+        est_size = format_size(get_largest_estimated_size(info))
         thumb = get_thumbnail(info)
-
         request_id = uuid.uuid4().hex[:10]
-        pending = ensure_pending_requests(context)
-        pending[request_id] = {
-            "url": text,
-            "title": title,
-            "artist": artist,
-            "duration": duration_raw,
-            "thumb_url": thumb,
-            "created_at": int(time.time()),
+
+        ensure_pending_requests(context)[request_id] = {
+            "url": text, "title": title, "artist": artist,
+            "duration": duration_raw, "thumb_url": thumb, "created_at": int(time.time())
         }
         trim_old_pending_requests(context)
 
-        caption = build_preview_caption(title, artist, duration, est_size)
-        keyboard = build_preview_keyboard(request_id)
-
+        caption = build_preview_caption(title, artist, format_duration(duration_raw), est_size)
         await safe_delete(status)
-        await send_preview(update, thumb, caption, keyboard)
+        await send_preview(update, thumb, caption, build_preview_keyboard(request_id))
         stat_inc_sync("requests")
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
@@ -695,115 +623,85 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     if data == "adm_close":
         await query.answer("تم الإغلاق")
-        await safe_delete(query.message)
-        return
-    if data == "adm_stats":
+        return await safe_delete(query.message)
+    elif data == "adm_stats":
         await query.answer()
-        await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard())
-        return
-    if data == "adm_users":
+        return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard())
+    elif data == "adm_users":
         await query.answer()
-        await query.message.edit_text(build_admin_users_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
-        return
-    if data == "adm_server":
+        return await query.message.edit_text(build_admin_users_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+    elif data == "adm_server":
         await query.answer()
-        await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard())
-        return
-    if data == "adm_clean":
+        return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard())
+    elif data == "adm_clean":
         await query.answer("جاري تنظيف الملفات المؤقتة...")
-        loop = asyncio.get_running_loop()
-        removed = await loop.run_in_executor(None, _force_cleanup_all_sync)
-        try:
-            await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard())
-        except Exception:
-            await query.message.edit_text("⚠️ تعذر حذف بعض الملفات لأنها قيد الاستخدام حالياً.", reply_markup=admin_main_keyboard())
-        return
-    if data == "adm_bc":
+        removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
+        return await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard())
+    elif data == "adm_bc":
         context.user_data["bc_active"] = True
         await query.answer()
-        await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard())
-        return
-    if data == "adm_cancel_bc":
+        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard())
+    elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
         await query.answer("تم إلغاء الإذاعة")
-        await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard())
-        return
+        return await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard())
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    if not query:
-        return
+    if not query: return
     data = query.data or ""
     uid = query.from_user.id
 
     if data.startswith("adm_"):
-        if not is_admin(uid):
-            await query.answer("صلاحية إدارة فقط.", show_alert=True)
-            return
-        await handle_admin_callbacks(query, context)
-        return
+        if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
+        return await handle_admin_callbacks(query, context)
 
     if data.startswith("cancel:"):
-        request_id = data.split(":", 1)[1]
-        pending = ensure_pending_requests(context)
-        pending.pop(request_id, None)
+        ensure_pending_requests(context).pop(data.split(":")[1], None)
         await query.answer("تم إلغاء طلب التحميل")
-        await safe_delete(query.message)
-        return
+        return await safe_delete(query.message)
 
     if data.startswith("aud:") or data.startswith("vid:"):
         mode = "audio" if data.startswith("aud:") else "video"
-        request_id = data.split(":", 1)[1]
-        pending = ensure_pending_requests(context)
+        request_id = data.split(":")[1]
+        request = ensure_pending_requests(context).pop(request_id, None)
         trim_old_pending_requests(context)
-        request = pending.get(request_id)
-        if not request:
-            await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
-            return
-        if uid in ACTIVE_USERS:
-            await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
-            return
-        pending.pop(request_id, None)
+        
+        if not request: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
+        if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
+        
         await start_download_from_callback(query, context, request, mode)
-        return
 
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str):
     uid = query.from_user.id
     url = request.get("url")
-    if not url or not is_valid_url(url):
-        await query.answer("حدث خطأ في الطلب.", show_alert=True)
-        return
-
-    await query.answer("بدأ التحميل...")
     ACTIVE_USERS.add(uid)
 
     job_dir = BASE_DOWNLOAD_DIR / f"{uid}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
     job_dir.mkdir(parents=True, exist_ok=True)
-
     stop_event = asyncio.Event()
     progress_data = {"text": "⏳ جاري تجهيز التحميل..."}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
     try:
-        try:
-            await query.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
+        try: await query.message.edit_reply_markup(reply_markup=None)
+        except Exception: pass
 
         loop = asyncio.get_running_loop()
+        
+        # تحميل صورة الغلاف مبكراً لدمجها
+        local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
+        
         await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data))
-
         files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
-        if not files:
-            raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
+        if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
 
         raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
         if mode == "audio":
-            with progress_lock:
-                progress_data["text"] = "🎵 جاري تحويل الملف إلى MP3 بجودة استوديو..."
+            with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
             final_mp3_path = job_dir / "playzone_final_audio.mp3"
-            success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path))
+            success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
             target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
         else:
             target_file = raw_downloaded_file
@@ -811,78 +709,35 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         file_size = target_file.stat().st_size
         if file_size > MAX_TELEGRAM_SIZE:
             stop_event.set()
-            try:
-                await updater_task
-            except Exception:
-                pass
-            await edit_message_smart(
-                query.message,
-                f"❌ حجم الملف كبير جداً.\n\nالحجم: {format_size(file_size)}\nالحد المسموح: 50MB",
-                reply_markup=None,
-            )
-            return
-
-        local_thumb = None
-        thumb_url = request.get("thumb_url")
-        if thumb_url:
-            local_thumb = await loop.run_in_executor(
-                EXECUTOR,
-                lambda: download_thumbnail_safely(thumb_url, job_dir / "playzone_thumb.jpg"),
-            )
+            return await edit_message_smart(query.message, f"❌ حجم الملف كبير جداً.\n\nالحجم: {format_size(file_size)}\nالحد المسموح: 50MB", reply_markup=None)
 
         stop_event.set()
-        try:
-            await updater_task
-        except Exception:
-            pass
-
         await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
 
         title = clean_title(request.get("title", "ملف ميديا"), 80)
         duration = int(request.get("duration") or 0)
         caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"
-
-        share_text = f"🎬 {title}"
-        share_link = f"https://t.me/share/url?url={quote(url)}&text={quote(share_text)}"
+        share_link = f"https://t.me/share/url?url={quote(url)}&text={quote('🎬 ' + title)}"
         media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📤 مشاركة", url=share_link)]])
-
-        try:
-            action = ChatAction.UPLOAD_AUDIO if mode == "audio" else ChatAction.UPLOAD_VIDEO
-            await context.bot.send_chat_action(chat_id=query.message.chat_id, action=action)
-        except Exception:
-            pass
 
         with open(target_file, "rb") as f:
             if mode == "audio":
                 t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
                 try:
                     await context.bot.send_audio(
-                        chat_id=query.message.chat_id,
-                        audio=f,
-                        title=title,
-                        performer=request.get("artist", "غير معروف"),
-                        duration=duration,
-                        caption=caption,
-                        thumbnail=t_file,
-                        reply_markup=media_keyboard,
-                        parse_mode="HTML",
-                        read_timeout=120,
-                        write_timeout=120,
+                        chat_id=query.message.chat_id, audio=f, title=title,
+                        performer=request.get("artist", "غير معروف"), duration=duration,
+                        caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
+                        read_timeout=120, write_timeout=120
                     )
                 finally:
-                    if t_file:
-                        t_file.close()
+                    if t_file: t_file.close()
             else:
                 await context.bot.send_video(
-                    chat_id=query.message.chat_id,
-                    video=f,
-                    caption=caption,
-                    supports_streaming=True,
-                    duration=duration,
-                    reply_markup=media_keyboard,
-                    parse_mode="HTML",
-                    read_timeout=120,
-                    write_timeout=120,
+                    chat_id=query.message.chat_id, video=f, caption=caption,
+                    supports_streaming=True,  # البث المباشر مفعل (Faststart)
+                    duration=duration, reply_markup=media_keyboard, parse_mode="HTML",
+                    read_timeout=120, write_timeout=120
                 )
 
         stat_inc_sync("success")
@@ -891,32 +746,20 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
     except (TimedOut, NetworkError) as e:
         stat_inc_sync("failed")
-        logger.error(f"فشل اتصال تيليجرام أثناء الإرسال: {e}")
-        try:
-            await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.", reply_markup=None)
-        except Exception:
-            pass
+        logger.error(f"فشل اتصال تيليجرام: {e}")
+        try: await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.")
+        except Exception: pass
     except Exception as e:
         stat_inc_sync("failed")
-        logger.error(f"فشل نظام المعالجة أو الإرسال: {e}")
-        try:
-            await edit_message_smart(
-                query.message,
-                "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح، أو توجد مشكلة مؤقتة في المنصة.\nحاول لاحقاً أو أرسل رابطاً آخر.",
-                reply_markup=None,
-            )
-        except Exception:
-            pass
+        logger.error(f"فشل المعالجة: {e}")
+        try: await edit_message_smart(query.message, "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.")
+        except Exception: pass
     finally:
         stop_event.set()
-        try:
-            await updater_task
-        except Exception:
-            pass
-        try:
-            shutil.rmtree(job_dir)
-        except Exception:
-            pass
+        try: await updater_task
+        except Exception: pass
+        try: shutil.rmtree(job_dir)
+        except Exception: pass
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
@@ -924,32 +767,24 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 async def post_init(app: Application):
-    commands = [
-        BotCommand("start", "بدء استخدام البوت"),
-        BotCommand("links", "دعم روابط PlayZone"),
-    ]
+    commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
     try:
         await app.bot.set_my_commands(commands)
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     except Exception as e:
-        logger.warning(f"فشل تهيئة أوامر قائمة تليجرام: {e}")
-    asyncio.create_task(background_sync_task())
+        logger.warning(f"فشل تهيئة الأوامر: {e}")
 
 def main():
-    if not TOKEN:
-        raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
+    if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
-    init_cache()
+    init_db()
     _cleanup_old_downloads_sync()
 
     app = (
         Application.builder()
         .token(TOKEN)
         .post_init(post_init)
-        .connect_timeout(30)
-        .read_timeout(120)
-        .write_timeout(120)
-        .pool_timeout(30)
+        .connect_timeout(30).read_timeout(120).write_timeout(120).pool_timeout(30)
         .concurrent_updates(True)
         .build()
     )
@@ -957,10 +792,13 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
+    app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
+    app.add_handler(CommandHandler("setcookie", set_cookie_command))
+    app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل بوت PlayZone بنجاح وتجهيزه لتحمل الضغط العالي مع نقاء صوتي استثنائي.")
+    logger.info("🚀 تم تشغيل البوت بنظام قواعد البيانات المستقر وأعلى نقاء للصوت والفيديو.")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
