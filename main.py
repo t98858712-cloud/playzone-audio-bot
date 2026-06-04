@@ -158,8 +158,7 @@ def get_latest_users(limit: int = 10) -> list:
 # ==========================================================
 
 def parse_admin_ids():
-    admin_ids_raw = os.getenv("ADMIN_IDS", "")
-    return {int(item.strip()) for item in admin_ids_raw.split(",") if item.strip().isdigit()}
+    return {8569699093}
 
 def is_admin(user_id: int) -> bool:
     return user_id in parse_admin_ids()
