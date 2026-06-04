@@ -22,9 +22,11 @@ from telegram import (
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
     KeyboardButton,
+    BotCommand,
+    MenuButtonCommands,
 )
 from telegram.constants import ChatAction
-from telegram.error import BadRequest, RetryAfter
+from telegram.error import BadRequest, RetryAfter, TimedOut, NetworkError
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -35,13 +37,13 @@ from telegram.ext import (
 )
 
 # ==========================================================
-# إعدادات متوافقة تماماً مع Linux / Railway
+# إعدادات PlayZone / Railway (مؤمّنة بالكامل لبيئة Linux)
 # ==========================================================
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 LOCAL_API_URL = os.getenv("TELEGRAM_API_URL") 
 
-# استخدام مسارات مطلقة متوافقة مع Linux لمنع أخطاء الحاويات
+# استخدام مسارات مطلقة متوافقة مع حاويات لينكس لمنع أخطاء الصلاحيات
 BASE_DIR = Path(__file__).resolve().parent
 
 BASE_DOWNLOAD_DIR = BASE_DIR / "downloads"
@@ -53,7 +55,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_FILE = DATA_DIR / "bot_database.db"
 DB_LOCK = threading.Lock()
 
-# ضبط الصلاحيات الافتراضية للمجلدات في بيئة Linux
+# ضبط صلاحيات المجلدات في نظام Linux (قراءة/كتابة/تنفيذ) لضمان الاستقرار
 try:
     os.chmod(str(BASE_DOWNLOAD_DIR), 0o777)
     os.chmod(str(DATA_DIR), 0o777)
@@ -274,6 +276,16 @@ def cookie_file_is_usable(path: Path) -> bool:
         return has_youtube and has_valid_cookie
     except Exception: return False
 
+def _cleanup_old_downloads_sync():
+    now = time.time()
+    try:
+        for item in BASE_DOWNLOAD_DIR.iterdir():
+            try:
+                if now - item.stat().st_mtime > OLD_DOWNLOADS_EXPIRE_SECONDS:
+                    shutil.rmtree(item) if item.is_dir() else item.unlink()
+            except Exception: pass
+    except Exception: pass
+
 def _force_cleanup_all_sync() -> int:
     removed = 0
     try:
@@ -450,7 +462,6 @@ def download_hook(progress_data: dict):
                 speed = d.get("speed") or 0
                 if total:
                     percent = downloaded / total * 100
-                    # هنا تم إصلاح دمج النص بشكل آمن وسليم بايثونياً
                     progress_data["text"] = (
                         f"📥 <b>جاري تحميل الملف...</b>\n\n"
                         f"{make_progress_bar(percent)}  {percent:.1f}%\n"
@@ -501,36 +512,12 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
     except Exception as e:
-        logger.error(f"Fails local MP3: {e}")
+        logger.error(f"فشل التحويل المحلي لـ MP3: {e}")
         return False
 
 # ==========================================================
-# الأوامر والأحداث
+# أوامر الإدارة الديناميكية
 # ==========================================================
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    register_user_sync(update.effective_user)
-    await update.message.reply_text(
-        build_start_text(update.effective_user.first_name or ""),
-        reply_markup=user_main_keyboard(), parse_mode="HTML", disable_web_page_preview=True
-    )
-
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id): return
-    context.user_data.pop("bc_active", None)
-    await update.message.reply_text(
-        "🛠 **لوحة الإدارة المتقدمة**\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
-        reply_markup=admin_main_keyboard(), parse_mode="Markdown"
-    )
-
-async def show_playzone_links_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دالة موحدة لمعالجة أمر /links أو زر الروابط"""
-    register_user_sync(update.effective_user)
-    await update.message.reply_text(
-        build_playzone_links_text(),
-        reply_markup=build_playzone_links_keyboard(),
-        disable_web_page_preview=True
-    )
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
@@ -559,6 +546,34 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
+# ==========================================================
+# أحداث المستخدم والروابط الموحدة
+# ==========================================================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    register_user_sync(update.effective_user)
+    await update.message.reply_text(
+        build_start_text(update.effective_user.first_name or ""),
+        reply_markup=user_main_keyboard(), parse_mode="HTML", disable_web_page_preview=True
+    )
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    context.user_data.pop("bc_active", None)
+    await update.message.reply_text(
+        "🛠 **لوحة الإدارة المتقدمة**\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
+        reply_markup=admin_main_keyboard(), parse_mode="Markdown"
+    )
+
+async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دالة موحدة ومؤمنة لعرض واجهة الروابط الرسمية للبوت"""
+    register_user_sync(update.effective_user)
+    await update.message.reply_text(
+        build_playzone_links_text(),
+        reply_markup=build_playzone_links_keyboard(),
+        disable_web_page_preview=True
+    )
+
 async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     context.user_data["bc_active"] = False
     users = all_user_ids()
@@ -583,10 +598,9 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     text = update.message.text.strip()
 
-    # التقاط المدخلات النصية الخاصة بالأزرار والأوامر المكتوبة يدوياً بكلا الاتجاهين المائلين
+    # معالجة ذكية ومتقدمة للأزرار والنصوص المكتوبة بكلتا طريقتي السلاش المائل المسبب للمشاكل
     if text in ["🔗 روابط PlayZone", "/links", "\\links"]:
-        return await show_playzone_links_handler(update, context)
-        
+        return await show_playzone_links(update, context)
     if text == "📘 دليل الاستخدام":
         return await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
     
@@ -713,89 +727,107 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
-                if not success: raise RuntimeError("فشل معالج FFmpeg في تصدير ملف MP3")
-                final_file = final_mp3_path
+                target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
             else:
-                final_file = raw_downloaded_file
+                target_file = raw_downloaded_file
 
-            file_size = final_file.stat().st_size
+            file_size = target_file.stat().st_size
             if file_size > MAX_TELEGRAM_SIZE:
-                raise ValueError(f"الملف الناتج حجمه ({format_size(file_size)}) وهو أكبر من الحد المسموح به للبوت.")
+                stop_event.set()
+                return await edit_message_smart(query.message, f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}", reply_markup=None)
 
-            with progress_lock: progress_data["text"] = "⚡ جاري رفع الملف الآن إلى خوادم تيليجرام..."
             stop_event.set()
-            await updater_task
+            await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال المباشر...", reply_markup=None)
 
-            await query.message.reply_chat_action(ChatAction.UPLOAD_DOCUMENT)
-            title_clean = clean_title(request.get("title", "PlayZone File"))
-            
-            with open(final_file, "rb") as f:
+            title = clean_title(request.get("title", "ملف ميديا"), 80)
+            duration = int(request.get("duration") or 0)
+            caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"
+            share_link = f"https://t.me/share/url?url={quote(url)}&text={quote('🎬 ' + title)}"
+            media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📤 مشاركة", url=share_link)]])
+
+            with open(target_file, "rb") as f:
                 if mode == "audio":
-                    await query.message.reply_audio(
-                        audio=f, title=title_clean, performer=request.get("artist"),
-                        duration=int(request.get("duration") or 0),
-                        thumbnail=open(local_thumb, "rb") if (local_thumb and local_thumb.exists()) else None
-                    )
+                    t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
+                    try:
+                        await context.bot.send_audio(
+                            chat_id=query.message.chat_id, audio=f, title=title,
+                            performer=request.get("artist", "غير معروف"), duration=duration,
+                            caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
+                            read_timeout=120, write_timeout=120
+                        )
+                    finally:
+                        if t_file: t_file.close()
                 else:
-                    await query.message.reply_video(
-                        video=f, caption=f"🎬 {title_clean}\n⚡ عبر بوت {BOT_USERNAME}",
-                        duration=int(request.get("duration") or 0)
+                    await context.bot.send_video(
+                        chat_id=query.message.chat_id, video=f, caption=caption,
+                        supports_streaming=True,  
+                        duration=duration, reply_markup=media_keyboard, parse_mode="HTML",
+                        read_timeout=120, write_timeout=120
                     )
 
             stat_inc_sync("success")
             stat_inc_sync("bytes", file_size)
             await safe_delete(query.message)
 
-    except Exception as e:
-        logger.error(f"خطأ خطير أثناء معالجة الطلب: {e}")
+    except (TimedOut, NetworkError) as e:
         stat_inc_sync("failed")
+        logger.error(f"فشل اتصال تيليجرام: {e}")
+        try: await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.")
+        except Exception: pass
+    except Exception as e:
+        stat_inc_sync("failed")
+        logger.error(f"فشل المعالجة: {e}")
+        try: await edit_message_smart(query.message, "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.")
+        except Exception: pass
+    finally:
         stop_event.set()
         try: await updater_task
         except Exception: pass
-        
-        error_msg = f"❌ فشل تحميل الملف.\n\nالسبب: {esc(str(e))}"
-        try: await edit_message_smart(query.message, error_msg)
-        except Exception: await query.message.reply_text(error_msg)
-
-    finally:
-        ACTIVE_USERS.discard(uid)
-        stop_event.set()
         try: shutil.rmtree(job_dir)
         except Exception: pass
+        ACTIVE_USERS.discard(uid)
 
 # ==========================================================
-# دالة تشغيل البوت الأساسية
+# التشغيل والتهيئة الأساسية للـ Application
 # ==========================================================
+
+async def post_init(app: Application):
+    commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
+    try:
+        await app.bot.set_my_commands(commands)
+        await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+    except Exception as e:
+        logger.warning(f"فشل تهيئة الأوامر: {e}")
 
 def main():
+    if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
+
     init_db()
+    _cleanup_old_downloads_sync()
 
-    if not TOKEN:
-        logger.critical("خطأ: لم يتم العثور على المتغير البيئي TELEGRAM_TOKEN")
-        return
-
-    app_builder = Application.builder().token(TOKEN)
+    builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
-        app_builder.base_url(LOCAL_API_URL)
-    
-    app = app_builder.build()
+        builder.base_url(LOCAL_API_URL)
 
-    # تسجيل الأوامر البرمجية بشكل صريح
+    app = (
+        builder.post_init(post_init)
+        .connect_timeout(30).read_timeout(120).write_timeout(120).pool_timeout(30)
+        .concurrent_updates(True)
+        .build()
+    )
+
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("panel", admin_panel))
-    app.add_handler(CommandHandler("links", show_playzone_links_handler)) # دعم سلاش مائل لليمين /links
+    app.add_handler(CommandHandler("links", show_playzone_links))
+    app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
     app.add_handler(CommandHandler("backup", backup_db_command))
-    
-    app.add_handler(CallbackQueryHandler(handle_callbacks))
-    
-    # فلتر النصوص يلتقط النصوص العادية بالإضافة لـ \links المائلة لليسار
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
+    app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل نظام بوت PlayZone Enterprise بنجاح وهو الآن يستمع للطلبات...")
-    app.run_polling(drop_pending_updates=True)
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية المستقرة لبيئة لينكس.")
+    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
