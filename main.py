@@ -691,7 +691,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     stop_event = asyncio.Event()
     
     # رسالة الانتظار الذكية في حال كان السيرفر مشغولاً
-    progress_data = {"text": "⏳ يتم وضعك الآن في طابور الانتظار...\n(السيرفر يعالج طلبات أخرى، سيبدأ دورك تلقائياً)"}
+    progress_data = {"text": "⏳ يرجى الانتظار..."}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
     try:
@@ -700,7 +700,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
         # هنا ينتظر المستخدم دوره بأمان تام دون أن يسبب ضغطاً على السيرفر (نظام Semaphore)
         async with DOWNLOAD_SEMAPHORE:
-            with progress_lock: progress_data["text"] = "🚀 بدأ دورك! جاري التجهيز للتحميل..."
+            with progress_lock: progress_data["text"] = "🚀 بدأ التحميل... يرجى الانتظار ⏬"
             
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
