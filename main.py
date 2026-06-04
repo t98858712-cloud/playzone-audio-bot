@@ -1,3 +1,4 @@
+هل كودي هذا به مشاكل
 import os
 import re
 import time
@@ -158,7 +159,8 @@ def get_latest_users(limit: int = 10) -> list:
 # ==========================================================
 
 def parse_admin_ids():
-    return {8569699093}
+    admin_ids_raw = os.getenv("ADMIN_IDS", "")
+    return {int(item.strip()) for item in admin_ids_raw.split(",") if item.strip().isdigit()}
 
 def is_admin(user_id: int) -> bool:
     return user_id in parse_admin_ids()
@@ -422,6 +424,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if mode == "audio":
         opts["format"] = "bestaudio/best"
     else:
+        # إذا تم كسر الحظر بخادم محلي، لا داعي لتقييد حجم الفيديو لـ 50M في جودة السحب
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         opts["format"] = f"bestvideo[height<=720][filesize<{max_fs}]+bestaudio/best[height<=720][filesize<{max_fs}]/best"
         opts["merge_output_format"] = "mp4"
@@ -464,14 +467,12 @@ def download_hook(progress_data: dict):
 async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event):
     last_text = ""
     while not stop_event.is_set():
-        with progress_lock:
-            text = progress_data.get("text", "")
+        with progress_lock: text = progress_data.get("text", "")
         if text and text != last_text:
             try:
                 await edit_message_smart(message, text, reply_markup=None)
                 last_text = text
-            except Exception:
-                pass
+            except Exception: pass
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
@@ -509,6 +510,7 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
 # ==========================================================
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تحديث مكتبة التحميل مباشرة من التيليجرام"""
     if not is_admin(update.effective_user.id): return
     msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
     try:
@@ -518,6 +520,7 @@ async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYP
         await msg.edit_text(f"❌ فشل التحديث: {e}")
 
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """استلام ملف الكوكيز من المطور مباشرة"""
     if not is_admin(update.effective_user.id): return
     if not update.message.document:
         return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود يوتيوب.")
@@ -528,6 +531,7 @@ async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text("✅ تم استلام وتركيب ملف الكوكيز بنجاح!")
 
 async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تحميل قاعدة البيانات فوراً للحماية من الضياع"""
     if not is_admin(update.effective_user.id): return
     try:
         with open(DB_FILE, "rb") as f:
@@ -570,10 +574,8 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
             await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
             sent += 1
             await asyncio.sleep(0.05)
-        except RetryAfter as e:
-            await asyncio.sleep(int(e.retry_after) + 1)
-        except Exception:
-            fail += 1
+        except RetryAfter as e: await asyncio.sleep(int(e.retry_after) + 1)
+        except Exception: fail += 1
     
     stat_inc_sync("broadcasts")
     await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
@@ -689,6 +691,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
     
+    # رسالة الانتظار الذكية في حال كان السيرفر مشغولاً
     progress_data = {"text": "⏳ يتم وضعك الآن في طابور الانتظار...\n(السيرفر يعالج طلبات أخرى، سيبدأ دورك تلقائياً)"}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
@@ -696,9 +699,9 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         try: await query.message.edit_reply_markup(reply_markup=None)
         except Exception: pass
 
+        # هنا ينتظر المستخدم دوره بأمان تام دون أن يسبب ضغطاً على السيرفر (نظام Semaphore)
         async with DOWNLOAD_SEMAPHORE:
-            with progress_lock:
-                progress_data["text"] = "🚀 بدأ دورك! جاري التجهيز للتحميل..."
+            with progress_lock: progress_data["text"] = "🚀 بدأ دورك! جاري التجهيز للتحميل..."
             
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
@@ -710,8 +713,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
             if mode == "audio":
-                with progress_lock:
-                    progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
+                with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
                 target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
@@ -792,6 +794,7 @@ def main():
     init_db()
     _cleanup_old_downloads_sync()
 
+    # دعم تشغيل السيرفرات المحلية لكسر حاجز التيليجرام 50MB
     builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
         builder.base_url(LOCAL_API_URL)
