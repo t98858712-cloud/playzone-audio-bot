@@ -41,6 +41,8 @@ from telegram.ext import (
 # ==========================================================
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+# دعم خادم تيليجرام المحلي لكسر حاجز الـ 50 ميجابايت مستقبلاً
+LOCAL_API_URL = os.getenv("TELEGRAM_API_URL") 
 
 BASE_DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "./downloads"))
 BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
@@ -48,11 +50,12 @@ BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
 DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 DATA_DIR.mkdir(exist_ok=True)
 
-# قاعدة البيانات المدمجة فائقة الأداء
 DB_FILE = DATA_DIR / "bot_database.db"
 DB_LOCK = threading.Lock()
 
-MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(50 * 1024 * 1024)))
+# إذا تم استخدام API محلي، يتم رفع الحد إلى 2 جيجابايت، وإلا يبقى 50 ميجا
+DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
+MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
 COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt"))
 
 PROGRESS_UPDATE_SECONDS = float(os.getenv("PROGRESS_UPDATE_SECONDS", "3.0"))
@@ -60,14 +63,14 @@ REQUEST_EXPIRE_SECONDS = int(os.getenv("REQUEST_EXPIRE_SECONDS", str(15 * 60)))
 OLD_DOWNLOADS_EXPIRE_SECONDS = int(os.getenv("OLD_DOWNLOADS_EXPIRE_SECONDS", str(60 * 60)))
 MAX_THUMBNAIL_BYTES = int(os.getenv("MAX_THUMBNAIL_BYTES", str(2 * 1024 * 1024)))
 
-CPU_COUNT = os.cpu_count() or 2
-MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(CPU_COUNT * 2)))
-
-ACTIVE_USERS = set()
+# نظام الطابور الذكي (Semaphore) لمنع انهيار السيرفر تحت الضغط
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(os.cpu_count() or 2)))
+DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(2, MAX_WORKERS))
 
-BOT_USERNAME = os.getenv("BOT_USERNAME", "@P1ay_Z0ne_Bot")
+ACTIVE_USERS = set()
 
+BOT_USERNAME = os.getenv("BOT_USERNAME", "@P1ay_Z0ne_Bot")
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
 FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
 INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
@@ -86,13 +89,12 @@ for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# إدارة قاعدة البيانات (SQLite3 WAL Mode) - خالي من العيوب
+# إدارة قاعدة البيانات (SQLite3 WAL Mode)
 # ==========================================================
 
 def init_db():
     with DB_LOCK:
         with sqlite3.connect(DB_FILE) as conn:
-            # تفعيل وضع WAL لتسريع عمليات القراءة والكتابة المتزامنة
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -375,7 +377,8 @@ def build_server_status_text() -> str:
         f"• مجلد التحميل: {BASE_DOWNLOAD_DIR}\n"
         f"• الملفات المؤقتة: {file_count}\n"
         f"• حجم الملفات المؤقتة: {format_size(total_size)}\n"
-        f"• العمليات النشطة: {len(ACTIVE_USERS)}"
+        f"• العمليات النشطة: {len(ACTIVE_USERS)}\n"
+        f"• الحد الأقصى المتزامن: {MAX_WORKERS}"
     )
 
 # ==========================================================
@@ -405,7 +408,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و FFmpeg مع الميزات الخارقة (Faststart & Cover Art)
+# yt-dlp و FFmpeg
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
@@ -420,10 +423,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if mode == "audio":
         opts["format"] = "bestaudio/best"
     else:
-        # إجبار الفيديو على تحميل ملفات لا تتجاوز حدود التيليجرام بكثير لمنع الفشل المتأخر
-        opts["format"] = "bestvideo[height<=720][filesize<50M]+bestaudio/best[height<=720][filesize<50M]/best"
+        # إذا تم كسر الحظر بخادم محلي، لا داعي لتقييد حجم الفيديو لـ 50M في جودة السحب
+        max_fs = "50M" if not LOCAL_API_URL else "2000M"
+        opts["format"] = f"bestvideo[height<=720][filesize<{max_fs}]+bestaudio/best[height<=720][filesize<{max_fs}]/best"
         opts["merge_output_format"] = "mp4"
-        # تفعيل Faststart لجعل الفيديو يبدأ البث فوراً في التيليجرام دون تقطيع
         opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
 
     if cookie_file_is_usable(COOKIES_FILE):
@@ -490,13 +493,10 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
 def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path = None) -> bool:
     try:
         cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(input_file)]
-        
-        # دمج الغلاف داخل الـ MP3 ليظهر باحترافية في مشغلات الموسيقى
         if local_thumb and local_thumb.exists():
             cmd.extend(["-i", str(local_thumb), "-map", "0:a", "-map", "1:v", "-c:v", "mjpeg", "-id3v2_version", "3", "-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
         else:
             cmd.extend(["-vn"])
-
         cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "48000", "-ac", "2", "-threads", "0", str(output_file)])
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
@@ -505,29 +505,38 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         return False
 
 # ==========================================================
-# أوامر الإدارة الديناميكية (تحديث البوت حيّاً)
+# أوامر الإدارة الديناميكية
 # ==========================================================
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تحديث مكتبة yt-dlp دون إعادة تشغيل السيرفر"""
+    """تحديث مكتبة التحميل مباشرة من التيليجرام"""
     if not is_admin(update.effective_user.id): return
     msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
     try:
         subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
-        await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار لمقاومة الحظر.")
+        await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار.")
     except Exception as e:
         await msg.edit_text(f"❌ فشل التحديث: {e}")
 
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """استلام ملف الكوكيز وحفظه لتخطي القيود فوراً"""
+    """استلام ملف الكوكيز من المطور مباشرة"""
     if not is_admin(update.effective_user.id): return
     if not update.message.document:
-        return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود العمر وتسجيل الدخول.")
+        return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود يوتيوب.")
     
     file_id = update.message.document.file_id
     new_file = await context.bot.get_file(file_id)
     await new_file.download_to_drive(COOKIES_FILE)
     await update.message.reply_text("✅ تم استلام وتركيب ملف الكوكيز بنجاح!")
+
+async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تحميل قاعدة البيانات فوراً للحماية من الضياع"""
+    if not is_admin(update.effective_user.id): return
+    try:
+        with open(DB_FILE, "rb") as f:
+            await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياطية من قاعدة البيانات.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
 # ==========================================================
 # أحداث المستخدم
@@ -544,7 +553,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
     await update.message.reply_text(
-        "🛠 **لوحة الإدارة المتقدمة**\nأوامر إضافية:\n/update_dlp - تحديث محرك التحميل\n/setcookie - تجديد الكوكيز",
+        "🛠 **لوحة الإدارة المتقدمة**\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
         reply_markup=admin_main_keyboard(), parse_mode="Markdown"
     )
 
@@ -616,7 +625,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         await status.edit_text("❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة وغير محذوف، ثم حاول مرة أخرى.")
 
 # ==========================================================
-# الأزرار والتحميل
+# الأزرار ونظام الطابور الذكي (Semaphore Queue)
 # ==========================================================
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
@@ -680,69 +689,73 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir = BASE_DOWNLOAD_DIR / f"{uid}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
-    progress_data = {"text": "⏳ جاري تجهيز التحميل..."}
+    
+    # رسالة الانتظار الذكية في حال كان السيرفر مشغولاً
+    progress_data = {"text": "⏳ يتم وضعك الآن في طابور الانتظار...\n(السيرفر يعالج طلبات أخرى، سيبدأ دورك تلقائياً)"}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
     try:
         try: await query.message.edit_reply_markup(reply_markup=None)
         except Exception: pass
 
-        loop = asyncio.get_running_loop()
-        
-        # تحميل صورة الغلاف مبكراً لدمجها
-        local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
-        
-        await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data))
-        files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
-        if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
+        # هنا ينتظر المستخدم دوره بأمان تام دون أن يسبب ضغطاً على السيرفر (نظام Semaphore)
+        async with DOWNLOAD_SEMAPHORE:
+            with progress_lock: progress_data["text"] = "🚀 بدأ دورك! جاري التجهيز للتحميل..."
+            
+            loop = asyncio.get_running_loop()
+            local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
+            
+            await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data))
+            files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
+            if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
 
-        raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
+            raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
-        if mode == "audio":
-            with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
-            final_mp3_path = job_dir / "playzone_final_audio.mp3"
-            success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
-            target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
-        else:
-            target_file = raw_downloaded_file
-
-        file_size = target_file.stat().st_size
-        if file_size > MAX_TELEGRAM_SIZE:
-            stop_event.set()
-            return await edit_message_smart(query.message, f"❌ حجم الملف كبير جداً.\n\nالحجم: {format_size(file_size)}\nالحد المسموح: 50MB", reply_markup=None)
-
-        stop_event.set()
-        await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
-
-        title = clean_title(request.get("title", "ملف ميديا"), 80)
-        duration = int(request.get("duration") or 0)
-        caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"
-        share_link = f"https://t.me/share/url?url={quote(url)}&text={quote('🎬 ' + title)}"
-        media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📤 مشاركة", url=share_link)]])
-
-        with open(target_file, "rb") as f:
             if mode == "audio":
-                t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
-                try:
-                    await context.bot.send_audio(
-                        chat_id=query.message.chat_id, audio=f, title=title,
-                        performer=request.get("artist", "غير معروف"), duration=duration,
-                        caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
+                with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
+                final_mp3_path = job_dir / "playzone_final_audio.mp3"
+                success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
+                target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
+            else:
+                target_file = raw_downloaded_file
+
+            file_size = target_file.stat().st_size
+            if file_size > MAX_TELEGRAM_SIZE:
+                stop_event.set()
+                return await edit_message_smart(query.message, f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}", reply_markup=None)
+
+            stop_event.set()
+            await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال المباشر...", reply_markup=None)
+
+            title = clean_title(request.get("title", "ملف ميديا"), 80)
+            duration = int(request.get("duration") or 0)
+            caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"
+            share_link = f"https://t.me/share/url?url={quote(url)}&text={quote('🎬 ' + title)}"
+            media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📤 مشاركة", url=share_link)]])
+
+            with open(target_file, "rb") as f:
+                if mode == "audio":
+                    t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
+                    try:
+                        await context.bot.send_audio(
+                            chat_id=query.message.chat_id, audio=f, title=title,
+                            performer=request.get("artist", "غير معروف"), duration=duration,
+                            caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
+                            read_timeout=120, write_timeout=120
+                        )
+                    finally:
+                        if t_file: t_file.close()
+                else:
+                    await context.bot.send_video(
+                        chat_id=query.message.chat_id, video=f, caption=caption,
+                        supports_streaming=True,  
+                        duration=duration, reply_markup=media_keyboard, parse_mode="HTML",
                         read_timeout=120, write_timeout=120
                     )
-                finally:
-                    if t_file: t_file.close()
-            else:
-                await context.bot.send_video(
-                    chat_id=query.message.chat_id, video=f, caption=caption,
-                    supports_streaming=True,  # البث المباشر مفعل (Faststart)
-                    duration=duration, reply_markup=media_keyboard, parse_mode="HTML",
-                    read_timeout=120, write_timeout=120
-                )
 
-        stat_inc_sync("success")
-        stat_inc_sync("bytes", file_size)
-        await safe_delete(query.message)
+            stat_inc_sync("success")
+            stat_inc_sync("bytes", file_size)
+            await safe_delete(query.message)
 
     except (TimedOut, NetworkError) as e:
         stat_inc_sync("failed")
@@ -780,10 +793,13 @@ def main():
     init_db()
     _cleanup_old_downloads_sync()
 
+    # دعم تشغيل السيرفرات المحلية لكسر حاجز التيليجرام 50MB
+    builder = Application.builder().token(TOKEN)
+    if LOCAL_API_URL:
+        builder.base_url(LOCAL_API_URL)
+
     app = (
-        Application.builder()
-        .token(TOKEN)
-        .post_init(post_init)
+        builder.post_init(post_init)
         .connect_timeout(30).read_timeout(120).write_timeout(120).pool_timeout(30)
         .concurrent_updates(True)
         .build()
@@ -794,11 +810,12 @@ def main():
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
+    app.add_handler(CommandHandler("backup", backup_db_command))
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بنظام قواعد البيانات المستقر وأعلى نقاء للصوت والفيديو.")
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
