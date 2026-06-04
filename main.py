@@ -416,10 +416,15 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
-        "retries": 10, "fragment_retries": 10, "socket_timeout": 30, "cachedir": False,
-        "concurrent_fragment_downloads": 10,
-        "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Connection": "keep-alive"},
-        "extractor_args": {"youtube": {"player_client": ["android", "ios"], "skip": ["webpage"]}},
+        "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
+        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive"
+        },
+        "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
     }
 
     if mode == "audio":
@@ -532,7 +537,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     try:
         with open(DB_FILE, "rb") as f:
-            await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياقاطية من قاعدة البيانات.")
+            await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياطية من قاعدة البيانات.")
     except Exception as e:
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
@@ -697,7 +702,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
     
-    # 1. تحديث نص الانتظار بناءً على طلبك
     progress_data = {"text": "⏳ يرجى الانتظار..."}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
@@ -706,7 +710,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception: pass
 
         async with DOWNLOAD_SEMAPHORE:
-            # 2. تحديث نص بدء التحميل بناءً على طلبك
             with progress_lock: progress_data["text"] = "🚀 بدأ التحميل... يرجى الانتظار ⏬"
             
             loop = asyncio.get_running_loop()
@@ -732,7 +735,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 return await edit_message_smart(query.message, f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}", reply_markup=None)
 
             stop_event.set()
-            # 3. تم حذف كلمة "المباشر" تماماً من هنا بناءً على طلبك
             await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
 
             title = clean_title(request.get("title", "ملف ميديا"), 80)
@@ -823,6 +825,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
     logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
+    # تفعيل drop_pending_updates بشكل إجباري لتجنب مشاكل الـ Conflict عند تكرار تشغيل الحاوية
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
