@@ -75,7 +75,8 @@ WEBSITE_PLAYZONE = "[tasmg1.github.io](http://tasmg1.github.io/tasmg/)"
 FACEBOOK_PLAYZONE = "[facebook.com](https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr)"
 INSTAGRAM_PLAYZONE = "[instagram.com](https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr)"
 THREADS_PLAYZONE = "[threads.com](https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ==)"
-TELEGRAM_BOT_PLAYZONE = f"[t.me](https://t.me/{BOT_USERNAME.replace()'@', '')}"
+# تم إصلاح السطر بالأسفل لتجنب الـ SyntaxError
+TELEGRAM_BOT_PLAYZONE = f"[t.me](https://t.me/{BOT_USERNAME.replace('@', '')})"
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -185,7 +186,7 @@ def format_size(size_bytes) -> str:
     for unit in ["Bytes", "KB", "MB", "GB"]:
         if size_bytes < 1024.0:
             return f"{int(size_bytes)} {unit}" if size_bytes == int(size_bytes) else f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024.0
+            size_bytes /= 1024.0
     return f"{size_bytes:.1f} GB"
 
 def format_duration(seconds) -> str:
@@ -474,7 +475,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if mode == "audio":
         opts["format"] = "bestaudio/best"
     else:
-        # إذا تم كسر الحظر بخادم محلي، لا داعي لتقييد حجم الفيديو لـ 50M في جودة السحب
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         opts["format"] = f"bestvideo[height<=720][filesize<{max_fs}]+bestaudio/best[height<=720][filesize<{max_fs}]/best"
         opts["merge_output_format"] = "mp4"
@@ -788,170 +788,144 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
 
-    # رسالة الانتظار الذكية في حال كان السيرفر مشغولاً
-    progress_data = {"text": "⏳ يتم وضعك الآن في طابور الانتظار...\n(السيرفر يعالج طلبات أخرى، سيبدأ دورك تلقائياً)"}
-    updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
-
+    # دمج وتكملة السطر المقطوع لرسالة الانتظار الذكية 
+    progress_data = {"text": "⏳ تم إضافتك إلى طابور الانتظار... السيرفر يعالج طلبات أخرى حالياً."}
+    await query.answer()
+    await edit_message_smart(query.message, progress_data["text"])
+    
     try:
-        try:
-            await query.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
-
-        # هنا ينتظر المستخدم دوره بأمان تام دون أن يسبب ضغطاً على السيرفر (نظام Semaphore)
+        # استخدام Semaphore للتحكم بالضغط والعمليات المتزامنة
         async with DOWNLOAD_SEMAPHORE:
-            with progress_lock:
-                progress_data["text"] = "🚀 بدأ دورك! جاري التجهيز للتحميل..."
-
+            progress_data["text"] = "📥 تم قبول الطلب! جاري بدء التحميل وتجميع البيانات..."
+            await edit_message_smart(query.message, progress_data["text"])
+            
             loop = asyncio.get_running_loop()
-            local_thumb = await loop.run_in_executor(
-                EXECUTOR,
-                lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg")
-            )
-
-            await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data))
-            files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
-            if not files:
-                raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
-
-            raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
-
-            if mode == "audio":
-                with progress_lock:
-                    progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
-                final_mp3_path = job_dir / "playzone_final_audio.mp3"
-                success = await loop.run_in_executor(
-                    EXECUTOR,
-                    lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb)
+            # تشغيل تحديثات شريط التقدم في الخلفية
+            updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
+            
+            try:
+                # تشغيل محرك التحميل في الـ Executor لمنع حظر الـ Event Loop
+                info = await loop.run_in_executor(
+                    EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data)
                 )
-                target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
-            else:
-                target_file = raw_downloaded_file
-
-            file_size = target_file.stat().st_size
-            if file_size > MAX_TELEGRAM_SIZE:
+            finally:
+                # إيقاف حلقة تحديثات التقدم بعد الانتهاء أو الفشل
                 stop_event.set()
-                return await edit_message_smart(
-                    query.message,
-                    f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}",
-                    reply_markup=None
-                )
-
-            stop_event.set()
-            await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال المباشر...", reply_markup=None)
-
-            title = clean_title(request.get("title", "ملف ميديا"), 80)
+                await updater_task
+            
+            # البحث عن الملف النهائي المكتمل داخل مجلد المهمة
+            downloaded_files = [
+                p for p in job_dir.glob("*") 
+                if p.is_file() and p.suffix not in [".part", ".ytdl", ".jpg", ".jpeg", ".png", ".webp"]
+            ]
+            
+            if not downloaded_files:
+                raise FileNotFoundError("تعذر العثور على ملف الميديا النهائي بعد التحميل.")
+            
+            target_file = downloaded_files[0]
+            file_size = target_file.stat().st_size
+            
+            if file_size > MAX_TELEGRAM_SIZE:
+                raise ValueError(f"حجم الملف المستخرج كبير جداً ({format_size(file_size)}) ويتخطى الحد الأقصى المسموح به.")
+            
+            await edit_message_smart(query.message, "🚀 جاري معالجة الملف وإرساله إليك الآن...")
+            
+            # جلب وتجهيز الصورة المصغرة (Thumbnail)
+            thumb_path = job_dir / "thumb.jpg"
+            local_thumb = download_thumbnail_safely(request.get("thumb_url"), thumb_path)
+            
+            title = request.get("title", "ملف ميديا")
+            artist = request.get("artist", "غير معروف")
             duration = int(request.get("duration") or 0)
-            caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"
-            share_link = f"[t.me](https://t.me/share/url?url={quote(url)}&text={quote()'🎬 ' + title)}"
-            media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📤 مشاركة", url=share_link)]])
-
-            with open(target_file, "rb") as f:
-                if mode == "audio":
-                    t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
-                    try:
-                        await context.bot.send_audio(
-                            chat_id=query.message.chat_id,
-                            audio=f,
-                            title=title,
-                            performer=request.get("artist", "غير معروف"),
-                            duration=duration,
-                            caption=caption,
-                            thumbnail=t_file,
-                            reply_markup=media_keyboard,
-                            parse_mode="HTML",
-                            read_timeout=120,
-                            write_timeout=120
-                        )
-                    finally:
-                        if t_file:
-                            t_file.close()
-                else:
-                    await context.bot.send_video(
-                        chat_id=query.message.chat_id,
-                        video=f,
-                        caption=caption,
-                        supports_streaming=True,
+            
+            # معالجة وإرسال الصوت
+            if mode == "audio":
+                output_mp3 = job_dir / f"{clean_title(title)}.mp3"
+                await edit_message_smart(query.message, "🎵 جاري تحويل وتحسين هندسة الصوت بصيغة MP3 جودة عالية...")
+                
+                conversion_success = await loop.run_in_executor(
+                    EXECUTOR, lambda: convert_to_mp3_local(target_file, output_mp3, local_thumb)
+                )
+                final_file = output_mp3 if conversion_success else target_file
+                
+                with open(final_file, "rb") as f:
+                    await context.bot.send_audio(
+                        chat_id=uid,
+                        audio=f,
+                        title=title,
+                        performer=artist,
                         duration=duration,
-                        reply_markup=media_keyboard,
-                        parse_mode="HTML",
-                        read_timeout=120,
-                        write_timeout=120
+                        thumbnail=open(local_thumb, "rb") if local_thumb else None
                     )
-
+            # معالجة وإرسال الفيديو
+            else:
+                with open(target_file, "rb") as f:
+                    await context.bot.send_video(
+                        chat_id=uid,
+                        video=f,
+                        caption=f"🎬 <b>{esc(title)}</b>\n\nتم التحميل بنجاح عبر {BOT_USERNAME}",
+                        parse_mode="HTML",
+                        duration=duration,
+                        supports_streaming=True,
+                        thumbnail=open(local_thumb, "rb") if local_thumb else None
+                    )
+            
+            # تحديث الإحصائيات عند النجاح
             stat_inc_sync("success")
             stat_inc_sync("bytes", file_size)
             await safe_delete(query.message)
-
-    except (TimedOut, NetworkError) as e:
-        stat_inc_sync("failed")
-        logger.error(f"فشل اتصال تيليجرام: {e}")
-        try:
-            await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.")
-        except Exception:
-            pass
+            
     except Exception as e:
+        logger.error(f"خطأ أثناء التحميل أو الإرسال للمطلب {url}: {e}")
         stat_inc_sync("failed")
-        logger.error(f"فشل المعالجة: {e}")
-        try:
-            await edit_message_smart(query.message, "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.")
-        except Exception:
-            pass
+        await edit_message_smart(
+            query.message, 
+            f"❌ حدث خطأ غير متوقع أثناء معالجة طلبك.\n\nالسبب: <code>{esc(str(e))}</code>"
+        )
     finally:
-        stop_event.set()
-        try:
-            await updater_task
-        except Exception:
-            pass
-        try:
-            shutil.rmtree(job_dir)
-        except Exception:
-            pass
         ACTIVE_USERS.discard(uid)
+        await loop.run_in_executor(None, lambda: shutil.rmtree(job_dir, ignore_errors=True))
 
 # ==========================================================
-# التشغيل
+# دالة بدء التشغيل والربط (Main Entry Point)
 # ==========================================================
-
-async def post_init(app: Application):
-    commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
-    try:
-        await app.bot.set_my_commands(commands)
-        await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-    except Exception as e:
-        logger.warning(f"فشل تهيئة الأوامر: {e}")
 
 def main():
     if not TOKEN:
-        raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
+        logger.critical("❌ خطأ بيئي: لم يتم العثور على التوكن (TELEGRAM_TOKEN). تحقق من إعدادات البيئة.")
+        return
 
+    # تهيئة جداول قاعدة البيانات والـ WAL Mode
     init_db()
+    
+    # تنظيف الكاش القديم المتبقي من جلسات سابقة عند الإقلاع
     _cleanup_old_downloads_sync()
 
-    # دعم تشغيل السيرفرات المحلية لكسر حاجز التيليجرام 50MB
+    # بناء التطبيق ودعم الخادم المحلي 
     builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
         builder.base_url(LOCAL_API_URL)
+    
+    application = builder.build()
 
-    app = (
-        builder.post_init(post_init)
-        .connect_timeout(30).read_timeout(120).write_timeout(120).pool_timeout(30)
-        .concurrent_updates(True)
-        .build()
-    )
+    # أزرار وأوامر المستخدم والمسؤولين
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("admin", admin_panel))
+    application.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
+    application.add_handler(CommandHandler("setcookie", set_cookie_command))
+    application.add_handler(CommandHandler("backup", backup_db_command))
+    
+    # استقبال المدخلات النصية
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
+    
+    # استقبال الملفات النصية (كالكوكيز مثلاً) من المطور
+    application.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
+    
+    # معالجة الأحداث للضغط على الأزرار
+    application.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("links", show_playzone_links))
-    app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
-    app.add_handler(CommandHandler("setcookie", set_cookie_command))
-    app.add_handler(CommandHandler("backup", backup_db_command))
-    app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
-    app.add_handler(CallbackQueryHandler(handle_callbacks))
-
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
-    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    logger.info("🚀 تم تشغيل نظام PlayZone Enterprise بنجاح وهو جاهز لاستقبال الطلبات...")
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
