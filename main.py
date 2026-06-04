@@ -37,30 +37,20 @@ from telegram.ext import (
 )
 
 # ==========================================================
-# إعدادات PlayZone / Railway (مؤمّنة بالكامل لبيئة Linux)
+# إعدادات PlayZone / Railway
 # ==========================================================
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 LOCAL_API_URL = os.getenv("TELEGRAM_API_URL") 
 
-# استخدام مسارات مطلقة متوافقة مع حاويات لينكس لمنع أخطاء الصلاحيات
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "./downloads"))
+BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
 
-BASE_DOWNLOAD_DIR = BASE_DIR / "downloads"
-BASE_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
+DATA_DIR.mkdir(exist_ok=True)
 
 DB_FILE = DATA_DIR / "bot_database.db"
 DB_LOCK = threading.Lock()
-
-# ضبط صلاحيات المجلدات في نظام Linux (قراءة/كتابة/تنفيذ) لضمان الاستقرار
-try:
-    os.chmod(str(BASE_DOWNLOAD_DIR), 0o777)
-    os.chmod(str(DATA_DIR), 0o777)
-except Exception:
-    pass
 
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
@@ -363,7 +353,7 @@ def build_admin_stats_text() -> str:
     stats = load_stats_sync()
     users_count = len(all_user_ids())
     return (
-        "📊 إحصائيات البوت\n\n"
+        "📊 <b>إحصائيات البوت</b>\n\n"
         f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
         f"• التحميلات الناجحة: {stats.get('success', 0)}\n"
         f"• العمليات الفاشلة: {stats.get('failed', 0)}\n"
@@ -374,19 +364,19 @@ def build_admin_stats_text() -> str:
 
 def build_admin_users_text(limit: int = 10) -> str:
     users = get_latest_users(limit)
-    lines = [f"👥 آخر المستخدمين النشطين:"]
+    lines = [f"👥 <b>آخر المستخدمين النشطين:</b>"]
     for u in users:
         name = u.get("first_name") or "بدون اسم"
         username = f"@{u.get('username')}" if u.get("username") else "لا يوجد"
-        lines.append(f"• {esc(name)} — {esc(username)} — ID: {u.get('id')}")
+        lines.append(f"• {esc(name)} — {esc(username)} — ID: <code>{u.get('id')}</code>")
     return "\n".join(lines)
 
 def build_server_status_text() -> str:
     total_size = sum(p.stat().st_size for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
     file_count = sum(1 for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
     return (
-        "📁 حالة السيرفر\n\n"
-        f"• مجلد التحميل: {BASE_DOWNLOAD_DIR}\n"
+        "📁 <b>حالة السيرفر</b>\n\n"
+        f"• مجلد التحميل: <code>{BASE_DOWNLOAD_DIR}</code>\n"
         f"• الملفات المؤقتة: {file_count}\n"
         f"• حجم الملفات المؤقتة: {format_size(total_size)}\n"
         f"• العمليات النشطة: {len(ACTIVE_USERS)}\n"
@@ -463,7 +453,7 @@ def download_hook(progress_data: dict):
                 if total:
                     percent = downloaded / total * 100
                     progress_data["text"] = (
-                        f"📥 <b>جاري تحميل الملف...</b>\n\n"
+                        "📥 <b>جاري تحميل الملف...</b>\n\n"
                         f"{make_progress_bar(percent)}  {percent:.1f}%\n"
                         f"📦 الحجم: {format_size(downloaded)} / {format_size(total)}\n"
                         f"🚀 السرعة: {format_size(speed)}/ث"
@@ -561,12 +551,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
     await update.message.reply_text(
-        "🛠 **لوحة الإدارة المتقدمة**\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
-        reply_markup=admin_main_keyboard(), parse_mode="Markdown"
+        "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
+        reply_markup=admin_main_keyboard(), parse_mode="HTML"
     )
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دالة موحدة ومؤمنة لعرض واجهة الروابط الرسمية للبوت"""
     register_user_sync(update.effective_user)
     await update.message.reply_text(
         build_playzone_links_text(),
@@ -586,7 +575,12 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
             await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
             sent += 1
             await asyncio.sleep(0.05)
-        except RetryAfter as e: await asyncio.sleep(int(e.retry_after) + 1)
+        except RetryAfter as e: 
+            await asyncio.sleep(int(e.retry_after) + 1)
+            try:
+                await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
+                sent += 1
+            except Exception: fail += 1
         except Exception: fail += 1
     
     stat_inc_sync("broadcasts")
@@ -598,7 +592,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     text = update.message.text.strip()
 
-    # معالجة ذكية ومتقدمة للأزرار والنصوص المكتوبة بكلتا طريقتي السلاش المائل المسبب للمشاكل
     if text in ["🔗 روابط PlayZone", "/links", "\\links"]:
         return await show_playzone_links(update, context)
     if text == "📘 دليل الاستخدام":
@@ -649,25 +642,25 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         return await safe_delete(query.message)
     elif data == "adm_stats":
         await query.answer()
-        return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard())
+        return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_users":
         await query.answer()
         return await query.message.edit_text(build_admin_users_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_server":
         await query.answer()
-        return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard())
+        return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_clean":
         await query.answer("جاري تنظيف الملفات المؤقتة...")
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
-        return await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard())
+        return await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_bc":
         context.user_data["bc_active"] = True
         await query.answer()
-        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard())
+        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard(), parse_mode="HTML")
     elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
         await query.answer("تم إلغاء الإذاعة")
-        return await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard())
+        return await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard(), parse_mode="HTML")
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -788,7 +781,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
-# التشغيل والتهيئة الأساسية للـ Application
+# التشغيل
 # ==========================================================
 
 async def post_init(app: Application):
@@ -826,7 +819,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية المستقرة لبيئة لينكس.")
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
