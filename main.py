@@ -450,9 +450,10 @@ def download_hook(progress_data: dict):
                 speed = d.get("speed") or 0
                 if total:
                     percent = downloaded / total * 100
+                    # هنا تم إصلاح دمج النص بشكل آمن وسليم بايثونياً
                     progress_data["text"] = (
-                        "📥 <b>جاري تحميل الملف...</b>\n\n"
-                        {make_progress_bar(percent)} + f"  {percent:.1f}%\n"
+                        f"📥 <b>جاري تحميل الملف...</b>\n\n"
+                        f"{make_progress_bar(percent)}  {percent:.1f}%\n"
                         f"📦 الحجم: {format_size(downloaded)} / {format_size(total)}\n"
                         f"🚀 السرعة: {format_size(speed)}/ث"
                     )
