@@ -532,7 +532,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     try:
         with open(DB_FILE, "rb") as f:
-            await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياطية من قاعدة البيانات.")
+            await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياقاطية من قاعدة البيانات.")
     except Exception as e:
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
@@ -697,6 +697,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
     
+    # 1. تحديث نص الانتظار بناءً على طلبك
     progress_data = {"text": "⏳ يرجى الانتظار..."}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
@@ -705,6 +706,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception: pass
 
         async with DOWNLOAD_SEMAPHORE:
+            # 2. تحديث نص بدء التحميل بناءً على طلبك
             with progress_lock: progress_data["text"] = "🚀 بدأ التحميل... يرجى الانتظار ⏬"
             
             loop = asyncio.get_running_loop()
@@ -730,6 +732,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 return await edit_message_smart(query.message, f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}", reply_markup=None)
 
             stop_event.set()
+            # 3. تم حذف كلمة "المباشر" تماماً من هنا بناءً على طلبك
             await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
 
             title = clean_title(request.get("title", "ملف ميديا"), 80)
