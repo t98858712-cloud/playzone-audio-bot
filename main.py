@@ -41,6 +41,7 @@ from telegram.ext import (
 # ==========================================================
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+# دعم خادم تيليجرام المحلي لكسر حاجز الـ 50 ميجابايت مستقبلاً
 LOCAL_API_URL = os.getenv("TELEGRAM_API_URL") 
 
 BASE_DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "./downloads"))
@@ -52,6 +53,7 @@ DATA_DIR.mkdir(exist_ok=True)
 DB_FILE = DATA_DIR / "bot_database.db"
 DB_LOCK = threading.Lock()
 
+# إذا تم استخدام API محلي، يتم رفع الحد إلى 2 جيجابايت، وإلا يبقى 50 ميجا
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
 COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt"))
@@ -61,6 +63,7 @@ REQUEST_EXPIRE_SECONDS = int(os.getenv("REQUEST_EXPIRE_SECONDS", str(15 * 60)))
 OLD_DOWNLOADS_EXPIRE_SECONDS = int(os.getenv("OLD_DOWNLOADS_EXPIRE_SECONDS", str(60 * 60)))
 MAX_THUMBNAIL_BYTES = int(os.getenv("MAX_THUMBNAIL_BYTES", str(2 * 1024 * 1024)))
 
+# نظام الطابور الذكي (Semaphore) لمنع انهيار السيرفر تحت الضغط
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(os.cpu_count() or 2)))
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(2, MAX_WORKERS))
@@ -322,11 +325,6 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
     ])
 
-def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ إلغاء العملية", callback_data="adm_cancel_bc")]
-    ])
-
 def build_start_text(first_name: str) -> str:
     return (
         f"أهلاً {esc(first_name)} 👋\n\n"
@@ -353,7 +351,7 @@ def build_admin_stats_text() -> str:
     stats = load_stats_sync()
     users_count = len(all_user_ids())
     return (
-        "📊 <b>إحصائيات البوت</b>\n\n"
+        "📊 إحصائيات البوت\n\n"
         f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
         f"• التحميلات الناجحة: {stats.get('success', 0)}\n"
         f"• العمليات الفاشلة: {stats.get('failed', 0)}\n"
@@ -364,19 +362,19 @@ def build_admin_stats_text() -> str:
 
 def build_admin_users_text(limit: int = 10) -> str:
     users = get_latest_users(limit)
-    lines = [f"👥 <b>آخر المستخدمين النشطين:</b>"]
+    lines = [f"👥 آخر المستخدمين النشطين:"]
     for u in users:
         name = u.get("first_name") or "بدون اسم"
         username = f"@{u.get('username')}" if u.get("username") else "لا يوجد"
-        lines.append(f"• {esc(name)} — {esc(username)} — ID: <code>{u.get('id')}</code>")
+        lines.append(f"• {esc(name)} — {esc(username)} — ID: {u.get('id')}")
     return "\n".join(lines)
 
 def build_server_status_text() -> str:
     total_size = sum(p.stat().st_size for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
     file_count = sum(1 for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
     return (
-        "📁 <b>حالة السيرفر</b>\n\n"
-        f"• مجلد التحميل: <code>{BASE_DOWNLOAD_DIR}</code>\n"
+        "📁 حالة السيرفر\n\n"
+        f"• مجلد التحميل: {BASE_DOWNLOAD_DIR}\n"
         f"• الملفات المؤقتة: {file_count}\n"
         f"• حجم الملفات المؤقتة: {format_size(total_size)}\n"
         f"• العمليات النشطة: {len(ACTIVE_USERS)}\n"
@@ -425,6 +423,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if mode == "audio":
         opts["format"] = "bestaudio/best"
     else:
+        # إذا تم كسر الحظر بخادم محلي، لا داعي لتقييد حجم الفيديو لـ 50M في جودة السحب
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         opts["format"] = f"bestvideo[height<=720][filesize<{max_fs}]+bestaudio/best[height<=720][filesize<{max_fs}]/best"
         opts["merge_output_format"] = "mp4"
@@ -510,6 +509,7 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
 # ==========================================================
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تحديث مكتبة التحميل مباشرة من التيليجرام"""
     if not is_admin(update.effective_user.id): return
     msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
     try:
@@ -519,6 +519,7 @@ async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYP
         await msg.edit_text(f"❌ فشل التحديث: {e}")
 
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """استلام ملف الكوكيز من المطور مباشرة"""
     if not is_admin(update.effective_user.id): return
     if not update.message.document:
         return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود يوتيوب.")
@@ -529,6 +530,7 @@ async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text("✅ تم استلام وتركيب ملف الكوكيز بنجاح!")
 
 async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تحميل قاعدة البيانات فوراً للحماية من الضياع"""
     if not is_admin(update.effective_user.id): return
     try:
         with open(DB_FILE, "rb") as f:
@@ -537,7 +539,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
 # ==========================================================
-# أحداث المستخدم والروابط الموحدة
+# أحداث المستخدم
 # ==========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -551,17 +553,13 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
     await update.message.reply_text(
-        "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
-        reply_markup=admin_main_keyboard(), parse_mode="HTML"
+        "🛠 **لوحة الإدارة المتقدمة**\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
+        reply_markup=admin_main_keyboard(), parse_mode="Markdown"
     )
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
-    await update.message.reply_text(
-        build_playzone_links_text(),
-        reply_markup=build_playzone_links_keyboard(),
-        disable_web_page_preview=True
-    )
+    await update.message.reply_text(build_playzone_links_text(), reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
 
 async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     context.user_data["bc_active"] = False
@@ -575,12 +573,7 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
             await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
             sent += 1
             await asyncio.sleep(0.05)
-        except RetryAfter as e: 
-            await asyncio.sleep(int(e.retry_after) + 1)
-            try:
-                await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
-                sent += 1
-            except Exception: fail += 1
+        except RetryAfter as e: await asyncio.sleep(int(e.retry_after) + 1)
         except Exception: fail += 1
     
     stat_inc_sync("broadcasts")
@@ -592,10 +585,10 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     text = update.message.text.strip()
 
-    if text in ["🔗 روابط PlayZone", "/links", "\\links"]:
-        return await show_playzone_links(update, context)
     if text == "📘 دليل الاستخدام":
         return await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
+    if text == "🔗 روابط PlayZone":
+        return await update.message.reply_text(build_playzone_links_text(), reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
     
     if is_admin(uid) and context.user_data.get("bc_active"):
         return await handle_broadcast_text(update, context, text)
@@ -642,25 +635,25 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         return await safe_delete(query.message)
     elif data == "adm_stats":
         await query.answer()
-        return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard())
     elif data == "adm_users":
         await query.answer()
         return await query.message.edit_text(build_admin_users_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_server":
         await query.answer()
-        return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard())
     elif data == "adm_clean":
         await query.answer("جاري تنظيف الملفات المؤقتة...")
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
-        return await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard())
     elif data == "adm_bc":
         context.user_data["bc_active"] = True
         await query.answer()
-        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard())
     elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
         await query.answer("تم إلغاء الإذاعة")
-        return await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard())
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -697,6 +690,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
     
+    # رسالة الانتظار الذكية في حال كان السيرفر مشغولاً
     progress_data = {"text": "⏳ يرجى الانتظار..."}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
@@ -704,6 +698,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         try: await query.message.edit_reply_markup(reply_markup=None)
         except Exception: pass
 
+        # هنا ينتظر المستخدم دوره بأمان تام دون أن يسبب ضغطاً على السيرفر (نظام Semaphore)
         async with DOWNLOAD_SEMAPHORE:
             with progress_lock: progress_data["text"] = "🚀 بدأ التحميل... يرجى الانتظار ⏬"
             
@@ -730,7 +725,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 return await edit_message_smart(query.message, f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}", reply_markup=None)
 
             stop_event.set()
-            await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال المباشر...", reply_markup=None)
+            await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
 
             title = clean_title(request.get("title", "ملف ميديا"), 80)
             duration = int(request.get("duration") or 0)
@@ -798,6 +793,7 @@ def main():
     init_db()
     _cleanup_old_downloads_sync()
 
+    # دعم تشغيل السيرفرات المحلية لكسر حاجز التيليجرام 50MB
     builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
         builder.base_url(LOCAL_API_URL)
