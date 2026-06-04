@@ -10,7 +10,6 @@ import logging
 import threading
 import urllib.request
 import ipaddress
-import warnings
 from pathlib import Path
 from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
@@ -18,11 +17,10 @@ from concurrent.futures import ThreadPoolExecutor
 import yt_dlp
 import aiosqlite
 
-# إخفاء تحذيرات مكتبة جوجل من السجلات للحفاظ على نظافتها
-warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+# استخدام المكتبة الجديدة والحديثة من جوجل للذكاء الاصطناعي
+from google import genai
+from google.genai import types
 
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -69,17 +67,19 @@ logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=lo
 logger = logging.getLogger("PlayZone_Enterprise")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# التحقق من وجود FFmpeg المهم جداً
 if not shutil.which("ffmpeg"):
     logger.error("⚠️ تحذير: برنامج FFmpeg غير مثبت في السيرفر! دمج الفيديو والصوت قد يفشل.")
 
 # ==========================================================
-# 🤖 إعداد الذكاء الاصطناعي (مع نظام الإنقاذ وتوفير الرام)
+# 🤖 إعداد الذكاء الاصطناعي (أحدث إصدار من Google GenAI)
 # ==========================================================
 USER_CHATS = {} 
+USER_CHAT_COUNT = {}
 
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    genai_client = genai.Client(api_key=GEMINI_API_KEY)
+    genai_aclient = genai_client.aio  # العميل غير المتزامن
+    
     system_persona = (
         "أنت المساعد الذكي والودود لبوت PlayZone على تيليجرام. "
         "مهمتك هي مساعدة المستخدمين، الإجابة على أسئلتهم بأسلوب احترافي، وتصحيح نصوصهم إذا طلبوا ذلك. "
@@ -87,18 +87,21 @@ if GEMINI_API_KEY:
         "البوت يستطيع تحميل أي فيديو أو صوت من الإنترنت. إذا طلب المستخدم تحميل شيء، "
         "أخبره ببساطة أن يرسل الرابط مباشرة في المحادثة لتقوم بتحميله فوراً."
     )
-    safety_settings = {
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-    }
     
-    ai_model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=system_persona, safety_settings=safety_settings)
-    fallback_model = genai.GenerativeModel(model_name='gemini-pro', safety_settings=safety_settings)
+    safety_settings = [
+        types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+        types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+        types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
+        types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH),
+    ]
+    
+    ai_config = types.GenerateContentConfig(
+        system_instruction=system_persona,
+        safety_settings=safety_settings
+    )
 else:
-    ai_model = None
-    fallback_model = None
+    genai_aclient = None
+    ai_config = None
 
 # ==========================================================
 # 2. الذاكرة المؤقتة والتحكم
@@ -202,6 +205,8 @@ def generate_users_file(rows, filepath):
 async def init_db():
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute("PRAGMA journal_mode=WAL;")
+        await db.execute("PRAGMA synchronous=NORMAL;")
+        
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, last_name TEXT, first_seen INTEGER, last_seen INTEGER, is_banned INTEGER DEFAULT 0, is_admin INTEGER DEFAULT 0
@@ -330,14 +335,9 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
 def user_manage_keyboard(target_id: int) -> InlineKeyboardMarkup:
     is_ban = target_id in BANNED_USERS_CACHE
     is_adm = target_id in DYNAMIC_ADMINS_CACHE
-    
     ban_btn = InlineKeyboardButton("✅ فك الحظر", callback_data=f"unban:{target_id}") if is_ban else InlineKeyboardButton("🚫 حظر", callback_data=f"ban:{target_id}")
     adm_btn = InlineKeyboardButton("🔻 سحب الإدارة", callback_data=f"demote:{target_id}") if is_adm else InlineKeyboardButton("🛡️ ترقية لإدمن", callback_data=f"promote:{target_id}")
-    
-    return InlineKeyboardMarkup([
-        [ban_btn, adm_btn],
-        [InlineKeyboardButton("🔙 عودة للوحة", callback_data="adm_back")]
-    ])
+    return InlineKeyboardMarkup([[ban_btn, adm_btn], [InlineKeyboardButton("🔙 عودة للوحة", callback_data="adm_back")]])
 
 async def admin_panel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
@@ -356,13 +356,11 @@ async def handle_admin_files(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not doc: return
 
     file_name = doc.file_name.lower()
-    
     if file_name == "cookies.txt":
         status = await update.message.reply_text("⏳ جاري تركيب الكوكيز الجديد...")
         new_file = await context.bot.get_file(doc.file_id)
         await new_file.download_to_drive(COOKIES_FILE)
         await status.edit_text("✅ <b>تم تركيب ملف الكوكيز الجديد بنجاح!</b>\nسيتخطى البوت الآن حظر يوتيوب.", parse_mode="HTML")
-    
     elif file_name.endswith(".db"):
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("استعادة هذه النسخة ⚠️", callback_data=f"restore_{doc.file_id}")]])
         await update.message.reply_text("📦 <b>تم اكتشاف ملف قاعدة بيانات.</b>\nهل أنت متأكد من رغبتك في استعادة هذه النسخة؟ (سيتم مسح البيانات الحالية)", reply_markup=kb, parse_mode="HTML")
@@ -443,7 +441,6 @@ async def broadcast_worker(app: Application):
                 await app.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
                 sent += 1
             except Forbidden:
-                # إذا حظرنا المستخدم، نعلمه كمحظور لتسريع الإذاعات القادمة (ميزة جديدة)
                 fail += 1
                 await update_user_status(user_id, "is_banned", 1)
                 BANNED_USERS_CACHE.add(user_id)
@@ -457,16 +454,16 @@ async def broadcast_worker(app: Application):
             await asyncio.sleep(0.04) 
 
             if i % 1000 == 0 and i > 0:
-                try: await status_msg.edit_text(f"📢 جاري الإذاعة...\nتم الإرسال: {sent}\nفشل: {fail}")
+                try: await status_msg.edit_text(f"📢 جاري الإذاعة...\nتم الإرسال: {sent}\nفشل/حظر: {fail}")
                 except Exception: pass
 
         await stat_inc("broadcasts")
-        try: await status_msg.edit_text(f"✅ انتهت الإذاعة!\nالناجح: {sent}\nالفاشل/المحظورين: {fail}")
+        try: await status_msg.edit_text(f"✅ انتهت الإذاعة!\nالناجح: {sent}\nالفاشل: {fail}")
         except Exception: pass
         BROADCAST_QUEUE.task_done()
 
 # ==========================================================
-# 8. التوجيه الذكي للرسائل، الأزرار والذكاء الاصطناعي
+# 8. التوجيه الذكي للرسائل، الأزرار والمساعد الذكي
 # ==========================================================
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -503,38 +500,36 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if uid in ACTIVE_USERS:
         return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
     
-    # 3. الدردشة مع الذكاء الاصطناعي
+    # 3. الدردشة مع الذكاء الاصطناعي (أحدث مكتبة genai)
     if not is_valid_url(text):
-        if ai_model:
+        if genai_aclient:
             await context.bot.send_chat_action(chat_id=uid, action=ChatAction.TYPING)
             try:
-                if uid not in USER_CHATS: 
-                    USER_CHATS[uid] = ai_model.start_chat(history=[])
-                
-                # مسح الذاكرة إذا طالت المحادثة لتوفير مساحة الرام (ميزة جديدة)
-                if len(USER_CHATS[uid].history) > 20:
-                    USER_CHATS[uid] = ai_model.start_chat(history=[])
+                # إنشاء محادثة جديدة أو استكمال السابقة (مع مسحها كل 20 رسالة لحفظ الرام)
+                if uid not in USER_CHATS or USER_CHAT_COUNT.get(uid, 0) > 20:
+                    USER_CHATS[uid] = genai_aclient.chats.create(model='gemini-2.5-flash', config=ai_config)
+                    USER_CHAT_COUNT[uid] = 0
                     
-                response = await USER_CHATS[uid].send_message_async(text)
+                response = await USER_CHATS[uid].send_message(text)
+                USER_CHAT_COUNT[uid] += 1
                 reply_text = response.text[:4000]
+                
                 try: return await update.message.reply_text(reply_text, parse_mode="Markdown")
                 except Exception: return await update.message.reply_text(reply_text)
             except Exception as e:
                 logger.error(f"Gemini Chat Error: {e}")
-                USER_CHATS.pop(uid, None) 
-                
-                # تفعيل الموديل الاحتياطي
-                if "404" in str(e) or "not found" in str(e).lower() or "models/" in str(e):
-                    if fallback_model:
-                        try:
-                            fallback_resp = await asyncio.to_thread(fallback_model.generate_content, f"{system_persona}\n\nسؤال المستخدم: {text}")
-                            reply_text = fallback_resp.text[:4000]
-                            try: return await update.message.reply_text(reply_text, parse_mode="Markdown")
-                            except Exception: return await update.message.reply_text(reply_text)
-                        except Exception as fallback_e:
-                            logger.error(f"Gemini Fallback Error: {fallback_e}")
-                            
-                return await update.message.reply_text("❌ عذراً، لا يمكنني الاستجابة الآن بسبب ضغط على الخوادم.")
+                # محاولة الإنقاذ بالموديل المستقر
+                try:
+                    USER_CHATS[uid] = genai_aclient.chats.create(model='gemini-2.0-flash', config=ai_config)
+                    USER_CHAT_COUNT[uid] = 1
+                    response = await USER_CHATS[uid].send_message(text)
+                    reply_text = response.text[:4000]
+                    try: return await update.message.reply_text(reply_text, parse_mode="Markdown")
+                    except Exception: return await update.message.reply_text(reply_text)
+                except Exception as fallback_e:
+                    logger.error(f"Gemini Fallback Error: {fallback_e}")
+                    USER_CHATS.pop(uid, None)
+                    return await update.message.reply_text("❌ عذراً، لا يمكنني الاستجابة الآن بسبب ضغط على الخوادم.")
         else:
             return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
 
@@ -593,9 +588,7 @@ async def start_download(query, context, request: dict, mode: str):
                 return await edit_message_smart(query.message, f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}")
 
             stop_event.set()
-            
-            # تحديث ذكي يعلم المستخدم أن الرفع قيد التنفيذ للتيليجرام
-            await edit_message_smart(query.message, "📤 <b>جاري الرفع إلى تيليجرام...</b>\nقد يستغرق هذا دقيقة للملفات الكبيرة.", reply_markup=None)
+            await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
 
             title = clean_title(request.get("title", "ملف ميديا"), 80)
             duration = int(request.get("duration") or 0)
@@ -639,7 +632,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     uid = query.from_user.id
     
-    # معالجة الاستعادة بأمان (حذف الكاش لمنع التلف)
+    # استعادة قواعد البيانات مع المسح الآمن
     if data.startswith("restore_"):
         if not is_admin(uid): return await query.answer("❌ لا تملك صلاحيات.", show_alert=True)
         file_id = data.split("_")[1]
@@ -647,11 +640,8 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             new_file = await context.bot.get_file(file_id)
             await new_file.download_to_drive(DB_FILE)
-            
-            # مسح ملفات الكاش لقاعدة البيانات لتجنب تعطلها
             Path(str(DB_FILE) + "-wal").unlink(missing_ok=True)
             Path(str(DB_FILE) + "-shm").unlink(missing_ok=True)
-            
             KNOWN_USERS_CACHE.clear(); BANNED_USERS_CACHE.clear(); DYNAMIC_ADMINS_CACHE.clear()
             await init_db()
             await query.message.edit_text("✅ <b>تم استعادة قاعدة البيانات وتحديث النظام بنجاح!</b>", parse_mode="HTML")
@@ -736,21 +726,18 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         elif data == "adm_ai_debug":
             await query.answer("تحليل ذكي...")
-            if not ai_model or not LOG_FILE.exists(): return await query.message.edit_text("❌ لا يوجد أخطاء مسجلة أو مفتاح الذكاء الاصطناعي مفقود.", reply_markup=admin_main_keyboard())
+            if not genai_aclient or not LOG_FILE.exists(): return await query.message.edit_text("❌ لا يوجد أخطاء مسجلة أو مفتاح الذكاء الاصطناعي مفقود.", reply_markup=admin_main_keyboard())
             with open(LOG_FILE, "r", encoding="utf-8") as f: logs = "".join(f.readlines()[-40:])
             
             try:
-                resp = await asyncio.to_thread(ai_model.generate_content, f"اشرح هذه الأخطاء إن وجدت باختصار:\n{logs}")
+                resp = await genai_aclient.models.generate_content(model='gemini-2.5-flash', contents=f"اشرح هذه الأخطاء إن وجدت باختصار:\n{logs}")
                 reply_content = resp.text[:3000]
             except Exception as e:
-                if fallback_model and ("404" in str(e) or "not found" in str(e).lower()):
-                    try:
-                        fallback_resp = await asyncio.to_thread(fallback_model.generate_content, f"اشرح هذه الأخطاء إن وجدت باختصار:\n{logs}")
-                        reply_content = fallback_resp.text[:3000]
-                    except Exception:
-                        reply_content = f"❌ فشل الاتصال بالذكاء الاصطناعي: {e}"
-                else:
-                    reply_content = f"❌ خطأ: {e}"
+                try:
+                    resp = await genai_aclient.models.generate_content(model='gemini-2.0-flash', contents=f"اشرح هذه الأخطاء إن وجدت باختصار:\n{logs}")
+                    reply_content = resp.text[:3000]
+                except Exception:
+                    reply_content = f"❌ فشل الاتصال بالذكاء الاصطناعي: {e}"
                     
             try: await query.message.edit_text(f"🧠 {reply_content}", parse_mode="Markdown", reply_markup=admin_main_keyboard())
             except Exception: await query.message.edit_text(f"🧠 {reply_content}", reply_markup=admin_main_keyboard())
@@ -765,10 +752,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.execv(sys.executable, ['python'] + sys.argv)
         return
 
-    # إصلاح زر "إلغاء التحميل" ليقوم بمسح رسالة المعاينة لتنظيف الشاشة
     if data.startswith("cancel:"):
         context.user_data.pop(data.split(":")[1], None)
-        await query.answer("تم إلغاء الطلب ❌")
+        await query.answer("تم الإلغاء")
         return await safe_delete(query.message)
 
     await query.answer() 
@@ -783,7 +769,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id in BANNED_USERS_CACHE: return
     await register_user_cached(update.effective_user)
-    # استخدام النص الأصلي بدقة
     await update.message.reply_text(build_start_text(update.effective_user.first_name or ""), reply_markup=user_main_keyboard(), parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
@@ -799,7 +784,6 @@ async def post_init(app: Application):
 def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
     
-    # حل مشكلة تعارض الـ Polling عند التحديث (Conflict Error)
     try:
         builder = Application.builder().token(TOKEN)
         if LOCAL_API_URL: builder.base_url(LOCAL_API_URL)
