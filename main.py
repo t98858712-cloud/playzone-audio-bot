@@ -648,7 +648,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_bc":
         context.user_data["bc_active"] = True
         await query.answer()
-        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_main_keyboard())
+        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard())
     elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
         await query.answer("تم إلغاء الإذاعة")
@@ -726,7 +726,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             stop_event.set()
             await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال المباشر...", reply_markup=None)
 
-            title = clean_title(request.get("title", "ملف مedia"), 80)
+            title = clean_title(request.get("title", "ملف ميديا"), 80)
             duration = int(request.get("duration") or 0)
             caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"
             share_link = f"https://t.me/share/url?url={quote(url)}&text={quote('🎬 ' + title)}"
