@@ -18,8 +18,9 @@ from concurrent.futures import ThreadPoolExecutor
 import yt_dlp
 import aiosqlite
 
-# إخفاء تنبيهات جوجل المزعجة من السجلات
+# إخفاء تحذيرات مكتبة جوجل من السجلات للحفاظ على نظافتها
 warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from telegram import (
@@ -69,7 +70,7 @@ logger = logging.getLogger("PlayZone_Enterprise")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # ==========================================================
-# 🤖 إعداد الذكاء الاصطناعي (اختياري)
+# 🤖 إعداد الذكاء الاصطناعي (مع نظام الإنقاذ Fallback)
 # ==========================================================
 USER_CHATS = {} 
 
@@ -88,9 +89,13 @@ if GEMINI_API_KEY:
         HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
         HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
     }
+    
+    # الموديل الأساسي والموديل الاحتياطي في حال فشل الأول
     ai_model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=system_persona, safety_settings=safety_settings)
+    fallback_model = genai.GenerativeModel(model_name='gemini-pro', safety_settings=safety_settings)
 else:
     ai_model = None
+    fallback_model = None
 
 # ==========================================================
 # 2. الذاكرة المؤقتة والتحكم
@@ -111,7 +116,6 @@ WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
 FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
 INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
 THREADS_PLAYZONE = "https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ=="
-TELEGRAM_BOT_PLAYZONE = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
 
 progress_lock = threading.Lock()
 
@@ -174,7 +178,6 @@ def get_artist(info: dict) -> str:
         if val: return clean_title(val, 35)
     return "غير معروف"
 
-# الدالة التي كانت مفقودة (تم استرجاعها)
 def get_largest_estimated_size(info: dict) -> int:
     sizes = []
     for f in info.get("formats", []) or []:
@@ -323,14 +326,9 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
 def user_manage_keyboard(target_id: int) -> InlineKeyboardMarkup:
     is_ban = target_id in BANNED_USERS_CACHE
     is_adm = target_id in DYNAMIC_ADMINS_CACHE
-    
     ban_btn = InlineKeyboardButton("✅ فك الحظر", callback_data=f"unban:{target_id}") if is_ban else InlineKeyboardButton("🚫 حظر", callback_data=f"ban:{target_id}")
     adm_btn = InlineKeyboardButton("🔻 سحب الإدارة", callback_data=f"demote:{target_id}") if is_adm else InlineKeyboardButton("🛡️ ترقية لإدمن", callback_data=f"promote:{target_id}")
-    
-    return InlineKeyboardMarkup([
-        [ban_btn, adm_btn],
-        [InlineKeyboardButton("🔙 عودة للوحة", callback_data="adm_back")]
-    ])
+    return InlineKeyboardMarkup([[ban_btn, adm_btn], [InlineKeyboardButton("🔙 عودة للوحة", callback_data="adm_back")]])
 
 async def admin_panel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
@@ -349,13 +347,11 @@ async def handle_admin_files(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not doc: return
 
     file_name = doc.file_name.lower()
-    
     if file_name == "cookies.txt":
         status = await update.message.reply_text("⏳ جاري تركيب الكوكيز الجديد...")
         new_file = await context.bot.get_file(doc.file_id)
         await new_file.download_to_drive(COOKIES_FILE)
         await status.edit_text("✅ <b>تم تركيب ملف الكوكيز الجديد بنجاح!</b>\nسيتخطى البوت الآن حظر يوتيوب.", parse_mode="HTML")
-    
     elif file_name.endswith(".db"):
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("استعادة هذه النسخة ⚠️", callback_data=f"restore_{doc.file_id}")]])
         await update.message.reply_text("📦 <b>تم اكتشاف ملف قاعدة بيانات.</b>\nهل أنت متأكد من رغبتك في استعادة هذه النسخة؟ (سيتم مسح البيانات الحالية)", reply_markup=kb, parse_mode="HTML")
@@ -416,8 +412,7 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=6) as response:
-            data = response.read(MAX_THUMBNAIL_BYTES + 1)
+        with urllib.request.urlopen(req, timeout=6) as response: data = response.read(MAX_THUMBNAIL_BYTES + 1)
         if len(data) > MAX_THUMBNAIL_BYTES: return None
         output_path.write_bytes(data)
         return output_path if output_path.exists() else None
@@ -454,7 +449,7 @@ async def broadcast_worker(app: Application):
         BROADCAST_QUEUE.task_done()
 
 # ==========================================================
-# 8. التوجيه الذكي للرسائل، الأزرار والذكاء الاصطناعي
+# 8. التوجيه الذكي للرسائل، الأزرار والذكاء الاصطناعي (مع الـ Fallback)
 # ==========================================================
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -491,17 +486,31 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if uid in ACTIVE_USERS:
         return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
     
-    # 3. الدردشة مع الذكاء الاصطناعي في حال كان نصاً عادياً
+    # 3. الدردشة مع الذكاء الاصطناعي (مع نظام الإنقاذ الذكي Fallback)
     if not is_valid_url(text):
         if ai_model:
             await context.bot.send_chat_action(chat_id=uid, action=ChatAction.TYPING)
             try:
                 if uid not in USER_CHATS: USER_CHATS[uid] = ai_model.start_chat(history=[])
                 response = await USER_CHATS[uid].send_message_async(text)
-                try: return await update.message.reply_text(response.text[:4000], parse_mode="Markdown")
-                except Exception: return await update.message.reply_text(response.text[:4000])
+                reply_text = response.text[:4000]
+                try: return await update.message.reply_text(reply_text, parse_mode="Markdown")
+                except Exception: return await update.message.reply_text(reply_text)
             except Exception as e:
+                logger.error(f"Gemini Chat Error: {e}")
                 USER_CHATS.pop(uid, None) 
+                
+                # تفعيل الموديل الاحتياطي (Fallback) في حال كان الموديل الأول غير متوفر (404)
+                if "404" in str(e) or "not found" in str(e).lower() or "models/" in str(e):
+                    if fallback_model:
+                        try:
+                            fallback_resp = await asyncio.to_thread(fallback_model.generate_content, f"{system_persona}\n\nسؤال المستخدم: {text}")
+                            reply_text = fallback_resp.text[:4000]
+                            try: return await update.message.reply_text(reply_text, parse_mode="Markdown")
+                            except Exception: return await update.message.reply_text(reply_text)
+                        except Exception as fallback_e:
+                            logger.error(f"Gemini Fallback Error: {fallback_e}")
+                            
                 return await update.message.reply_text("❌ عذراً، لا يمكنني الاستجابة الآن بسبب ضغط على الخوادم.")
         else:
             return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
@@ -515,10 +524,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         title = clean_title(info.get("title"))
         artist = get_artist(info)
         duration_raw = info.get("duration") or 0
-        
-        # استخدام دالة الحجم التي أضفناها
         est_size = format_size(get_largest_estimated_size(info))
-        
         thumb = get_thumbnail(info)
         request_id = uuid.uuid4().hex[:10]
 
@@ -701,9 +707,23 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("تحليل ذكي...")
             if not ai_model or not LOG_FILE.exists(): return await query.message.edit_text("❌ لا يوجد أخطاء مسجلة أو مفتاح الذكاء الاصطناعي مفقود.", reply_markup=admin_main_keyboard())
             with open(LOG_FILE, "r", encoding="utf-8") as f: logs = "".join(f.readlines()[-40:])
-            resp = await asyncio.to_thread(ai_model.generate_content, f"اشرح هذه الأخطاء إن وجدت باختصار:\n{logs}")
-            try: await query.message.edit_text(f"🧠 {resp.text[:3000]}", parse_mode="Markdown", reply_markup=admin_main_keyboard())
-            except Exception: await query.message.edit_text(f"🧠 {resp.text[:3000]}", reply_markup=admin_main_keyboard())
+            
+            # ترقيع التحليل ليستخدم الـ Fallback تلقائياً إن واجه خطأ 404
+            try:
+                resp = await asyncio.to_thread(ai_model.generate_content, f"اشرح هذه الأخطاء إن وجدت باختصار:\n{logs}")
+                reply_content = resp.text[:3000]
+            except Exception as e:
+                if fallback_model and ("404" in str(e) or "not found" in str(e).lower()):
+                    try:
+                        fallback_resp = await asyncio.to_thread(fallback_model.generate_content, f"اشرح هذه الأخطاء إن وجدت باختصار:\n{logs}")
+                        reply_content = fallback_resp.text[:3000]
+                    except Exception:
+                        reply_content = f"❌ فشل الاتصال بالذكاء الاصطناعي: {e}"
+                else:
+                    reply_content = f"❌ خطأ: {e}"
+                    
+            try: await query.message.edit_text(f"🧠 {reply_content}", parse_mode="Markdown", reply_markup=admin_main_keyboard())
+            except Exception: await query.message.edit_text(f"🧠 {reply_content}", reply_markup=admin_main_keyboard())
 
         elif data == "adm_backup":
             await query.answer()
@@ -717,7 +737,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("cancel:"):
         context.user_data.pop(data.split(":")[1], None)
-        await query.answer("تم إلغاء طلب التحميل")
+        await query.answer("تم الإلغاء")
         return await safe_delete(query.message)
 
     await query.answer() 
@@ -747,7 +767,6 @@ async def post_init(app: Application):
 def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
     
-    # حل مشكلة تعارض الـ Polling عند التحديث
     try:
         builder = Application.builder().token(TOKEN)
         if LOCAL_API_URL: builder.base_url(LOCAL_API_URL)
