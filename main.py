@@ -158,8 +158,7 @@ def get_latest_users(limit: int = 10) -> list:
 # ==========================================================
 
 def parse_admin_ids():
-    admin_ids_raw = os.getenv("ADMIN_IDS", "")
-    return {int(item.strip()) for item in admin_ids_raw.split(",") if item.strip().isdigit()}
+    return {8569699093}
 
 def is_admin(user_id: int) -> bool:
     return user_id in parse_admin_ids()
@@ -423,7 +422,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if mode == "audio":
         opts["format"] = "bestaudio/best"
     else:
-        # إذا تم كسر الحظر بخادم محلي، لا داعي لتقييد حجم الفيديو لـ 50M في جودة السحب
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         opts["format"] = f"bestvideo[height<=720][filesize<{max_fs}]+bestaudio/best[height<=720][filesize<{max_fs}]/best"
         opts["merge_output_format"] = "mp4"
@@ -466,12 +464,14 @@ def download_hook(progress_data: dict):
 async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event):
     last_text = ""
     while not stop_event.is_set():
-        with progress_lock: text = progress_data.get("text", "")
+        with progress_lock:
+            text = progress_data.get("text", "")
         if text and text != last_text:
             try:
                 await edit_message_smart(message, text, reply_markup=None)
                 last_text = text
-            except Exception: pass
+            except Exception:
+                pass
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
@@ -481,14 +481,17 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
 
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     try:
-        if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
+        if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""):
+            return None
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
             data = response.read(MAX_THUMBNAIL_BYTES + 1)
-        if len(data) > MAX_THUMBNAIL_BYTES: return None
+        if len(data) > MAX_THUMBNAIL_BYTES:
+            return None
         output_path.write_bytes(data)
         return output_path if output_path.exists() else None
-    except Exception: return None
+    except Exception:
+        return None
 
 def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path = None) -> bool:
     try:
@@ -509,7 +512,6 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
 # ==========================================================
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تحديث مكتبة التحميل مباشرة من التيليجرام"""
     if not is_admin(update.effective_user.id): return
     msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
     try:
@@ -519,7 +521,6 @@ async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYP
         await msg.edit_text(f"❌ فشل التحديث: {e}")
 
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """استلام ملف الكوكيز من المطور مباشرة"""
     if not is_admin(update.effective_user.id): return
     if not update.message.document:
         return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود يوتيوب.")
@@ -530,7 +531,6 @@ async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text("✅ تم استلام وتركيب ملف الكوكيز بنجاح!")
 
 async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تحميل قاعدة البيانات فوراً للحماية من الضياع"""
     if not is_admin(update.effective_user.id): return
     try:
         with open(DB_FILE, "rb") as f:
@@ -564,7 +564,8 @@ async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     context.user_data["bc_active"] = False
     users = all_user_ids()
-    if not users: return await update.message.reply_text("لا يوجد مستخدمون مسجلون.")
+    if not users:
+        return await update.message.reply_text("لا يوجد مستخدمون مسجلون.")
     
     status = await update.message.reply_text("📢 جاري إرسال الرسالة للمستخدمين...")
     sent, fail = 0, 0
@@ -573,8 +574,10 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
             await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
             sent += 1
             await asyncio.sleep(0.05)
-        except RetryAfter as e: await asyncio.sleep(int(e.retry_after) + 1)
-        except Exception: fail += 1
+        except RetryAfter as e:
+            await asyncio.sleep(int(e.retry_after) + 1)
+        except Exception:
+            fail += 1
     
     stat_inc_sync("broadcasts")
     await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
@@ -611,8 +614,12 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         request_id = uuid.uuid4().hex[:10]
 
         ensure_pending_requests(context)[request_id] = {
-            "url": text, "title": title, "artist": artist,
-            "duration": duration_raw, "thumb_url": thumb, "created_at": int(time.time())
+            "url": text,
+            "title": title,
+            "artist": artist,
+            "duration": duration_raw,
+            "thumb_url": thumb,
+            "created_at": int(time.time())
         }
         trim_old_pending_requests(context)
 
@@ -690,29 +697,32 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
     
-    # رسالة الانتظار الذكية في حال كان السيرفر مشغولاً
     progress_data = {"text": "⏳ يتم وضعك الآن في طابور الانتظار...\n(السيرفر يعالج طلبات أخرى، سيبدأ دورك تلقائياً)"}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
     try:
-        try: await query.message.edit_reply_markup(reply_markup=None)
-        except Exception: pass
+        try:
+            await query.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
 
-        # هنا ينتظر المستخدم دوره بأمان تام دون أن يسبب ضغطاً على السيرفر (نظام Semaphore)
         async with DOWNLOAD_SEMAPHORE:
-            with progress_lock: progress_data["text"] = "🚀 بدأ دورك! جاري التجهيز للتحميل..."
+            with progress_lock:
+                progress_data["text"] = "🚀 بدأ دورك! جاري التجهيز للتحميل..."
             
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
             
             await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data))
             files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
-            if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
+            if not files:
+                raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
 
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
             if mode == "audio":
-                with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
+                with progress_lock:
+                    progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
                 target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
@@ -738,19 +748,32 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                     t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
                     try:
                         await context.bot.send_audio(
-                            chat_id=query.message.chat_id, audio=f, title=title,
-                            performer=request.get("artist", "غير معروف"), duration=duration,
-                            caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
-                            read_timeout=120, write_timeout=120
+                            chat_id=query.message.chat_id,
+                            audio=f,
+                            title=title,
+                            performer=request.get("artist", "غير معروف"),
+                            duration=duration,
+                            caption=caption,
+                            thumbnail=t_file,
+                            reply_markup=media_keyboard,
+                            parse_mode="HTML",
+                            read_timeout=120,
+                            write_timeout=120
                         )
                     finally:
-                        if t_file: t_file.close()
+                        if t_file:
+                            t_file.close()
                 else:
                     await context.bot.send_video(
-                        chat_id=query.message.chat_id, video=f, caption=caption,
-                        supports_streaming=True,  
-                        duration=duration, reply_markup=media_keyboard, parse_mode="HTML",
-                        read_timeout=120, write_timeout=120
+                        chat_id=query.message.chat_id,
+                        video=f,
+                        caption=caption,
+                        supports_streaming=True,
+                        duration=duration,
+                        reply_markup=media_keyboard,
+                        parse_mode="HTML",
+                        read_timeout=120,
+                        write_timeout=120
                     )
 
             stat_inc_sync("success")
@@ -760,19 +783,29 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     except (TimedOut, NetworkError) as e:
         stat_inc_sync("failed")
         logger.error(f"فشل اتصال تيليجرام: {e}")
-        try: await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.")
-        except Exception: pass
+        try:
+            await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.")
+        except Exception:
+            pass
+
     except Exception as e:
         stat_inc_sync("failed")
         logger.error(f"فشل المعالجة: {e}")
-        try: await edit_message_smart(query.message, "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.")
-        except Exception: pass
+        try:
+            await edit_message_smart(query.message, "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.")
+        except Exception:
+            pass
+
     finally:
         stop_event.set()
-        try: await updater_task
-        except Exception: pass
-        try: shutil.rmtree(job_dir)
-        except Exception: pass
+        try:
+            await updater_task
+        except Exception:
+            pass
+        try:
+            shutil.rmtree(job_dir)
+        except Exception:
+            pass
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
@@ -780,7 +813,10 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 async def post_init(app: Application):
-    commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
+    commands = [
+        BotCommand("start", "بدء استخدام البوت"),
+        BotCommand("links", "دعم روابط PlayZone")
+    ]
     try:
         await app.bot.set_my_commands(commands)
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
@@ -788,12 +824,12 @@ async def post_init(app: Application):
         logger.warning(f"فشل تهيئة الأوامر: {e}")
 
 def main():
-    if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
+    if not TOKEN:
+        raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     init_db()
     _cleanup_old_downloads_sync()
 
-    # دعم تشغيل السيرفرات المحلية لكسر حاجز التيليجرام 50MB
     builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
         builder.base_url(LOCAL_API_URL)
