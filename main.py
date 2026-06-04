@@ -5,7 +5,6 @@ import html
 import uuid
 import asyncio
 import shutil
-import sqlite3
 import logging
 import threading
 import subprocess
@@ -16,6 +15,7 @@ from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
 
 import yt_dlp
+import aiosqlite
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -50,7 +50,6 @@ DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 DATA_DIR.mkdir(exist_ok=True)
 
 DB_FILE = DATA_DIR / "bot_database.db"
-DB_LOCK = threading.Lock()
 
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
@@ -86,68 +85,68 @@ for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# إدارة قاعدة البيانات (SQLite3 WAL Mode)
+# إدارة قاعدة البيانات (Asynchronous SQLite3)
 # ==========================================================
 
-def init_db():
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY,
-                    username TEXT,
-                    first_name TEXT,
-                    last_name TEXT,
-                    first_seen INTEGER,
-                    last_seen INTEGER
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS stats (
-                    key TEXT PRIMARY KEY,
-                    value INTEGER
-                )
-            """)
-            for k in ["requests", "success", "failed", "bytes", "broadcasts"]:
-                conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (k,))
+async def init_db():
+    async with aiosqlite.connect(DB_FILE) as db:
+        await db.execute("PRAGMA journal_mode=WAL;")
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                first_seen INTEGER,
+                last_seen INTEGER
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS stats (
+                key TEXT PRIMARY KEY,
+                value INTEGER
+            )
+        """)
+        for k in ["requests", "success", "failed", "bytes", "broadcasts"]:
+            await db.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (k,))
+        await db.commit()
 
-def register_user_sync(user):
+async def register_user(user):
     if not user: return
     now = int(time.time())
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT first_seen FROM users WHERE id = ?", (user.id,))
-            row = cur.fetchone()
+    async with aiosqlite.connect(DB_FILE) as db:
+        async with db.execute("SELECT first_seen FROM users WHERE id = ?", (user.id,)) as cursor:
+            row = await cursor.fetchone()
             first_seen = row[0] if row else now
-            conn.execute("""
-                INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now))
+        
+        await db.execute("""
+            INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now))
+        await db.commit()
 
-def stat_inc_sync(key: str, value: int = 1):
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, key))
+async def stat_inc(key: str, value: int = 1):
+    async with aiosqlite.connect(DB_FILE) as db:
+        await db.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, key))
+        await db.commit()
 
-def load_stats_sync() -> dict:
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            rows = conn.execute("SELECT key, value FROM stats").fetchall()
+async def load_stats() -> dict:
+    async with aiosqlite.connect(DB_FILE) as db:
+        async with db.execute("SELECT key, value FROM stats") as cursor:
+            rows = await cursor.fetchall()
             return {k: v for k, v in rows}
 
-def all_user_ids() -> list:
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            rows = conn.execute("SELECT id FROM users").fetchall()
+async def all_user_ids() -> list:
+    async with aiosqlite.connect(DB_FILE) as db:
+        async with db.execute("SELECT id FROM users") as cursor:
+            rows = await cursor.fetchall()
             return [row[0] for row in rows]
 
-def get_latest_users(limit: int = 10) -> list:
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("SELECT * FROM users ORDER BY last_seen DESC LIMIT ?", (limit,)).fetchall()
+async def get_latest_users(limit: int = 10) -> list:
+    async with aiosqlite.connect(DB_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users ORDER BY last_seen DESC LIMIT ?", (limit,)) as cursor:
+            rows = await cursor.fetchall()
             return [dict(r) for r in rows]
 
 # ==========================================================
@@ -273,8 +272,10 @@ def _cleanup_old_downloads_sync():
             try:
                 if now - item.stat().st_mtime > OLD_DOWNLOADS_EXPIRE_SECONDS:
                     shutil.rmtree(item) if item.is_dir() else item.unlink()
-            except Exception: pass
-    except Exception: pass
+            except Exception as e:
+                logger.debug(f"Failed to clean old item {item}: {e}")
+    except Exception as e:
+        logger.debug(f"Failed to access download dir for cleanup: {e}")
 
 def _force_cleanup_all_sync() -> int:
     removed = 0
@@ -284,8 +285,10 @@ def _force_cleanup_all_sync() -> int:
                 if item.is_dir(): shutil.rmtree(item)
                 else: item.unlink()
                 removed += 1
-            except Exception: pass
-    except Exception: pass
+            except Exception as e:
+                logger.debug(f"Failed to force clean item {item}: {e}")
+    except Exception as e:
+        logger.debug(f"Failed to access download dir for force cleanup: {e}")
     return removed
 
 # ==========================================================
@@ -349,9 +352,10 @@ def build_guide_text() -> str:
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
     return f"🎬 <b>{esc(title)}</b>\n<b>{esc(artist)}</b>\n⏱ {esc(duration)} - 💾 {esc(est_size)}"
 
-def build_admin_stats_text() -> str:
-    stats = load_stats_sync()
-    users_count = len(all_user_ids())
+async def build_admin_stats_text() -> str:
+    stats = await load_stats()
+    users_list = await all_user_ids()
+    users_count = len(users_list)
     return (
         "📊 <b>إحصائيات البوت</b>\n\n"
         f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
@@ -362,8 +366,8 @@ def build_admin_stats_text() -> str:
         f"• عدد الإذاعات: {stats.get('broadcasts', 0)}"
     )
 
-def build_admin_users_text(limit: int = 10) -> str:
-    users = get_latest_users(limit)
+async def build_admin_users_text(limit: int = 10) -> str:
+    users = await get_latest_users(limit)
     lines = [f"👥 <b>آخر المستخدمين النشطين:</b>"]
     for u in users:
         name = u.get("first_name") or "بدون اسم"
@@ -389,7 +393,7 @@ def build_server_status_text() -> str:
 
 async def safe_delete(message):
     try: await message.delete()
-    except Exception: pass
+    except Exception as e: logger.debug(f"Failed to delete message: {e}")
 
 async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: str = "HTML"):
     try:
@@ -406,7 +410,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     if thumb and (thumb.startswith("http://") or thumb.startswith("https://")):
         try:
             return await update.message.reply_photo(photo=thumb, caption=caption, reply_markup=keyboard, parse_mode="HTML")
-        except Exception: pass
+        except Exception as e: logger.debug(f"Failed to send preview photo: {e}")
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
@@ -477,7 +481,7 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
             try:
                 await edit_message_smart(message, text, reply_markup=None)
                 last_text = text
-            except Exception: pass
+            except Exception as e: logger.debug(f"Progress update error: {e}")
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
@@ -494,7 +498,9 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
         if len(data) > MAX_THUMBNAIL_BYTES: return None
         output_path.write_bytes(data)
         return output_path if output_path.exists() else None
-    except Exception: return None
+    except Exception as e:
+        logger.debug(f"Thumbnail download failed: {e}")
+        return None
 
 def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path = None) -> bool:
     try:
@@ -516,12 +522,21 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
-    msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
+    msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل في الخلفية...")
     try:
-        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
-        await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار.")
+        process = await asyncio.create_subprocess_exec(
+            os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode == 0:
+            await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار.")
+        else:
+            await msg.edit_text(f"❌ فشل التحديث.\n\nالخطأ: {stderr.decode().strip()}")
     except Exception as e:
-        await msg.edit_text(f"❌ فشل التحديث: {e}")
+        await msg.edit_text(f"❌ حدث خطأ غير متوقع: {e}")
 
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
@@ -536,8 +551,9 @@ async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     try:
-        with open(DB_FILE, "rb") as f:
-            await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياطية من قاعدة البيانات.")
+        # قراءة الملف بـ to_thread لتجنب إيقاف العمليات
+        file_data = await asyncio.to_thread(DB_FILE.read_bytes)
+        await update.message.reply_document(document=file_data, filename="bot_database.db", caption="📦 نسخة احتياطية من قاعدة البيانات.")
     except Exception as e:
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
@@ -546,7 +562,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    register_user_sync(update.effective_user)
+    await register_user(update.effective_user)
     await update.message.reply_text(
         build_start_text(update.effective_user.first_name or ""),
         reply_markup=user_main_keyboard(), parse_mode="HTML", disable_web_page_preview=True
@@ -561,7 +577,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    register_user_sync(update.effective_user)
+    await register_user(update.effective_user)
     await update.message.reply_text(
         build_playzone_links_text(),
         reply_markup=build_playzone_links_keyboard(),
@@ -570,7 +586,7 @@ async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     context.user_data["bc_active"] = False
-    users = all_user_ids()
+    users = await all_user_ids()
     if not users: return await update.message.reply_text("لا يوجد مستخدمون مسجلون.")
     
     status = await update.message.reply_text("📢 جاري إرسال الرسالة للمستخدمين...")
@@ -588,12 +604,12 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
             except Exception: fail += 1
         except Exception: fail += 1
     
-    stat_inc_sync("broadcasts")
+    await stat_inc("broadcasts")
     await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
-    register_user_sync(update.effective_user)
+    await register_user(update.effective_user)
     uid = update.effective_user.id
     text = update.message.text.strip()
 
@@ -631,7 +647,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         caption = build_preview_caption(title, artist, format_duration(duration_raw), est_size)
         await safe_delete(status)
         await send_preview(update, thumb, caption, build_preview_keyboard(request_id))
-        stat_inc_sync("requests")
+        await stat_inc("requests")
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
         await status.edit_text("❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة وغير محذوف، ثم حاول مرة أخرى.")
@@ -647,16 +663,18 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         return await safe_delete(query.message)
     elif data == "adm_stats":
         await query.answer()
-        return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        stats_text = await build_admin_stats_text()
+        return await query.message.edit_text(stats_text, reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_users":
         await query.answer()
-        return await query.message.edit_text(build_admin_users_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        users_text = await build_admin_users_text()
+        return await query.message.edit_text(users_text, reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_server":
         await query.answer()
         return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_clean":
         await query.answer("جاري تنظيف الملفات المؤقتة...")
-        removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
+        removed = await asyncio.to_thread(_force_cleanup_all_sync)
         return await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_bc":
         context.user_data["bc_active"] = True
@@ -716,6 +734,8 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
             
             await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data))
+            
+            # File system iterdir should ideally be in executor, but it's fast enough here unless disk is completely blocked
             files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
             if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
 
@@ -743,6 +763,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             share_link = f"https://t.me/share/url?url={quote(url)}&text={quote('🎬 ' + title)}"
             media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📤 مشاركة", url=share_link)]])
 
+            # قراءة ورفع الملف يتم معالجته داخلياً بواسطة إطار العمل بشكل غير متزامن
             with open(target_file, "rb") as f:
                 if mode == "audio":
                     t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
@@ -763,17 +784,17 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                         read_timeout=120, write_timeout=120
                     )
 
-            stat_inc_sync("success")
-            stat_inc_sync("bytes", file_size)
+            await stat_inc("success")
+            await stat_inc("bytes", file_size)
             await safe_delete(query.message)
 
     except (TimedOut, NetworkError) as e:
-        stat_inc_sync("failed")
+        await stat_inc("failed")
         logger.error(f"فشل اتصال تيليجرام: {e}")
         try: await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.")
         except Exception: pass
     except Exception as e:
-        stat_inc_sync("failed")
+        await stat_inc("failed")
         logger.error(f"فشل المعالجة: {e}")
         try: await edit_message_smart(query.message, "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.")
         except Exception: pass
@@ -781,8 +802,8 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         stop_event.set()
         try: await updater_task
         except Exception: pass
-        try: shutil.rmtree(job_dir)
-        except Exception: pass
+        try: await asyncio.to_thread(shutil.rmtree, job_dir)
+        except Exception as e: logger.debug(f"Failed to cleanup job dir: {e}")
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
@@ -790,6 +811,10 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 async def post_init(app: Application):
+    # تهيئة قاعدة البيانات الغير متزامنة وحذف الملفات القديمة
+    await init_db()
+    await asyncio.to_thread(_cleanup_old_downloads_sync)
+    
     commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
     try:
         await app.bot.set_my_commands(commands)
@@ -799,9 +824,6 @@ async def post_init(app: Application):
 
 def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
-
-    init_db()
-    _cleanup_old_downloads_sync()
 
     builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
@@ -824,8 +846,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
-    # تفعيل drop_pending_updates بشكل إجباري لتجنب مشاكل الـ Conflict عند تكرار تشغيل الحاوية
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Fully Asynchronous).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
