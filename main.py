@@ -10,12 +10,16 @@ import logging
 import threading
 import urllib.request
 import ipaddress
+import warnings
 from pathlib import Path
 from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
 
 import yt_dlp
 import aiosqlite
+
+# إخفاء تنبيهات جوجل المزعجة من السجلات
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from telegram import (
@@ -27,7 +31,7 @@ from telegram import (
     BotCommand,
 )
 from telegram.constants import ChatAction
-from telegram.error import BadRequest, RetryAfter, TimedOut, NetworkError
+from telegram.error import BadRequest, RetryAfter, TimedOut, NetworkError, Conflict
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -102,7 +106,6 @@ MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(max(4, (os.cpu_count() or 2) * 2)
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 
-# نصوص وروابط PlayZone الأصلية
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@P1ay_Z0ne_Bot")
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
 FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
@@ -170,6 +173,14 @@ def get_artist(info: dict) -> str:
         val = info.get(key)
         if val: return clean_title(val, 35)
     return "غير معروف"
+
+# الدالة التي كانت مفقودة (تم استرجاعها)
+def get_largest_estimated_size(info: dict) -> int:
+    sizes = []
+    for f in info.get("formats", []) or []:
+        try: sizes.append(int(f.get("filesize") or f.get("filesize_approx") or 0))
+        except Exception: pass
+    return max(sizes) if sizes else 0
 
 def generate_users_file(rows, filepath):
     with open(filepath, "w", encoding="utf-8") as f:
@@ -332,7 +343,6 @@ async def admin_panel_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(text, reply_markup=admin_main_keyboard(), parse_mode="HTML")
 
-# التعرف التلقائي على الملفات من الإدمن
 async def handle_admin_files(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     doc = update.message.document
@@ -379,7 +389,6 @@ def download_hook(progress_data: dict):
                 speed = d.get("speed") or 0
                 if total:
                     percent = downloaded / total * 100
-                    # تصميم شريط التقدم الأصلي الخاص بـ PlayZone
                     progress_data["text"] = (
                         "📥 <b>جاري تحميل الملف...</b>\n\n"
                         f"{make_progress_bar(percent)}  {percent:.1f}%\n"
@@ -506,7 +515,10 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         title = clean_title(info.get("title"))
         artist = get_artist(info)
         duration_raw = info.get("duration") or 0
+        
+        # استخدام دالة الحجم التي أضفناها
         est_size = format_size(get_largest_estimated_size(info))
+        
         thumb = get_thumbnail(info)
         request_id = uuid.uuid4().hex[:10]
 
@@ -524,7 +536,7 @@ async def start_download(query, context, request: dict, mode: str):
     uid = query.from_user.id
     ACTIVE_USERS.add(uid)
     job_dir = BASE_DOWNLOAD_DIR / f"{uid}_{int(time.time())}_{uuid.uuid4().hex[:4]}"
-    job_dir.mkdir(exist_ok=True)
+    job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
     progress_data = {"text": "⏳ يرجى الانتظار..."}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
@@ -552,12 +564,10 @@ async def start_download(query, context, request: dict, mode: str):
                 return await edit_message_smart(query.message, f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}")
 
             stop_event.set()
-            # نص الإرسال الأصلي
             await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
 
             title = clean_title(request.get("title", "ملف ميديا"), 80)
             duration = int(request.get("duration") or 0)
-            # تنسيق المشاركة الأصلي
             caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"
             share_link = f"https://t.me/share/url?url={quote(request['url'])}&text={quote('🎬 ' + title)}"
             media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📤 مشاركة", url=share_link)]])
@@ -598,7 +608,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     uid = query.from_user.id
     
-    # معالجة استعادة قواعد البيانات
     if data.startswith("restore_"):
         if not is_admin(uid): return await query.answer("❌ لا تملك صلاحيات.", show_alert=True)
         file_id = data.split("_")[1]
@@ -612,7 +621,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e: await query.message.edit_text(f"❌ حدث خطأ: {e}")
         return
 
-    # معالجة أزرار الإدارة التفاعلية
     if data.startswith(("ban:", "unban:", "promote:", "demote:")):
         if not is_admin(uid): return await query.answer("❌ لا تملك صلاحيات.", show_alert=True)
         action, target_str = data.split(":")
@@ -637,7 +645,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         return await query.message.edit_reply_markup(reply_markup=user_manage_keyboard(target_id))
 
-    # معالجة لوحة التحكم
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer("❌ لا تملك صلاحيات.", show_alert=True)
         
@@ -708,7 +715,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             os.execv(sys.executable, ['python'] + sys.argv)
         return
 
-    # معالجة أزرار التحميل الأصلية
     if data.startswith("cancel:"):
         context.user_data.pop(data.split(":")[1], None)
         await query.answer("تم إلغاء طلب التحميل")
@@ -719,14 +725,13 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mode = "audio" if data.startswith("aud") else "video"
         request_id = data.split(":")[1]
         req = context.user_data.pop(request_id, None)
-        if not req: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
+        if not req: return await query.answer("انتهت الجلسة، يرجى إعادة إرسال الرابط.", show_alert=True)
         if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
         asyncio.create_task(start_download(query, context, req, mode))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id in BANNED_USERS_CACHE: return
     await register_user_cached(update.effective_user)
-    # استخدام النص الأصلي بدقة
     await update.message.reply_text(build_start_text(update.effective_user.first_name or ""), reply_markup=user_main_keyboard(), parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
@@ -741,19 +746,25 @@ async def post_init(app: Application):
 
 def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
-    b = Application.builder().token(TOKEN)
-    if LOCAL_API_URL: b.base_url(LOCAL_API_URL)
-    app = b.post_init(post_init).concurrent_updates(True).build()
     
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("links", handle_incoming_text))
-    app.add_handler(CommandHandler("admin", admin_panel_cmd))
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_admin_files))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
-    app.add_handler(CallbackQueryHandler(handle_callbacks))
+    # حل مشكلة تعارض الـ Polling عند التحديث
+    try:
+        builder = Application.builder().token(TOKEN)
+        if LOCAL_API_URL: builder.base_url(LOCAL_API_URL)
+        app = builder.post_init(post_init).concurrent_updates(True).build()
+        
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("links", handle_incoming_text))
+        app.add_handler(CommandHandler("admin", admin_panel_cmd))
+        app.add_handler(MessageHandler(filters.Document.ALL, handle_admin_files))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
+        app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 إقلاع (PlayZone Origin + Smart Interactive Admin + Gemini AI)")
-    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+        logger.info("🚀 إقلاع (PlayZone Origin + Smart Interactive Admin + Gemini AI)")
+        app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    except Conflict:
+        logger.error("❌ يوجد نسخة أخرى من البوت تعمل حالياً. سيتم الإغلاق لتجنب التعارض.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
