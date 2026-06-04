@@ -294,6 +294,13 @@ def _force_cleanup_all_sync() -> int:
 # ==========================================================
 # الواجهات والأزرار
 # ==========================================================
+def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ إلغاء الإذاعة", callback_data="adm_cancel_bc")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="adm_back")]
+    ])
+    def admin_back_keyboard() -> InlineKeyboardMarkup:
+    return admin_main_keyboard()
 
 def user_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
@@ -633,6 +640,13 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     if data == "adm_close":
         await query.answer("تم الإغلاق")
         return await safe_delete(query.message)
+    elif data == "adm_back":
+    await query.answer()
+    return await query.message.edit_text(
+        "🛠 **لوحة الإدارة المتقدمة**",
+        reply_markup=admin_main_keyboard(),
+        parse_mode="Markdown"
+    )
     elif data == "adm_stats":
         await query.answer()
         return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard())
@@ -647,9 +661,12 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
         return await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard())
     elif data == "adm_bc":
-        context.user_data["bc_active"] = True
-        await query.answer()
-        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard())
+    context.user_data["bc_active"] = True
+    await query.answer("📢 أرسل الآن الرسالة للإذاعة")
+    return await query.message.edit_text(
+        "📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:",
+        reply_markup=admin_broadcast_keyboard()
+    )
     elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
         await query.answer("تم إلغاء الإذاعة")
