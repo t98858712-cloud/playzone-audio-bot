@@ -308,12 +308,6 @@ def build_preview_keyboard(request_id: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton("❌ إلغاء", callback_data=f"cancel:{request_id}")],
     ])
 
-def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ إلغاء الإذاعة", callback_data="adm_cancel_bc")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="adm_back")]
-    ])
-
 def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Website PlayZone", url=WEBSITE_PLAYZONE)],
@@ -329,6 +323,11 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📊 الإحصائيات", callback_data="adm_stats"), InlineKeyboardButton("👥 المستخدمون", callback_data="adm_users")],
         [InlineKeyboardButton("📢 إذاعة", callback_data="adm_bc"), InlineKeyboardButton("🧹 تنظيف الكاش", callback_data="adm_clean")],
         [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
+    ])
+
+def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ إلغاء العملية", callback_data="adm_cancel_bc")]
     ])
 
 def build_start_text(first_name: str) -> str:
@@ -636,13 +635,9 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
-    
     if data == "adm_close":
         await query.answer("تم الإغلاق")
         return await safe_delete(query.message)
-    elif data == "adm_back":
-        await query.answer()
-        return await query.message.edit_text("🛠 **لوحة الإدارة المتقدمة**", reply_markup=admin_main_keyboard(), parse_mode="Markdown")
     elif data == "adm_stats":
         await query.answer()
         return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard())
@@ -725,101 +720,88 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
-                target_file = final_mp3_path if success else raw_downloaded_file
+                if not success: raise RuntimeError("فشل معالج FFmpeg في تصدير ملف MP3")
+                final_file = final_mp3_path
             else:
-                target_file = raw_downloaded_file
-                
-            # إيقاف التحديثات المستمرة قبل الإرسال لمنع أخطاء تيليجرام
+                final_file = raw_downloaded_file
+
+            file_size = final_file.stat().st_size
+            if file_size > MAX_TELEGRAM_SIZE:
+                raise ValueError(f"الملف الناتج حجمه ({format_size(file_size)}) وهو أكبر من الحد المسموح به للبوت.")
+
+            with progress_lock: progress_data["text"] = "⚡ جاري رفع الملف الآن إلى خوادم تيليجرام..."
             stop_event.set()
             await updater_task
-            
-            # التحقق من حجم الملف النهائي
-            file_size = target_file.stat().st_size
-            if file_size > MAX_TELEGRAM_SIZE:
-                raise ValueError(f"حجم الملف النهائي ({format_size(file_size)}) يتخطى الحد الأقصى المسموح به.")
 
-            with progress_lock: progress_data["text"] = "📤 جاري رفع الملف إلى تيليجرام، يرجى الانتظار قليلاً..."
-            await edit_message_smart(query.message, progress_data["text"])
+            await query.message.reply_chat_action(ChatAction.UPLOAD_DOCUMENT)
+            title_clean = clean_title(request.get("title", "PlayZone File"))
             
-            title = request.get("title", "ملف ميديا")
-            artist = request.get("artist", "غير معروف")
-            duration = int(request.get("duration") or 0)
-            
-            # إرسال الملف (صوت أو فيديو)
-            with open(target_file, "rb") as f:
+            with open(final_file, "rb") as f:
                 if mode == "audio":
-                    await context.bot.send_audio(
-                        chat_id=uid,
-                        audio=f,
-                        title=title,
-                        performer=artist,
-                        duration=duration,
-                        thumbnail=open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
+                    await query.message.reply_audio(
+                        audio=f, title=title_clean, performer=request.get("artist"),
+                        duration=int(request.get("duration") or 0),
+                        thumbnail=open(local_thumb, "rb") if (local_thumb and local_thumb.exists()) else None
                     )
                 else:
-                    await context.bot.send_video(
-                        chat_id=uid,
-                        video=f,
-                        caption=f"🎬 <b>{esc(title)}</b>\n\nتم التحميل بنجاح عبر {BOT_USERNAME}",
-                        parse_mode="HTML",
-                        duration=duration,
-                        supports_streaming=True,
-                        thumbnail=open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
+                    await query.message.reply_video(
+                        video=f, caption=f"🎬 {title_clean}\n⚡ عبر بوت {BOT_USERNAME}",
+                        duration=int(request.get("duration") or 0)
                     )
-            
+
             stat_inc_sync("success")
             stat_inc_sync("bytes", file_size)
             await safe_delete(query.message)
-            
+
     except Exception as e:
-        logger.error(f"خطأ أثناء معالجة الطلب للمستخدم {uid}: {e}")
+        logger.error(f"خطأ خطير أثناء معالجة الطلب: {e}")
         stat_inc_sync("failed")
-        stop_event.set() # نضمن إيقاف مهمة التحديث في حالة الفشل
-        await edit_message_smart(query.message, f"❌ حدث خطأ غير متوقع أثناء معالجة طلبك.\n\nالسبب: <code>{esc(str(e))}</code>")
+        stop_event.set()
+        try: await updater_task
+        except Exception: pass
+        
+        error_msg = f"❌ فشل تحميل الملف.\n\nالسبب: {esc(str(e))}"
+        try: await edit_message_smart(query.message, error_msg)
+        except Exception: await query.message.reply_text(error_msg)
+
     finally:
         ACTIVE_USERS.discard(uid)
-        await loop.run_in_executor(None, lambda: shutil.rmtree(job_dir, ignore_errors=True))
+        stop_event.set()
+        try: shutil.rmtree(job_dir)
+        except Exception: pass
 
 # ==========================================================
-# دالة بدء التشغيل (Main Execution)
+# دالة تشغيل البوت الأساسية
 # ==========================================================
 
 def main():
+    # إنشاء قاعدة البيانات مجدداً للتأكد من وجودها عند كل إقلاع
+    init_db()
+
     if not TOKEN:
-        logger.critical("❌ خطأ بيئي: لم يتم العثور على التوكن (TELEGRAM_TOKEN). تأكد من إعدادات البيئة (Environment Variables).")
+        logger.critical("خطأ: لم يتم العثور على المتغير البيئي TELEGRAM_TOKEN")
         return
 
-    # تهيئة جداول قاعدة البيانات والـ WAL Mode
-    init_db()
-    
-    # تنظيف الكاش القديم المتبقي من جلسات سابقة عند الإقلاع
-    _cleanup_old_downloads_sync()
-
-    # بناء التطبيق ودعم الخادم المحلي إن وُجد
-    builder = Application.builder().token(TOKEN)
+    # بناء كائن التطبيق (Application) الخاص بـ python-telegram-bot v20+
+    app_builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
-        builder.base_url(LOCAL_API_URL)
+        app_builder.base_url(LOCAL_API_URL)
     
-    application = builder.build()
+    app = app_builder.build()
 
-    # أوامر المستخدم والمسؤولين
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("admin", admin_panel))
-    application.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
-    application.add_handler(CommandHandler("setcookie", set_cookie_command))
-    application.add_handler(CommandHandler("backup", backup_db_command))
+    # تسجيل المتحكمات (Handlers) الخاصة بالرسائل والأوامر والـ Callbacks
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("panel", admin_panel))
+    app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
+    app.add_handler(CommandHandler("setcookie", set_cookie_command))
+    app.add_handler(CommandHandler("backup", backup_db_command))
     
-    # استقبال المدخلات النصية
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
-    
-    # استقبال الملفات النصية (كالكوكيز مثلاً) من المطور
-    application.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
-    
-    # معالجة الأحداث للضغط على الأزرار
-    application.add_handler(CallbackQueryHandler(handle_callbacks))
+    app.add_handler(CallbackQueryHandler(handle_callbacks))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
+    app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
 
-    logger.info("🚀 تم تشغيل البوت بنجاح وهو جاهز لاستقبال الطلبات...")
-    application.run_polling()
+    logger.info("🚀 تم تشغيل نظام بوت PlayZone Enterprise بنجاح وهو الآن يستمع للطلبات...")
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
