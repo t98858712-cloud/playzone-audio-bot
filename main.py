@@ -78,7 +78,7 @@ USER_CHAT_COUNT = {}
 
 if GEMINI_API_KEY:
     genai_client = genai.Client(api_key=GEMINI_API_KEY)
-    genai_aclient = genai_client.aio  # العميل غير المتزامن
+    genai_aclient = genai_client.aio 
     
     system_persona = (
         "أنت المساعد الذكي والودود لبوت PlayZone على تيليجرام. "
@@ -135,6 +135,12 @@ def is_admin(user_id: int) -> bool:
     return user_id in env_admins or user_id in DYNAMIC_ADMINS_CACHE
 
 def esc(text) -> str: return html.escape(str(text or ""), quote=False)
+
+# دالة ذكية لتنظيف نصوص الذكاء الاصطناعي لمنع تعطل تيليجرام
+def clean_markdown_for_telegram(text: str) -> str:
+    # نقوم بإرسال النص كما هو بدون تنسيق Markdown كحل نهائي ومستقر
+    return text.replace("*", "").replace("_", "").replace("`", "")
+
 def clean_title(text: str, limit=60) -> str:
     if not text: return "ملف ميديا"
     text = re.sub(r"[\\/:*?\"<>|]+", "", str(text))
@@ -312,10 +318,7 @@ async def edit_message_smart(message, text: str, reply_markup=None):
     except Exception: pass
 
 async def send_preview(update: Update, thumb: str, caption: str, keyboard: InlineKeyboardMarkup):
-    if thumb and (thumb.startswith("http://") or thumb.startswith("https://")):
-        try:
-            return await update.message.reply_photo(photo=thumb, caption=caption, reply_markup=keyboard, parse_mode="HTML")
-        except Exception: pass
+    # إرسال المعاينة كنص فقط لتجنب مشاكل WebP الخاصة بيوتيوب والتي ترفضها خوادم تيليجرام
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
@@ -372,8 +375,13 @@ async def handle_admin_files(update: Update, context: ContextTypes.DEFAULT_TYPE)
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
     opts = {"quiet": True, "no_warnings": True, "noplaylist": True, "retries": 15, "socket_timeout": 30, "cachedir": False, "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}}
     if PROXY_URL: opts["proxy"] = PROXY_URL
-    if mode == "audio": opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
-    else: opts["format"] = f"bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best"
+    
+    # تحسين صيغ الـ Audio و Video لتجنب صيغ Webm المزعجة لتيليجرام
+    if mode == "audio": 
+        opts["format"] = "m4a/bestaudio/best"
+    else: 
+        opts["format"] = f"bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/mp4/best"
+        
     opts["merge_output_format"] = "mp4"
     if COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 0: opts["cookiefile"] = str(COOKIES_FILE)
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
@@ -417,17 +425,6 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
             except Exception: pass
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
-def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
-    try:
-        if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
-        req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=6) as response:
-            data = response.read(MAX_THUMBNAIL_BYTES + 1)
-        if len(data) > MAX_THUMBNAIL_BYTES: return None
-        output_path.write_bytes(data)
-        return output_path if output_path.exists() else None
-    except Exception: return None
-
 # ==========================================================
 # 7. نظام الإذاعة بالخلفية
 # ==========================================================
@@ -463,7 +460,7 @@ async def broadcast_worker(app: Application):
         BROADCAST_QUEUE.task_done()
 
 # ==========================================================
-# 8. التوجيه الذكي للرسائل، الأزرار والمساعد الذكي
+# 8. التوجيه الذكي للرسائل، الأزرار والذكاء الاصطناعي
 # ==========================================================
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -500,36 +497,26 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if uid in ACTIVE_USERS:
         return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
     
-    # 3. الدردشة مع الذكاء الاصطناعي (أحدث مكتبة genai)
+    # 3. الدردشة مع الذكاء الاصطناعي (مع حماية النصوص)
     if not is_valid_url(text):
         if genai_aclient:
             await context.bot.send_chat_action(chat_id=uid, action=ChatAction.TYPING)
             try:
-                # إنشاء محادثة جديدة أو استكمال السابقة (مع مسحها كل 20 رسالة لحفظ الرام)
                 if uid not in USER_CHATS or USER_CHAT_COUNT.get(uid, 0) > 20:
                     USER_CHATS[uid] = genai_aclient.chats.create(model='gemini-2.5-flash', config=ai_config)
                     USER_CHAT_COUNT[uid] = 0
                     
                 response = await USER_CHATS[uid].send_message(text)
                 USER_CHAT_COUNT[uid] += 1
-                reply_text = response.text[:4000]
                 
-                try: return await update.message.reply_text(reply_text, parse_mode="Markdown")
-                except Exception: return await update.message.reply_text(reply_text)
+                # استخدام المنظف للنص كخيار آمن 100% لتجنب تعطل رسائل تيليجرام
+                safe_reply = clean_markdown_for_telegram(response.text[:4000])
+                return await update.message.reply_text(safe_reply)
+                
             except Exception as e:
                 logger.error(f"Gemini Chat Error: {e}")
-                # محاولة الإنقاذ بالموديل المستقر
-                try:
-                    USER_CHATS[uid] = genai_aclient.chats.create(model='gemini-2.0-flash', config=ai_config)
-                    USER_CHAT_COUNT[uid] = 1
-                    response = await USER_CHATS[uid].send_message(text)
-                    reply_text = response.text[:4000]
-                    try: return await update.message.reply_text(reply_text, parse_mode="Markdown")
-                    except Exception: return await update.message.reply_text(reply_text)
-                except Exception as fallback_e:
-                    logger.error(f"Gemini Fallback Error: {fallback_e}")
-                    USER_CHATS.pop(uid, None)
-                    return await update.message.reply_text("❌ عذراً، لا يمكنني الاستجابة الآن بسبب ضغط على الخوادم.")
+                USER_CHATS.pop(uid, None) 
+                return await update.message.reply_text("❌ عذراً، لا يمكنني الاستجابة الآن بسبب ضغط على الخوادم.")
         else:
             return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
 
@@ -573,12 +560,13 @@ async def start_download(query, context, request: dict, mode: str):
             progress_data["text"] = "🚀 بدأ التحميل... يرجى الانتظار ⏬"
             loop = asyncio.get_running_loop()
             
-            local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
-            
             opts = get_ydl_options(job_dir, progress_data, mode)
             await loop.run_in_executor(EXECUTOR, lambda: yt_dlp.YoutubeDL(opts).extract_info(request["url"], download=True))
             
-            files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".ytdl"] and p.name != "playzone_thumb.jpg"]
+            # الفلترة الذكية للملفات: أخذ ملفات الفيديو والصوت الواضحة فقط
+            valid_extensions = ['.mp4', '.m4a', '.mp3', '.mkv', '.webm']
+            files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix.lower() in valid_extensions]
+            
             if not files: raise RuntimeError("لم يتم العثور على الملف النهائي")
             target_file = files[0]
 
@@ -596,22 +584,23 @@ async def start_download(query, context, request: dict, mode: str):
             share_link = f"https://t.me/share/url?url={quote(request['url'])}&text={quote('🎬 ' + title)}"
             media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📤 مشاركة", url=share_link)]])
 
+            # إرسال المقطع مع تجاوز مشكلة الصور التالفة بوضعها كخيار تلقائي لتيليجرام
             with open(target_file, "rb") as f:
-                if mode == "audio":
-                    t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
-                    try:
+                try:
+                    if mode == "audio":
                         await context.bot.send_audio(
                             chat_id=query.message.chat_id, audio=f, title=title,
                             performer=request.get("artist", "غير معروف"), duration=duration,
-                            caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML", read_timeout=120
+                            caption=caption, reply_markup=media_keyboard, parse_mode="HTML", read_timeout=120
                         )
-                    finally:
-                        if t_file: t_file.close()
-                else:
-                    await context.bot.send_video(
-                        chat_id=query.message.chat_id, video=f, caption=caption, supports_streaming=True,  
-                        duration=duration, reply_markup=media_keyboard, parse_mode="HTML", read_timeout=120
-                    )
+                    else:
+                        await context.bot.send_video(
+                            chat_id=query.message.chat_id, video=f, caption=caption, supports_streaming=True,  
+                            duration=duration, reply_markup=media_keyboard, parse_mode="HTML", read_timeout=120
+                        )
+                except Exception as inner_e:
+                    logger.error(f"Telegram Upload Error: {inner_e}")
+                    raise inner_e
             
             await stat_inc("success")
             await stat_inc("bytes", file_size)
@@ -632,7 +621,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     uid = query.from_user.id
     
-    # استعادة قواعد البيانات مع المسح الآمن
     if data.startswith("restore_"):
         if not is_admin(uid): return await query.answer("❌ لا تملك صلاحيات.", show_alert=True)
         file_id = data.split("_")[1]
@@ -732,15 +720,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 resp = await genai_aclient.models.generate_content(model='gemini-2.5-flash', contents=f"اشرح هذه الأخطاء إن وجدت باختصار:\n{logs}")
                 reply_content = resp.text[:3000]
+                await query.message.edit_text(f"🧠 {clean_markdown_for_telegram(reply_content)}", reply_markup=admin_main_keyboard())
             except Exception as e:
-                try:
-                    resp = await genai_aclient.models.generate_content(model='gemini-2.0-flash', contents=f"اشرح هذه الأخطاء إن وجدت باختصار:\n{logs}")
-                    reply_content = resp.text[:3000]
-                except Exception:
-                    reply_content = f"❌ فشل الاتصال بالذكاء الاصطناعي: {e}"
-                    
-            try: await query.message.edit_text(f"🧠 {reply_content}", parse_mode="Markdown", reply_markup=admin_main_keyboard())
-            except Exception: await query.message.edit_text(f"🧠 {reply_content}", reply_markup=admin_main_keyboard())
+                await query.message.edit_text(f"❌ فشل الاتصال بالذكاء الاصطناعي: {e}", reply_markup=admin_main_keyboard())
 
         elif data == "adm_backup":
             await query.answer()
