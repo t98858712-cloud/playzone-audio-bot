@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import yt_dlp
 import aiosqlite
+import google.generativeai as genai
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -35,10 +36,10 @@ from telegram.ext import (
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 LOCAL_API_URL = os.getenv("TELEGRAM_API_URL") 
 PROXY_URL = os.getenv("PROXY_URL") 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 BASE_DOWNLOAD_DIR = Path("./downloads")
 BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
-
 DATA_DIR = Path("./data")
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -57,7 +58,14 @@ logging.basicConfig(
 logger = logging.getLogger("PlayZone_Enterprise")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# الذاكرة المؤقتة (RAM Caching) للسرعة القصوى
+# تهيئة Gemini AI
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    ai_model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    ai_model = None
+
+# الذاكرة المؤقتة للسرعة القصوى
 KNOWN_USERS_CACHE = set()
 BANNED_USERS_CACHE = set()
 DYNAMIC_ADMINS_CACHE = set()
@@ -91,10 +99,8 @@ def format_size(size_bytes) -> str:
     return f"{size_bytes:.1f} GB"
 
 def generate_users_file(rows, filepath):
-    """توليد ملف نصي بأسماء وبيانات جميع المستخدمين"""
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write("👥 قائمة مستخدمي البوت:\n")
-        f.write("="*60 + "\n")
+        f.write("👥 قائمة مستخدمي البوت:\n" + "="*60 + "\n")
         for r in rows:
             uid, un, fn, ban, adm = r
             status = " [محظور 🚫]" if ban else (" [إدمن 🛡️]" if adm else "")
@@ -120,7 +126,6 @@ async def init_db():
         """)
         await db.execute("CREATE TABLE IF NOT EXISTS stats (key TEXT PRIMARY KEY, value INTEGER)")
         
-        # تحديث الجداول برمجياً
         try: await db.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
         except: pass
         try: await db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
@@ -130,7 +135,6 @@ async def init_db():
             await db.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (k,))
         await db.commit()
         
-        # تعبئة الذاكرة المؤقتة
         async with db.execute("SELECT id, is_banned, is_admin FROM users") as cursor:
             async for row in cursor:
                 uid, banned, admin = row[0], row[1], row[2]
@@ -164,11 +168,10 @@ async def update_user_status(user_id: int, column: str, value: int):
         await db.commit()
 
 # ==========================================================
-# 4. أوامر الإدارة من خارج الكود (Text Commands)
+# 4. أوامر الإدارة من خارج الكود
 # ==========================================================
 
 async def manage_users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """إدارة المستخدمين عبر الأوامر النصية"""
     if not is_admin(update.effective_user.id): return
     msg = update.message.text.split()
     if len(msg) < 2 or not msg[1].isdigit():
@@ -195,7 +198,6 @@ async def manage_users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ تم سحب صلاحيات الإدارة من: <code>{target_id}</code>", parse_mode="HTML")
 
 async def db_restore_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """استعادة قاعدة البيانات"""
     if not is_admin(update.effective_user.id): return
     if not update.message.reply_to_message or not update.message.reply_to_message.document:
         return await update.message.reply_text("❌ يجب الرد (Reply) على ملف قاعدة البيانات .db بهذا الأمر.")
@@ -218,8 +220,8 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📊 الإحصائيات", callback_data="adm_stats"), InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server")],
         [InlineKeyboardButton("👥 أسماء المستخدمين", callback_data="adm_users_list"), InlineKeyboardButton("🧹 تنظيف المؤقتات", callback_data="adm_clean")],
         [InlineKeyboardButton("📦 نسخة احتياطية", callback_data="adm_backup"), InlineKeyboardButton("📄 سجلات النظام", callback_data="adm_logs")],
-        [InlineKeyboardButton("🔄 تحديث yt-dlp", callback_data="adm_update")],
-        [InlineKeyboardButton("⚠️ إعادة تشغيل البوت (Restart)", callback_data="adm_reboot")],
+        [InlineKeyboardButton("🧠 تحليل الأخطاء (Gemini)", callback_data="adm_ai_debug")],
+        [InlineKeyboardButton("🔄 تحديث yt-dlp", callback_data="adm_update"), InlineKeyboardButton("⚠️ إعادة التشغيل", callback_data="adm_reboot")],
         [InlineKeyboardButton("✖️ إغلاق اللوحة", callback_data="adm_close")]
     ])
 
@@ -342,7 +344,7 @@ async def trigger_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await status.edit_text(f"📢 تمت الجدولة لـ ({len(users)} مستخدم). ستعمل في الخلفية.")
 
 # ==========================================================
-# 8. معالجة الطلبات والأزرار التفاعلية (Handlers)
+# 8. معالجة الطلبات، الدردشة مع الذكاء الاصطناعي والأزرار
 # ==========================================================
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -356,9 +358,25 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if uid in ACTIVE_USERS:
         return await update.message.reply_text("⏳ لديك طلب قيد التنفيذ.")
+    
+    # الدردشة الذكية إذا لم يكن النص رابطاً
     if not text.startswith(("http://", "https://")):
-        return await update.message.reply_text("❌ أرسل رابط صالح يبدأ بـ http:// أو https://")
+        if ai_model:
+            status = await update.message.reply_text("💭 لحظات...")
+            try:
+                response = await asyncio.to_thread(ai_model.generate_content, text)
+                reply_text = response.text[:4000] # حدود تيليجرام
+                try:
+                    return await status.edit_text(reply_text, parse_mode="Markdown")
+                except Exception:
+                    return await status.edit_text(reply_text) # في حال وجود خطأ بتنسيق الماركدوان
+            except Exception as e:
+                logger.error(f"Gemini Error: {e}")
+                return await status.edit_text("❌ عذراً، لا يمكنني الاستجابة الآن بسبب ضغط على خوادم الذكاء الاصطناعي.")
+        else:
+            return await update.message.reply_text("❌ أرسل رابط صالح يبدأ بـ http:// أو https://")
 
+    # تحميل الميديا إذا كان رابطاً
     status = await update.message.reply_text("🔍 جاري الفحص...")
     try:
         loop = asyncio.get_running_loop()
@@ -477,7 +495,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         rows = await cursor.fetchall()
                 
                 await asyncio.to_thread(generate_users_file, rows, users_file)
-                
                 with open(users_file, "rb") as f:
                     await context.bot.send_document(
                         chat_id=uid, document=f, filename="Users_List.txt", 
@@ -529,6 +546,29 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 await query.message.edit_text(f"❌ خطأ: {e}", reply_markup=admin_main_keyboard())
         
+        elif data == "adm_ai_debug":
+            await query.answer("جاري تحليل المشاكل عبر الذكاء الاصطناعي...")
+            if not ai_model:
+                return await query.message.edit_text("❌ لم تقم بإضافة GEMINI_API_KEY في السيرفر.", reply_markup=admin_main_keyboard())
+            
+            try:
+                if not LOG_FILE.exists() or LOG_FILE.stat().st_size == 0:
+                    return await query.message.edit_text("✅ النظام نظيف تماماً، لا توجد سجلات أخطاء لتحليلها.", reply_markup=admin_main_keyboard())
+                
+                with open(LOG_FILE, "r", encoding="utf-8") as f:
+                    logs_data = "".join(f.readlines()[-60:]) # سحب آخر 60 سطراً من الأخطاء
+                
+                prompt = f"أنت خبير في سيرفرات بايثون وبوتات تيليجرام. راجع هذه السجلات الخاصة بسيرفري، هل توجد أخطاء؟ اشرحها باختصار وقدم كود الإصلاح:\n\n{logs_data}"
+                response = await asyncio.to_thread(ai_model.generate_content, prompt)
+                
+                reply = response.text[:4000]
+                try:
+                    await query.message.edit_text(f"🧠 **تحليل Gemini للسيرفر:**\n\n{reply}", parse_mode="Markdown", reply_markup=admin_main_keyboard())
+                except Exception:
+                    await query.message.edit_text(f"🧠 تحليل Gemini:\n\n{reply}", reply_markup=admin_main_keyboard())
+            except Exception as e:
+                await query.message.edit_text(f"❌ تعذر الاتصال بالذكاء الاصطناعي: {e}", reply_markup=admin_main_keyboard())
+
         elif data == "adm_backup":
             await query.answer("جاري تحضير النسخة...")
             try:
@@ -565,8 +605,9 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await register_user_cached(update.effective_user)
     text = (
         f"أهلاً بك 👋\n\n"
-        "أرسل لي رابط أي فيديو أو مقطع صوتي وسأقوم بتحميله لك فوراً.\n\n"
-        "دعمك يهمنا، لا تنسَ مشاركة البوت مع أصدقائك! 💚"
+        "🎬 أرسل لي رابط فيديو لأقوم بتحميله.\n"
+        "💬 أو تحدث معي وسأجيبك كذكاء اصطناعي!\n\n"
+        "دعمك يهمنا، شارك البوت مع أصدقائك 💚"
     )
     await update.message.reply_text(text)
 
@@ -604,7 +645,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم إطلاق البوت (Zero-Touch Admin Ready).")
+    logger.info("🚀 تم إطلاق البوت (Zero-Touch Admin Ready + AI Enabled).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
