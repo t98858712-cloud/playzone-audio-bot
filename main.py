@@ -22,11 +22,9 @@ from telegram import (
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup,
     KeyboardButton,
-    BotCommand,
-    MenuButtonCommands,
 )
 from telegram.constants import ChatAction
-from telegram.error import BadRequest, RetryAfter, TimedOut, NetworkError
+from telegram.error import BadRequest, RetryAfter
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -37,23 +35,31 @@ from telegram.ext import (
 )
 
 # ==========================================================
-# إعدادات PlayZone / Railway
+# إعدادات متوافقة تماماً مع Linux / Railway
 # ==========================================================
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-# دعم خادم تيليجرام المحلي لكسر حاجز الـ 50 ميجابايت مستقبلاً
 LOCAL_API_URL = os.getenv("TELEGRAM_API_URL") 
 
-BASE_DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "./downloads"))
-BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
+# استخدام مسارات مطلقة متوافقة مع Linux لمنع أخطاء الحاويات
+BASE_DIR = Path(__file__).resolve().parent
 
-DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
-DATA_DIR.mkdir(exist_ok=True)
+BASE_DOWNLOAD_DIR = BASE_DIR / "downloads"
+BASE_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_FILE = DATA_DIR / "bot_database.db"
 DB_LOCK = threading.Lock()
 
-# إذا تم استخدام API محلي، يتم رفع الحد إلى 2 جيجابايت، وإلا يبقى 50 ميجا
+# ضبط الصلاحيات الافتراضية للمجلدات في بيئة Linux
+try:
+    os.chmod(str(BASE_DOWNLOAD_DIR), 0o777)
+    os.chmod(str(DATA_DIR), 0o777)
+except Exception:
+    pass
+
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
 COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt"))
@@ -63,7 +69,6 @@ REQUEST_EXPIRE_SECONDS = int(os.getenv("REQUEST_EXPIRE_SECONDS", str(15 * 60)))
 OLD_DOWNLOADS_EXPIRE_SECONDS = int(os.getenv("OLD_DOWNLOADS_EXPIRE_SECONDS", str(60 * 60)))
 MAX_THUMBNAIL_BYTES = int(os.getenv("MAX_THUMBNAIL_BYTES", str(2 * 1024 * 1024)))
 
-# نظام الطابور الذكي (Semaphore) لمنع انهيار السيرفر تحت الضغط
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(os.cpu_count() or 2)))
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(2, MAX_WORKERS))
@@ -269,16 +274,6 @@ def cookie_file_is_usable(path: Path) -> bool:
         return has_youtube and has_valid_cookie
     except Exception: return False
 
-def _cleanup_old_downloads_sync():
-    now = time.time()
-    try:
-        for item in BASE_DOWNLOAD_DIR.iterdir():
-            try:
-                if now - item.stat().st_mtime > OLD_DOWNLOADS_EXPIRE_SECONDS:
-                    shutil.rmtree(item) if item.is_dir() else item.unlink()
-            except Exception: pass
-    except Exception: pass
-
 def _force_cleanup_all_sync() -> int:
     removed = 0
     try:
@@ -428,7 +423,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if mode == "audio":
         opts["format"] = "bestaudio/best"
     else:
-        # إذا تم كسر الحظر بخادم محلي، لا داعي لتقييد حجم الفيديو لـ 50M في جودة السحب
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         opts["format"] = f"bestvideo[height<=720][filesize<{max_fs}]+bestaudio/best[height<=720][filesize<{max_fs}]/best"
         opts["merge_output_format"] = "mp4"
@@ -458,7 +452,7 @@ def download_hook(progress_data: dict):
                     percent = downloaded / total * 100
                     progress_data["text"] = (
                         "📥 <b>جاري تحميل الملف...</b>\n\n"
-                        f"{make_progress_bar(percent)}  {percent:.1f}%\n"
+                        {make_progress_bar(percent)} + f"  {percent:.1f}%\n"
                         f"📦 الحجم: {format_size(downloaded)} / {format_size(total)}\n"
                         f"🚀 السرعة: {format_size(speed)}/ث"
                     )
@@ -506,45 +500,11 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
     except Exception as e:
-        logger.error(f"فشل التحويل المحلي لـ MP3: {e}")
+        logger.error(f"Fails local MP3: {e}")
         return False
 
 # ==========================================================
-# أوامر الإدارة الديناميكية
-# ==========================================================
-
-async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تحديث مكتبة التحميل مباشرة من التيليجرام"""
-    if not is_admin(update.effective_user.id): return
-    msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
-    try:
-        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
-        await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار.")
-    except Exception as e:
-        await msg.edit_text(f"❌ فشل التحديث: {e}")
-
-async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """استلام ملف الكوكيز من المطور مباشرة"""
-    if not is_admin(update.effective_user.id): return
-    if not update.message.document:
-        return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود يوتيوب.")
-    
-    file_id = update.message.document.file_id
-    new_file = await context.bot.get_file(file_id)
-    await new_file.download_to_drive(COOKIES_FILE)
-    await update.message.reply_text("✅ تم استلام وتركيب ملف الكوكيز بنجاح!")
-
-async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """تحميل قاعدة البيانات فوراً للحماية من الضياع"""
-    if not is_admin(update.effective_user.id): return
-    try:
-        with open(DB_FILE, "rb") as f:
-            await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياطية من قاعدة البيانات.")
-    except Exception as e:
-        await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
-
-# ==========================================================
-# أحداث المستخدم
+# الأوامر والأحداث
 # ==========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -562,9 +522,41 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=admin_main_keyboard(), parse_mode="Markdown"
     )
 
-async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_playzone_links_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دالة موحدة لمعالجة أمر /links أو زر الروابط"""
     register_user_sync(update.effective_user)
-    await update.message.reply_text(build_playzone_links_text(), reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
+    await update.message.reply_text(
+        build_playzone_links_text(),
+        reply_markup=build_playzone_links_keyboard(),
+        disable_web_page_preview=True
+    )
+
+async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
+    try:
+        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
+        await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار.")
+    except Exception as e:
+        await msg.edit_text(f"❌ فشل التحديث: {e}")
+
+async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    if not update.message.document:
+        return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود يوتيوب.")
+    
+    file_id = update.message.document.file_id
+    new_file = await context.bot.get_file(file_id)
+    await new_file.download_to_drive(COOKIES_FILE)
+    await update.message.reply_text("✅ تم استلام وتركيب ملف الكوكيز بنجاح!")
+
+async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    try:
+        with open(DB_FILE, "rb") as f:
+            await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياطية من قاعدة البيانات.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
 async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     context.user_data["bc_active"] = False
@@ -590,10 +582,12 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     text = update.message.text.strip()
 
+    # التقاط المدخلات النصية الخاصة بالأزرار والأوامر المكتوبة يدوياً بكلا الاتجاهين المائلين
+    if text in ["🔗 روابط PlayZone", "/links", "\\links"]:
+        return await show_playzone_links_handler(update, context)
+        
     if text == "📘 دليل الاستخدام":
         return await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
-    if text == "🔗 روابط PlayZone":
-        return await update.message.reply_text(build_playzone_links_text(), reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
     
     if is_admin(uid) and context.user_data.get("bc_active"):
         return await handle_broadcast_text(update, context, text)
@@ -695,7 +689,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
     
-    # رسالة الانتظار الذكية في حال كان السيرفر مشغولاً
     progress_data = {"text": "⏳ يتم وضعك الآن في طابور الانتظار...\n(السيرفر يعالج طلبات أخرى، سيبدأ دورك تلقائياً)"}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
@@ -703,7 +696,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         try: await query.message.edit_reply_markup(reply_markup=None)
         except Exception: pass
 
-        # هنا ينتظر المستخدم دوره بأمان تام دون أن يسبب ضغطاً على السيرفر (نظام Semaphore)
         async with DOWNLOAD_SEMAPHORE:
             with progress_lock: progress_data["text"] = "🚀 بدأ دورك! جاري التجهيز للتحميل..."
             
@@ -775,28 +767,29 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 def main():
-    # إنشاء قاعدة البيانات مجدداً للتأكد من وجودها عند كل إقلاع
     init_db()
 
     if not TOKEN:
         logger.critical("خطأ: لم يتم العثور على المتغير البيئي TELEGRAM_TOKEN")
         return
 
-    # بناء كائن التطبيق (Application) الخاص بـ python-telegram-bot v20+
     app_builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
         app_builder.base_url(LOCAL_API_URL)
     
     app = app_builder.build()
 
-    # تسجيل المتحكمات (Handlers) الخاصة بالرسائل والأوامر والـ Callbacks
+    # تسجيل الأوامر البرمجية بشكل صريح
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("panel", admin_panel))
+    app.add_handler(CommandHandler("links", show_playzone_links_handler)) # دعم سلاش مائل لليمين /links
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
     app.add_handler(CommandHandler("backup", backup_db_command))
     
     app.add_handler(CallbackQueryHandler(handle_callbacks))
+    
+    # فلتر النصوص يلتقط النصوص العادية بالإضافة لـ \links المائلة لليسار
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
 
