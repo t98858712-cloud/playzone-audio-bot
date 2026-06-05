@@ -1,4 +1,0 @@
-python-telegram-bot==21.11.1
-yt-dlp
-aiosqlite
-google-genai
