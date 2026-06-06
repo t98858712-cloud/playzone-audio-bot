@@ -103,8 +103,8 @@ LANGS = {
         'fav_empty': "❌ قائمة المفضلة الخاصة بك فارغة.",
         'fav_deleted': "🗑 تم مسح المقطع من المفضلة.",
         'fav_cleared': "🗑 تم إفراغ قائمة المفضلة بالكامل.",
-        'cancelled': "❌ تم إلغاء العملية.",
-        'error_size': "❌ حجم الملف النهائي يتجاوز الحد المسموح للتليجرام.",
+        'cancelled': "❌ تم إلغاء العملية بنجاح.",
+        'error_size': "❌ حجم الملف النهائي يتجاوز الحد المسموح للتليجرام حتى بعد محاولة الضغط.",
         'error_general': "❌ فشل المعالجة. تأكد من أن الرابط صحيح ومتاح للعامة.",
         'btn_guide': "📘 دليل الاستخدام",
         'btn_links': "🔗 روابط PlayZone",
@@ -132,8 +132,8 @@ LANGS = {
         'fav_empty': "❌ Your favorites list is empty.",
         'fav_deleted': "🗑 Removed from favorites.",
         'fav_cleared': "🗑 Favorites list cleared.",
-        'cancelled': "❌ Request cancelled.",
-        'error_size': "❌ Final file size exceeds the allowed Telegram limit.",
+        'cancelled': "❌ Request cancelled successfully.",
+        'error_size': "❌ Final file size exceeds the allowed Telegram limit even after compression.",
         'error_general': "❌ Failed to process. The link might be private or broken.",
         'btn_guide': "📘 Usage Guide",
         'btn_links': "🔗 PlayZone Links",
@@ -151,7 +151,7 @@ def get_text(user_id: int, key: str) -> str:
     return LANGS.get(lang, LANGS['ar']).get(key, LANGS['ar'].get(key, ""))
 
 # ==========================================================
-# 3. قواعد البيانات والإحصائيات اليومية
+# 3. قواعد البيانات والإحصائيات
 # ==========================================================
 def init_db():
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
@@ -198,16 +198,21 @@ def stat_inc_sync(key: str, value: int = 1):
     today_str = datetime.now().strftime("%Y-%m-%d")
     daily_key = f"{key}_{today_str}"
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
-        # إحصائية عامة
         conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (key,))
         conn.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, key))
-        # إحصائية يومية
         conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (daily_key,))
         conn.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, daily_key))
 
 def load_stats_sync() -> dict:
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
         return {k: v for k, v in conn.execute("SELECT key, value FROM stats").fetchall()}
+
+def get_average_rating() -> tuple:
+    with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
+        row = conn.execute("SELECT AVG(rating), COUNT(rating) FROM ratings").fetchone()
+        avg = round(row[0] or 0, 1)
+        count = row[1] or 0
+        return avg, count
 
 def all_user_ids() -> list:
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
@@ -320,6 +325,11 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
     ])
 
+def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✖️ إلغاء الإذاعة", callback_data="adm_cancel_bc")]
+    ])
+
 async def safe_delete(message):
     try: await message.delete()
     except: pass
@@ -362,6 +372,7 @@ def get_ydl_options(job_dir: Path = None, progress_data: dict = None, mode: str 
 
 def download_hook(progress_data: dict, req_id: str):
     def hook(d):
+        # تفعيل زر الإلغاء لقتل العملية الفورية
         if req_id and req_id in CANCEL_FLAGS: raise ValueError("USER_CANCELLED")
         with progress_lock:
             if d.get("status") == "downloading":
@@ -377,6 +388,7 @@ def download_hook(progress_data: dict, req_id: str):
 
 async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event, req_id: str, uid: int):
     last_text = ""
+    # إضافة زر الإلغاء في كل رسالة تحديث
     kb = InlineKeyboardMarkup([[InlineKeyboardButton(get_text(uid, 'cancel_btn'), callback_data=f"stop_dl:{req_id}")]])
     while not stop_event.is_set():
         with progress_lock: text = progress_data.get("text", "")
@@ -399,6 +411,7 @@ async def run_ffmpeg_async(cmd: list, cancel_req_id: str = None) -> bool:
     try:
         process = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         while process.returncode is None:
+            # تفعيل زر الإلغاء لقتل المعالجة بالـ FFmpeg
             if cancel_req_id and cancel_req_id in CANCEL_FLAGS:
                 process.terminate()
                 raise ValueError("USER_CANCELLED")
@@ -421,7 +434,6 @@ async def convert_to_mp3_async(input_file: Path, output_file: Path, req_id: str,
 
 async def compress_video_async(input_file: Path, output_file: Path, duration: int, req_id: str) -> bool:
     target_size = MAX_TELEGRAM_SIZE * 0.95
-    # حماية من خطأ القسمة على صفر
     safe_duration = duration if duration and duration > 0 else 60 
     total_bitrate = (target_size * 8) / safe_duration
     vid_bitrate = max(50000, total_bitrate - 128000)
@@ -431,7 +443,7 @@ async def compress_video_async(input_file: Path, output_file: Path, duration: in
     return await run_ffmpeg_async(cmd, req_id)
 
 # ==========================================================
-# 7. التفاعل الأساسي (النصوص والأزرار)
+# 7. التفاعل الأساسي (البحث الداخلي والنصوص)
 # ==========================================================
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
@@ -476,6 +488,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             stat_inc_sync(f"plat_{domain}", 1)
             stat_inc_sync("requests", 1)
         else:
+            # البحث الداخلي حسب الاسم / الأغنية
             opts = {"quiet": True, "extract_flat": True, "playlist_items": "1-5"}
             info = await loop.run_in_executor(EXECUTOR, lambda: yt_dlp.YoutubeDL(opts).extract_info(f"ytsearch5:{text}", download=False))
             entries = info.get("entries", [])
@@ -491,7 +504,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
                     kb.append([InlineKeyboardButton(f"🎬 {title}", callback_data=f"src:{sid}")])
                     context.user_data[f"src_{sid}"] = {"url": v_url, "timestamp": time.time()}
             
-            await status.edit_text("🔍 النتائج:", reply_markup=InlineKeyboardMarkup(kb))
+            await status.edit_text("🔍 النتائج (اضغط للتحميل):", reply_markup=InlineKeyboardMarkup(kb))
             stat_inc_sync("searches", 1)
     except Exception as e:
         logger.error(f"Search/Extract Error: {e}")
@@ -551,7 +564,7 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
     await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
 
 # ==========================================================
-# 8. إدارة الكول باك والتحميل (Core Callbacks)
+# 8. إدارة الكول باك والتحميل 
 # ==========================================================
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
@@ -566,7 +579,8 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         today_str = datetime.now().strftime("%Y-%m-%d")
         daily_dl = stats.get(f"success_{today_str}", 0)
         
-        # ترتيب المنصات الأكثر استخداماً
+        avg_rate, total_rates = get_average_rating()
+        
         plats = {k.replace("plat_", ""): v for k, v in stats.items() if k.startswith("plat_") and "202" not in k}
         top_plats = sorted(plats.items(), key=lambda x: x[1], reverse=True)[:3]
         plats_text = "\n".join([f"• {k}: {v}" for k, v in top_plats]) if top_plats else "لا يوجد"
@@ -577,7 +591,10 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
             f"• التحميلات الناجحة (الكلي): {stats.get('success', 0)}\n"
             f"• تحميلات اليوم: {daily_dl}\n"
-            f"• حجم الملفات الكلي: {format_size(stats.get('bytes', 0))}\n\n"
+            f"• حجم الملفات الكلي: {format_size(stats.get('bytes', 0))}\n"
+            f"• عمليات البحث المباشر: {stats.get('searches', 0)}\n\n"
+            f"⭐ <b>تقييم البوت العام:</b>\n"
+            f"• {avg_rate}/5.0 (بناءً على {total_rates} صوت)\n\n"
             f"🌐 <b>أكثر 3 منصات استخداماً:</b>\n{plats_text}"
         )
         return await safe_edit(query.message, text, reply_markup=admin_main_keyboard())
@@ -635,7 +652,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
 
-    # --- أزرار المفضلة التفاعلية ---
+    # تشغيل مقطع من المفضلة
     if data.startswith("playfav:"):
         await query.answer()
         fav_id = data.split(":")[1]
@@ -648,6 +665,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.delete()
         return await handle_incoming_text(update, context)
 
+    # حذف مقطع من المفضلة
     if data.startswith("delfav:"):
         fav_id = data.split(":")[1]
         with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
@@ -661,7 +679,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(get_text(uid, 'fav_cleared'), show_alert=True)
         return await safe_delete(query.message)
 
-    # --- الأزرار العامة ---
+    # جلب نتيجة البحث وتحويلها لطلب تحميل
     if data.startswith("src:"):
         await query.answer()
         sid = data.split(":")[1]
@@ -672,6 +690,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.delete()
         return await handle_incoming_text(update, context)
 
+    # إضافة للمفضلة
     if data.startswith("fav:"):
         req_id = data.split(":")[1]
         req = context.user_data.get(f"req_{req_id}")
@@ -686,8 +705,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("انتهت الجلسة", show_alert=True)
         return
 
+    # زر الإلغاء الشامل
     if data.startswith("stop_dl:"):
-        await query.answer("⚠️ جاري إيقاف العملية...", show_alert=True)
+        await query.answer("⚠️ جاري إيقاف العملية وإلغاء التحميل...", show_alert=True)
         req_id = data.split(":")[1]
         CANCEL_FLAGS.add(req_id)
         return 
@@ -721,7 +741,6 @@ async def process_download(query, context: ContextTypes.DEFAULT_TYPE, req: dict,
             with progress_lock: prog["text"] = get_text(uid, 'downloading')
             
             loop = asyncio.get_running_loop()
-            
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(req.get("thumb_url"), job_dir / "thumb.jpg"))
             
             opts = get_ydl_options(job_dir, prog, mode, req_id)
@@ -731,6 +750,7 @@ async def process_download(query, context: ContextTypes.DEFAULT_TYPE, req: dict,
             if not files: raise RuntimeError("No output file")
             target = max(files, key=lambda p: p.stat().st_mtime)
             
+            # التحويل والضغط التلقائي
             if mode == "audio":
                 with progress_lock: prog["text"] = get_text(uid, 'converting')
                 mp3_path = job_dir / "final.mp3"
@@ -789,7 +809,7 @@ async def process_download(query, context: ContextTypes.DEFAULT_TYPE, req: dict,
         shutil.rmtree(job_dir, ignore_errors=True)
 
 # ==========================================================
-# 9. السلاشات والأوامر 
+# 9. السلاشات والأوامر (الأدمن والمستخدمين)
 # ==========================================================
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
@@ -834,22 +854,22 @@ async def fav_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_msg=F
     if edit_msg: await safe_edit(update.callback_query.message, title_text, reply_markup=InlineKeyboardMarkup(kb))
     else: await update.message.reply_text(title_text, reply_markup=InlineKeyboardMarkup(kb))
 
+# نظام التقييم
 async def rate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not context.args or not context.args[0].isdigit() or not (1 <= int(context.args[0]) <= 5):
-        msg = "⭐ للتقييم أرسل (مثال):\n`/rate 5`" if get_user_lang(uid) == 'ar' else "⭐ To rate, send:\n`/rate 5`"
+        msg = "⭐ للتقييم، أرسل الأمر متبوعاً برقم من 1 إلى 5 (مثال):\n`/rate 5`" if get_user_lang(uid) == 'ar' else "⭐ To rate, send the command with a number from 1 to 5:\n`/rate 5`"
         return await update.message.reply_text(msg, parse_mode="Markdown")
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
         conn.execute("INSERT OR REPLACE INTO ratings (user_id, rating) VALUES (?, ?)", (uid, int(context.args[0])))
-    msg = "✅ شكراً لتقييمك ودعمك!" if get_user_lang(uid) == 'ar' else "✅ Thank you for your rating!"
+    msg = "✅ شكراً لتقييمك ودعمك! سيساعدنا ذلك في تحديد الميزات الأكثر استخداماً." if get_user_lang(uid) == 'ar' else "✅ Thank you for your rating! This will help us identify the most used features."
     await update.message.reply_text(msg)
 
-# ----------- أوامر الآدمن المخصصة -----------
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
     await update.message.reply_text(
-        "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر المدير:\n/update_dlp - تحديث المحرك\n/setcookie - أرسل الكوكيز مع الأمر\n/backup - سحب قاعدة البيانات\n/msg id text - مراسلة\n/ban id - حظر\n/unban id - فك حظر",
+        "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر المدير المتاحة:\n/update_dlp - تحديث المحرك\n/backup - سحب قاعدة البيانات\n/msg id text - مراسلة شخص عبر البوت باستخدام الـ ID\n/ban id - حظر مستخدم\n/unban id - فك حظر مستخدم\n\n* أو أرسل ملف كوكيز مباشر لتحديثه تلقائياً.",
         reply_markup=admin_main_keyboard(), parse_mode="HTML"
     )
 
@@ -864,7 +884,7 @@ async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYP
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     if not update.message.document:
-        return await update.message.reply_text("📥 يرجى إرفاق ملف `cookies.txt` كملف (Document) مع الأمر.")
+        return await update.message.reply_text("📥 يرجى إرسال ملف `cookies.txt` كملف مستند.")
     
     file_id = update.message.document.file_id
     new_file = await context.bot.get_file(file_id)
@@ -878,6 +898,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياطية من قاعدة البيانات.")
     except Exception as e: await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
+# المراسلة، الحظر، وفك الحظر
 async def admin_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id) or len(context.args) < 1: return
     cmd = update.message.text.split()[0].lower()
@@ -885,14 +906,15 @@ async def admin_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if cmd == "/msg" and len(context.args) > 1:
         try:
+            # مراسلة الشخص عبر الـ ID
             await context.bot.send_message(chat_id=target_id, text=" ".join(context.args[1:]))
-            await update.message.reply_text("✅ تم إرسال الرسالة.")
-        except Exception as e: await update.message.reply_text(f"❌ خطأ: {e}")
+            await update.message.reply_text("✅ تم إرسال الرسالة للمستخدم بنجاح.")
+        except Exception as e: await update.message.reply_text(f"❌ خطأ في الإرسال: {e}")
     elif cmd in ["/ban", "/unban"]:
         with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
             if cmd == "/ban": conn.execute("INSERT OR IGNORE INTO banned_users (id) VALUES (?)", (target_id,))
             else: conn.execute("DELETE FROM banned_users WHERE id = ?", (target_id,))
-        await update.message.reply_text(f"✅ تم تنفيذ أمر {cmd} بنجاح.")
+        await update.message.reply_text(f"✅ تم تنفيذ أمر {cmd} بنجاح على المستخدم.")
 
 # ==========================================================
 # 10. الإعداد والتشغيل (Main)
@@ -926,7 +948,6 @@ def main():
     
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
-    app.add_handler(CommandHandler("setcookie", set_cookie_command))
     app.add_handler(CommandHandler("backup", backup_db_command))
     app.add_handler(CommandHandler(["msg", "ban", "unban"], admin_actions))
     
