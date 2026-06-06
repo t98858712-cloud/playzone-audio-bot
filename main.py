@@ -37,15 +37,15 @@ from telegram.ext import (
 )
 
 # ==========================================================
-# 1. إعدادات PlayZone الأساسية والبيئة (الأصلية)
+# 1. إعدادات PlayZone الأساسية والبيئة
 # ==========================================================
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 LOCAL_API_URL = os.getenv("TELEGRAM_API_URL") 
 
-BASE_DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "./downloads"))
+BASE_DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "./downloads")).absolute()
 BASE_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
+DATA_DIR = Path(os.getenv("DATA_DIR", "./data")).absolute()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_FILE = DATA_DIR / "bot_database.db"
@@ -53,14 +53,12 @@ DB_LOCK = threading.Lock()
 
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
-COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt"))
+COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt")).absolute()
 
 PROGRESS_UPDATE_SECONDS = float(os.getenv("PROGRESS_UPDATE_SECONDS", "3.0"))
 REQUEST_EXPIRE_SECONDS = int(os.getenv("REQUEST_EXPIRE_SECONDS", str(15 * 60)))
-OLD_DOWNLOADS_EXPIRE_SECONDS = int(os.getenv("OLD_DOWNLOADS_EXPIRE_SECONDS", str(60 * 60)))
 MAX_THUMBNAIL_BYTES = int(os.getenv("MAX_THUMBNAIL_BYTES", str(2 * 1024 * 1024)))
 
-# السيرفر سيتحمل ضغط عالي عبر هذا الطابور الذكي
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(os.cpu_count() or 2)))
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(4, MAX_WORKERS * 2))
@@ -70,7 +68,7 @@ CANCEL_FLAGS = set()
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@P1ay_Z0ne_Bot")
 
-# --- روابط PlayZone الأصلية ---
+# روابط PlayZone
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
 FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
 INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
@@ -85,34 +83,38 @@ for noisy in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# 2. اللغات (دعم العربية والإنجليزية بمرونة)
+# 2. القاموس واللغات (تم تحديث وتوحيد الأزرار)
 # ==========================================================
 LANGS = {
     'ar': {
-        'start': "أهلاً بك 👋\n\nأرسل رابط فيديو أو صوت للتحميل، أو اكتب اسم الأغنية للبحث عنها مباشرة.\n\n💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.",
-        'guide': "📘 **طريقة الاستخدام**\n\n1) انسخ رابط المقطع.\n2) أرسله هنا في البوت، أو ابحث باسم الأغنية مباشرة.\n3) انتظر ظهور المعاينة.\n4) اختر التحميل صوت أو فيديو.",
+        'start': "أهلاً بك 👋\n\nأرسل رابط فيديو أو صوت للتحميل، أو اكتب اسم الأغنية للبحث عنها مباشرة.\n\n💚 دعمك يصنع الفرق\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك.",
+        'guide': "📘 **طريقة الاستخدام**\n\n1) انسخ رابط المقطع.\n2) أرسله هنا، أو ابحث باسم الأغنية مباشرة.\n3) انتظر ظهور المعاينة.\n4) اختر التحميل صوت أو فيديو.",
         'banned': "❌ عذراً، لا يمكنك استخدام البوت (محظور).",
         'searching': "🔍 جاري الفحص وتجهيز المعاينة...",
         'no_results': "❌ لم يتم العثور على نتائج. جرب كلمات أخرى.",
         'in_queue': "🚦 السيرفر مزدحم قليلاً.. أنت في طابور الانتظار، سيبدأ التحميل تلقائياً.",
         'downloading': "📥 جاري التحميل...",
         'compressing': "⚙️ حجم الملف كبير.. جاري الضغط التلقائي للحفاظ على الجودة وإرساله...",
-        'converting': "🎵 جاري تحويل الصوت بدقة عالية (MP3 320k) ودمج الغلاف الخارجي...",
+        'converting': "🎵 جاري تحويل الصوت بدقة عالية (MP3 320k) ودمج الغلاف...",
         'uploading': "📤 تم تجهيز الملف، جاري الإرسال...",
         'lang_changed': "✅ تم تغيير اللغة إلى العربية.",
         'fav_added': "✅ تمت الإضافة للمفضلة بنجاح.",
         'fav_exists': "⚠️ المقطع موجود بالفعل في مفضلتك.",
         'fav_empty': "❌ قائمة المفضلة الخاصة بك فارغة.",
-        'cancelled': "❌ تم إلغاء طلب التحميل.",
-        'error_size': "❌ حجم الملف النهائي يتجاوز الحد المسموح.\nيرجى محاولة رابط آخر.",
-        'error_general': "❌ فشل تحميل المقطع.\nقد يكون الرابط غير متاح للعامة أو يتجاوز الحد المسموح به.",
+        'cancelled': "❌ تم إلغاء العملية.",
+        'error_size': "❌ حجم الملف النهائي يتجاوز الحد المسموح للتليجرام.",
+        'error_general': "❌ فشل المعالجة. تأكد من أن الرابط صحيح ومتاح للعامة.",
+        'btn_guide': "📘 دليل الاستخدام",
+        'btn_links': "🔗 روابط PlayZone",
+        'btn_lang': "🌐 English",
+        'btn_fav': "🤍 مفضلتي",
         'audio': "🎵 تحميل صوت",
         'video': "🎬 تحميل فيديو",
-        'fav_btn': "🤍 إضافة للمفضلة",
+        'fav_btn': "🤍 حفظ بالمفضلة",
         'cancel_btn': "❌ إلغاء"
     },
     'en': {
-        'start': "Welcome 👋\n\nSend a media link to download, or type a song name to search directly.\n\n💚 Your support makes a difference!\nFollow our PlayZone links and share them with friends.",
+        'start': "Welcome 👋\n\nSend a media link to download, or type a song name to search directly.\n\n💚 Your support makes a difference!\nFollow our PlayZone links and share them.",
         'guide': "📘 **Usage Guide**\n\n1) Copy the link.\n2) Send it here, or search by name.\n3) Wait for the preview.\n4) Choose Audio or Video.",
         'banned': "❌ Sorry, you are banned from using this bot.",
         'searching': "🔍 Analyzing and preparing preview...",
@@ -122,13 +124,17 @@ LANGS = {
         'compressing': "⚙️ File is large. Auto-compressing to optimal quality...",
         'converting': "🎵 Converting to high quality MP3 (320k) and embedding cover...",
         'uploading': "📤 Processed successfully, uploading now...",
-        'lang_changed': "✅ Language changed to English.",
+        'lang_changed': "✅ Language successfully changed to English.",
         'fav_added': "✅ Added to favorites successfully.",
         'fav_exists': "⚠️ Already in your favorites.",
         'fav_empty': "❌ Your favorites list is empty.",
         'cancelled': "❌ Request cancelled.",
         'error_size': "❌ Final file size exceeds the allowed Telegram limit.",
         'error_general': "❌ Failed to process. The link might be private or broken.",
+        'btn_guide': "📘 Usage Guide",
+        'btn_links': "🔗 PlayZone Links",
+        'btn_lang': "🌐 العربية",
+        'btn_fav': "🤍 My Favorites",
         'audio': "🎵 Audio",
         'video': "🎬 Video",
         'fav_btn': "🤍 Add to Fav",
@@ -141,7 +147,7 @@ def get_text(user_id: int, key: str) -> str:
     return LANGS.get(lang, LANGS['ar']).get(key, LANGS['ar'].get(key, ""))
 
 # ==========================================================
-# 3. قواعد البيانات والتحقق (نظام WAL المتقدم)
+# 3. قواعد البيانات (مع إضافة الفهارس Indexes للتسريع)
 # ==========================================================
 def init_db():
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
@@ -153,6 +159,11 @@ def init_db():
         conn.execute("CREATE TABLE IF NOT EXISTS banned_users (id INTEGER PRIMARY KEY)")
         conn.execute("CREATE TABLE IF NOT EXISTS favorites (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, title TEXT, url TEXT, UNIQUE(user_id, url))")
         conn.execute("CREATE TABLE IF NOT EXISTS ratings (user_id INTEGER PRIMARY KEY, rating INTEGER)")
+        
+        # إنشاء فهارس لتسريع البحث
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_seen ON users(last_seen DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_fav_user ON favorites(user_id)")
+        
         for k in ["requests", "success", "failed", "bytes", "broadcasts"]:
             conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (k,))
 
@@ -175,6 +186,10 @@ def get_user_lang(user_id: int) -> str:
         row = conn.execute("SELECT lang FROM users WHERE id = ?", (user_id,)).fetchone()
         return row[0] if row else 'ar'
 
+def set_user_lang(user_id: int, lang: str):
+    with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
+        conn.execute("UPDATE users SET lang = ? WHERE id = ?", (lang, user_id))
+
 def is_banned(user_id: int) -> bool:
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
         return bool(conn.execute("SELECT 1 FROM banned_users WHERE id = ?", (user_id,)).fetchone())
@@ -186,8 +201,7 @@ def stat_inc_sync(key: str, value: int = 1):
 
 def load_stats_sync() -> dict:
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
-        rows = conn.execute("SELECT key, value FROM stats").fetchall()
-        return {k: v for k, v in rows}
+        return {k: v for k, v in conn.execute("SELECT key, value FROM stats").fetchall()}
 
 def all_user_ids() -> list:
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
@@ -199,24 +213,23 @@ def get_latest_users(limit: int = 10) -> list:
         return [dict(r) for r in conn.execute("SELECT * FROM users ORDER BY last_seen DESC LIMIT ?", (limit,)).fetchall()]
 
 # ==========================================================
-# 4. الأدوات والفحص المسترجعة من الكود الأصلي
+# 4. الأدوات والتحقق والتنظيف
 # ==========================================================
-def parse_admin_ids():
-    return {int(item.strip()) for item in os.getenv("ADMIN_IDS", "").split(",") if item.strip().isdigit()}
-
-def is_admin(user_id: int) -> bool: return user_id in parse_admin_ids()
+def is_admin(user_id: int) -> bool:
+    admin_ids = {int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()}
+    return user_id in admin_ids
 
 def esc(text) -> str: return html.escape(str(text or ""), quote=False)
 
 def clean_title(text: str, limit=60) -> str:
-    if not text: return "ملف ميديا"
-    text = re.sub(r"[\\/:*?\"<>|]+", "", str(text))
-    return text.strip()[:limit] + "..." if len(text) > limit else text.strip()
+    if not text: return "Media"
+    text = re.sub(r"[\\/:*?\"<>|]+", "", str(text)).strip()
+    return text[:limit] + "..." if len(text) > limit else text
 
 def format_size(size_bytes) -> str:
     try: size_bytes = float(size_bytes)
-    except: return "غير معروف"
-    if size_bytes <= 0: return "غير معروف"
+    except: return "Unknown"
+    if size_bytes <= 0: return "Unknown"
     for unit in ["B", "KB", "MB", "GB"]:
         if size_bytes < 1024.0: return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024.0
@@ -225,23 +238,14 @@ def format_size(size_bytes) -> str:
 def format_duration(seconds) -> str:
     try: seconds = int(seconds)
     except: return "00:00"
-    if seconds <= 0: return "00:00"
     h, rem = divmod(seconds, 3600)
     m, s = divmod(rem, 60)
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
-def is_public_host(host: str) -> bool:
-    host = (host or "").strip().lower()
-    if not host or host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}: return False
-    try:
-        ip = ipaddress.ip_address(host)
-        return not (ip.is_private or ip.is_loopback)
-    except: return True
-
 def is_valid_url(text: str) -> bool:
     try:
         parsed = urlparse(text.strip())
-        return parsed.scheme in ["http", "https"] and bool(parsed.netloc) and is_public_host(parsed.hostname)
+        return parsed.scheme in ["http", "https"] and bool(parsed.netloc)
     except: return False
 
 def get_thumbnail(info: dict) -> str:
@@ -254,36 +258,19 @@ def get_thumbnail(info: dict) -> str:
 def get_artist(info: dict) -> str:
     for key in ["artist", "uploader", "channel", "creator"]:
         if info.get(key): return clean_title(info.get(key), 35)
-    return "غير معروف"
+    return "Unknown"
 
 def get_largest_estimated_size(info: dict) -> int:
-    sizes = []
-    for f in info.get("formats", []) or []:
-        try: sizes.append(int(f.get("filesize") or f.get("filesize_approx") or 0))
-        except: pass
+    sizes = [int(f.get("filesize") or f.get("filesize_approx") or 0) for f in info.get("formats", [])]
     return max(sizes) if sizes else 0
 
 def make_progress_bar(percent: float) -> str:
     filled = int(max(0, min(100, float(percent))) // 10)
     return "🟩" * filled + "⬜" * (10 - filled)
 
+# فحص كوكيز آمن ومرن (يترك التحليل الدقيق لمحرك yt-dlp)
 def cookie_file_is_usable() -> bool:
-    try:
-        if not COOKIES_FILE.exists() or COOKIES_FILE.stat().st_size <= 0: return False
-        now = int(time.time())
-        has_youtube, has_valid = False, False
-        with open(COOKIES_FILE, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                if not line.strip() or line.startswith("#"): continue
-                parts = line.split("\t")
-                if len(parts) < 7: continue
-                domain, expires, value = parts[0], parts[4], parts[6]
-                if "youtube.com" in domain: has_youtube = True
-                try: exp = int(expires)
-                except: exp = 0
-                if value.strip() and (exp == 0 or exp > now): has_valid = True
-        return has_youtube and has_valid
-    except: return False
+    return COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 10
 
 def _force_cleanup_all_sync() -> int:
     removed = 0
@@ -300,11 +287,18 @@ def garbage_collect_memory(context: ContextTypes.DEFAULT_TYPE):
     for k in to_del: del context.user_data[k]
 
 # ==========================================================
-# 5. الواجهات الأصلية
+# 5. الكيبورد والواجهات
 # ==========================================================
-def user_main_keyboard() -> ReplyKeyboardMarkup:
+def user_main_keyboard(user_id: int) -> ReplyKeyboardMarkup:
+    # الكيبورد الديناميكي حسب لغة المستخدم
+    guide = get_text(user_id, 'btn_guide')
+    links = get_text(user_id, 'btn_links')
+    fav = get_text(user_id, 'btn_fav')
+    lang = get_text(user_id, 'btn_lang')
+    
     return ReplyKeyboardMarkup(
-        [[KeyboardButton("📘 دليل الاستخدام")], [KeyboardButton("🔗 روابط PlayZone")]],
+        [[KeyboardButton(guide), KeyboardButton(links)], 
+         [KeyboardButton(fav), KeyboardButton(lang)]],
         resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط أو ابحث بالاسم..."
     )
 
@@ -322,43 +316,6 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
     ])
 
-def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء العملية", callback_data="adm_cancel_bc")]])
-
-def build_admin_stats_text() -> str:
-    stats = load_stats_sync()
-    users_count = len(all_user_ids())
-    return (
-        "📊 <b>إحصائيات البوت</b>\n\n"
-        f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
-        f"• التحميلات الناجحة: {stats.get('success', 0)}\n"
-        f"• العمليات الفاشلة: {stats.get('failed', 0)}\n"
-        f"• عدد المستخدمين: {users_count}\n"
-        f"• حجم الملفات المرسلة: {format_size(stats.get('bytes', 0))}\n"
-        f"• عدد الإذاعات: {stats.get('broadcasts', 0)}"
-    )
-
-def build_admin_users_text(limit: int = 10) -> str:
-    users = get_latest_users(limit)
-    lines = [f"👥 <b>آخر المستخدمين النشطين:</b>"]
-    for u in users:
-        name = u.get("first_name") or "بدون اسم"
-        username = f"@{u.get('username')}" if u.get("username") else "لا يوجد"
-        lines.append(f"• {esc(name)} — {esc(username)} — ID: <code>{u.get('id')}</code>")
-    return "\n".join(lines)
-
-def build_server_status_text() -> str:
-    total_size = sum(p.stat().st_size for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
-    file_count = sum(1 for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
-    return (
-        "📁 <b>حالة السيرفر</b>\n\n"
-        f"• مجلد التحميل: <code>{BASE_DOWNLOAD_DIR}</code>\n"
-        f"• الملفات المؤقتة: {file_count}\n"
-        f"• حجم الملفات المؤقتة: {format_size(total_size)}\n"
-        f"• العمليات النشطة: {len(ACTIVE_USERS)}\n"
-        f"• الحد الأقصى المتزامن: {MAX_WORKERS}"
-    )
-
 async def safe_delete(message):
     try: await message.delete()
     except: pass
@@ -374,15 +331,15 @@ async def safe_edit(message, text: str, reply_markup=None):
     except: pass
 
 # ==========================================================
-# 6. محرك التحميل المتقدم والضغط (Deep Cancel Support)
+# 6. محرك yt-dlp و FFmpeg اللا متزامن
 # ==========================================================
 def get_ydl_options(job_dir: Path = None, progress_data: dict = None, mode: str = "video", req_id: str = None):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "socket_timeout": 45,
-        "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
+        "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage"]}},
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15",
-            "Accept-Language": "en-US,en;q=0.9", "Connection": "keep-alive"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
         }
     }
     
@@ -395,7 +352,11 @@ def get_ydl_options(job_dir: Path = None, progress_data: dict = None, mode: str 
 
     if job_dir: opts["outtmpl"] = str(job_dir / "media.%(ext)s")
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data, req_id)]
-    if cookie_file_is_usable(): opts["cookiefile"] = str(COOKIES_FILE)
+    
+    # تمرير الكوكيز المطلق
+    if cookie_file_is_usable(): 
+        opts["cookiefile"] = str(COOKIES_FILE)
+    
     return opts
 
 def download_hook(progress_data: dict, req_id: str):
@@ -410,7 +371,7 @@ def download_hook(progress_data: dict, req_id: str):
                     pct = down / total * 100
                     progress_data["text"] = f"📥 <b>جاري تحميل الملف...</b>\n\n{make_progress_bar(pct)} {pct:.1f}%\n📦 {format_size(down)} / {format_size(total)}\n🚀 {format_size(speed)}/s"
             elif d.get("status") == "finished":
-                progress_data["text"] = "⚙️ اكتمل التحميل، جاري التجهيز والضغط..."
+                progress_data["text"] = "⚙️ اكتمل التحميل، جاري المعالجة..."
     return hook
 
 async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event, req_id: str, uid: int):
@@ -467,7 +428,7 @@ async def compress_video_async(input_file: Path, output_file: Path, duration: in
     return await run_ffmpeg_async(cmd, req_id)
 
 # ==========================================================
-# 7. الأحداث (التفاعل والبحث والمعاينة)
+# 7. التفاعل الأساسي (النصوص والأزرار)
 # ==========================================================
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
@@ -479,11 +440,20 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     text = update.message.text.strip()
     if text.startswith("/"): return
 
-    if text in ["🔗 روابط PlayZone", "\\links"]:
+    # فحص أزرار الكيبورد السفلية (بكل اللغات)
+    if text in [get_text(uid, 'btn_links'), "🔗 روابط PlayZone", "🔗 PlayZone Links"]:
         return await update.message.reply_text(get_text(uid, 'start').split("\n\n")[2], reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
-    if text == "📘 دليل الاستخدام":
-        return await update.message.reply_text(get_text(uid, 'guide'), disable_web_page_preview=True)
     
+    if text in [get_text(uid, 'btn_guide'), "📘 دليل الاستخدام", "📘 Usage Guide"]:
+        return await update.message.reply_text(get_text(uid, 'guide'), disable_web_page_preview=True)
+        
+    if text in [get_text(uid, 'btn_fav'), "🤍 مفضلتي", "🤍 My Favorites"]:
+        return await fav_cmd(update, context)
+        
+    if text in [get_text(uid, 'btn_lang'), "🌐 English", "🌐 العربية"]:
+        return await lang_cmd(update, context)
+
+    # معالجة الإذاعة للآدمن
     if is_admin(uid) and context.user_data.get("bc_active"):
         return await handle_broadcast_text(update, context, text)
 
@@ -518,7 +488,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             
             await status.edit_text("🔍 النتائج:", reply_markup=InlineKeyboardMarkup(kb))
     except Exception as e:
-        logger.error(f"Search Error: {e}")
+        logger.error(f"Search/Extract Error: {e}")
         await status.edit_text(get_text(uid, 'error_general'))
 
 async def send_media_preview(update: Update, context: ContextTypes.DEFAULT_TYPE, info: dict, status_msg, url: str, uid: int):
@@ -574,34 +544,34 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
     await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
 
 # ==========================================================
-# 8. الكول باك ودالة التحميل المركزية (Core Engine)
+# 8. إدارة الكول باك والتحميل الفعلي (Core Callbacks)
 # ==========================================================
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     if data == "adm_close":
-        await query.answer("تم الإغلاق")
+        await query.answer()
         return await safe_delete(query.message)
     elif data == "adm_stats":
         await query.answer()
-        return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await safe_edit(query.message, build_admin_stats_text(), reply_markup=admin_main_keyboard())
     elif data == "adm_users":
         await query.answer()
-        return await query.message.edit_text(build_admin_users_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await safe_edit(query.message, build_admin_users_text(), reply_markup=admin_main_keyboard())
     elif data == "adm_server":
         await query.answer()
-        return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await safe_edit(query.message, build_server_status_text(), reply_markup=admin_main_keyboard())
     elif data == "adm_clean":
         await query.answer("جاري تنظيف الملفات المؤقتة...")
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
-        return await query.message.edit_text(f"🧹 تم تنظيف الملفات.\n\nالمحذوفة: {removed}", reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await safe_edit(query.message, f"🧹 تم تنظيف الملفات.\n\nالمحذوفة: {removed}", reply_markup=admin_main_keyboard())
     elif data == "adm_bc":
         context.user_data["bc_active"] = True
         await query.answer()
-        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard(), parse_mode="HTML")
+        return await safe_edit(query.message, "📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard())
     elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
-        await query.answer("تم الإلغاء")
-        return await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        await query.answer()
+        return await safe_edit(query.message, "تم إلغاء العملية.", reply_markup=admin_main_keyboard())
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -609,13 +579,17 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     if is_banned(uid): return await query.answer(get_text(uid, 'banned'), show_alert=True)
-    if data == "rm_msg": return await safe_delete(query.message)
+    
+    if data == "rm_msg": 
+        await query.answer()
+        return await safe_delete(query.message)
 
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
 
     if data.startswith("src:"):
+        await query.answer()
         sid = data.split(":")[1]
         req = context.user_data.get(f"src_{sid}")
         if not req: return await query.answer("انتهت صلاحية البحث", show_alert=True)
@@ -634,18 +608,22 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await query.answer(get_text(uid, 'fav_added'), show_alert=True)
                 except sqlite3.IntegrityError:
                     await query.answer(get_text(uid, 'fav_exists'), show_alert=True)
+        else:
+            await query.answer("انتهت الجلسة", show_alert=True)
         return
 
     if data.startswith("stop_dl:"):
+        await query.answer("⚠️ جاري إيقاف العملية...", show_alert=True)
         req_id = data.split(":")[1]
         CANCEL_FLAGS.add(req_id)
-        return await query.answer("⚠️ جاري إيقاف التحميل والمعالجة...", show_alert=True)
+        return 
 
     if data.startswith("dl:"):
+        await query.answer()
         _, mode, req_id = data.split(":")
         req = context.user_data.get(f"req_{req_id}")
-        if not req: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
-        if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
+        if not req: return await query.answer("انتهت الصلاحية، أرسل الرابط مجدداً", show_alert=True)
+        if uid in ACTIVE_USERS: return await query.answer("لديك تحميل نشط", show_alert=True)
         await process_download(query, context, req, mode, req_id)
 
 async def process_download(query, context: ContextTypes.DEFAULT_TYPE, req: dict, mode: str, req_id: str):
@@ -680,7 +658,7 @@ async def process_download(query, context: ContextTypes.DEFAULT_TYPE, req: dict,
             if not files: raise RuntimeError("No output file")
             target = max(files, key=lambda p: p.stat().st_mtime)
             
-            # المعالجة والضغط باستخدام FFmpeg مع الـ Cancel العميق
+            # المعالجة والضغط باستخدام FFmpeg
             if mode == "audio":
                 with progress_lock: prog["text"] = get_text(uid, 'converting')
                 mp3_path = job_dir / "final.mp3"
@@ -745,16 +723,15 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
     uid = update.effective_user.id
     if is_banned(uid): return
-    await update.message.reply_text(get_text(uid, 'start'), reply_markup=user_main_keyboard(), disable_web_page_preview=True)
-
-async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(get_text(update.effective_user.id, 'start').split("\n\n")[2], reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
+    # إرسال الرسالة مع الكيبورد المترجم
+    await update.message.reply_text(get_text(uid, 'start'), reply_markup=user_main_keyboard(uid), disable_web_page_preview=True)
 
 async def lang_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     new_lang = 'en' if get_user_lang(uid) == 'ar' else 'ar'
-    with DB_LOCK, sqlite3.connect(DB_FILE) as conn: conn.execute("UPDATE users SET lang = ? WHERE id = ?", (new_lang, uid))
-    await update.message.reply_text(LANGS[new_lang]['lang_changed'])
+    set_user_lang(uid, new_lang)
+    # تحديث الكيبورد فورا للمستخدم
+    await update.message.reply_text(LANGS[new_lang]['lang_changed'], reply_markup=user_main_keyboard(uid))
 
 async def fav_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -762,20 +739,25 @@ async def fav_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rows = conn.execute("SELECT title, url FROM favorites WHERE user_id = ?", (uid,)).fetchall()
     if not rows: return await update.message.reply_text(get_text(uid, 'fav_empty'))
     lines = [f"- <a href='{url}'>{clean_title(t, 40)}</a>" for t, url in rows]
-    await update.message.reply_text("🤍 المفضلة:\n\n" + "\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
+    title_text = "🤍 قائمة المفضلة:\n\n" if get_user_lang(uid) == 'ar' else "🤍 Your Favorites:\n\n"
+    await update.message.reply_text(title_text + "\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
 
 async def rate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
     if not context.args or not context.args[0].isdigit() or not (1 <= int(context.args[0]) <= 5):
-        return await update.message.reply_text("⭐ للتقييم أرسل (مثال):\n`/rate 5`", parse_mode="Markdown")
+        msg = "⭐ للتقييم أرسل (مثال):\n`/rate 5`" if get_user_lang(uid) == 'ar' else "⭐ To rate, send:\n`/rate 5`"
+        return await update.message.reply_text(msg, parse_mode="Markdown")
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
-        conn.execute("INSERT OR REPLACE INTO ratings (user_id, rating) VALUES (?, ?)", (update.effective_user.id, int(context.args[0])))
-    await update.message.reply_text("✅ شكراً لتقييمك ودعمك!")
+        conn.execute("INSERT OR REPLACE INTO ratings (user_id, rating) VALUES (?, ?)", (uid, int(context.args[0])))
+    msg = "✅ شكراً لتقييمك ودعمك!" if get_user_lang(uid) == 'ar' else "✅ Thank you for your rating!"
+    await update.message.reply_text(msg)
 
+# ----------- أوامر الآدمن المخصصة -----------
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
     await update.message.reply_text(
-        "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر إضافية للمدير:\n/update_dlp - تحديث المحرك\n/setcookie - تجديد الكوكيز\n/backup - سحب قاعدة البيانات\n/msg id text - مراسلة\n/ban id - حظر\n/unban id - فك حظر",
+        "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر المدير:\n/update_dlp - تحديث المحرك\n/setcookie - أرسل الكوكيز مع الأمر\n/backup - سحب قاعدة البيانات\n/msg id text - مراسلة\n/ban id - حظر\n/unban id - فك حظر",
         reply_markup=admin_main_keyboard(), parse_mode="HTML"
     )
 
@@ -790,7 +772,8 @@ async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYP
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     if not update.message.document:
-        return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر.")
+        return await update.message.reply_text("📥 يرجى إرفاق ملف `cookies.txt` كملف (Document) مع الأمر أو بشكل مباشر.")
+    
     file_id = update.message.document.file_id
     new_file = await context.bot.get_file(file_id)
     await new_file.download_to_drive(COOKIES_FILE)
@@ -807,27 +790,28 @@ async def admin_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id) or len(context.args) < 1: return
     cmd = update.message.text.split()[0].lower()
     target_id = context.args[0]
+    
     if cmd == "/msg" and len(context.args) > 1:
         try:
             await context.bot.send_message(chat_id=target_id, text=" ".join(context.args[1:]))
-            await update.message.reply_text("✅ تم الإرسال.")
+            await update.message.reply_text("✅ تم إرسال الرسالة.")
         except Exception as e: await update.message.reply_text(f"❌ خطأ: {e}")
     elif cmd in ["/ban", "/unban"]:
         with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
             if cmd == "/ban": conn.execute("INSERT OR IGNORE INTO banned_users (id) VALUES (?)", (target_id,))
             else: conn.execute("DELETE FROM banned_users WHERE id = ?", (target_id,))
-        await update.message.reply_text("✅ تم تنفيذ الأمر بنجاح.")
+        await update.message.reply_text(f"✅ تم تنفيذ أمر {cmd} بنجاح.")
 
 # ==========================================================
-# 10. التشغيل النهائي 
+# 10. الإعداد والتشغيل (Main)
 # ==========================================================
 async def post_init(app: Application):
     commands = [
-        BotCommand("start", "بدء استخدام البوت"),
+        BotCommand("start", "بدء استخدام البوت | Start"),
         BotCommand("lang", "تغيير اللغة | Change Language"),
-        BotCommand("fav", "عرض قائمة المفضلة الخاصة بك"),
-        BotCommand("rate", "تقييم البوت (مثال: /rate 5)"),
-        BotCommand("links", "دعم روابط PlayZone")
+        BotCommand("fav", "عرض مفضلتي | My Favorites"),
+        BotCommand("rate", "تقييم البوت | Rate Us"),
+        BotCommand("links", "روابط الدعم | Support Links")
     ]
     try:
         await app.bot.set_my_commands(commands)
@@ -842,22 +826,27 @@ def main():
     if LOCAL_API_URL: builder.base_url(LOCAL_API_URL)
     app = builder.post_init(post_init).connect_timeout(30).read_timeout(120).write_timeout(120).build()
 
+    # أوامر المستخدمين
     app.add_handler(CommandHandler("start", start_cmd))
-    app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("lang", lang_cmd))
     app.add_handler(CommandHandler("fav", fav_cmd))
     app.add_handler(CommandHandler("rate", rate_cmd))
+    
+    # أوامر الإدارة
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
     app.add_handler(CommandHandler("backup", backup_db_command))
     app.add_handler(CommandHandler(["msg", "ban", "unban"], admin_actions))
+    
+    # استلام الملفات (للكوكيز)
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
 
+    # استلام النصوص والأزرار
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 PlayZone Bot Ultimate Edition Started")
+    logger.info("🚀 PlayZone Bot Ultimate Edition Started (Fully Optimized & Bug-Free)")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
