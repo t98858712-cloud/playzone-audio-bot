@@ -37,7 +37,7 @@ from telegram.ext import (
 )
 
 # ==========================================================
-# 1. إعدادات PlayZone الأساسية والبيئة (الأصلية)
+# 1. الإعدادات والبيئة
 # ==========================================================
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 LOCAL_API_URL = os.getenv("TELEGRAM_API_URL") 
@@ -68,7 +68,7 @@ CANCEL_FLAGS = set()
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@P1ay_Z0ne_Bot")
 
-# روابط PlayZone (محفوظة كما هي)
+# روابط PlayZone
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
 FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
 INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
@@ -83,7 +83,7 @@ for noisy in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# 2. القاموس واللغات (النصوص الأصلية)
+# 2. القاموس واللغات
 # ==========================================================
 LANGS = {
     'ar': {
@@ -95,7 +95,7 @@ LANGS = {
         'in_queue': "🚦 السيرفر مزدحم قليلاً.. أنت في طابور الانتظار، سيبدأ التحميل تلقائياً.",
         'downloading': "📥 جاري التحميل...",
         'compressing': "⚙️ حجم الملف كبير.. جاري الضغط التلقائي للحفاظ على الجودة وإرساله...",
-        'converting': "🎵 جاري تحويل الصوت بدقة عالية (MP3 320k) ودمج الغلاف...",
+        'converting': "🎵 جاري تحويل الصوت بدقة عالية (MP3) ودمج الغلاف...",
         'uploading': "📤 تم تجهيز الملف، جاري الإرسال...",
         'lang_changed': "✅ تم تغيير اللغة إلى العربية.",
         'fav_added': "✅ تمت الإضافة للمفضلة بنجاح.",
@@ -124,7 +124,7 @@ LANGS = {
         'in_queue': "🚦 Server is busy. You are in the queue, download will start shortly.",
         'downloading': "📥 Downloading...",
         'compressing': "⚙️ File is large. Auto-compressing to optimal quality...",
-        'converting': "🎵 Converting to high quality MP3 (320k) and embedding cover...",
+        'converting': "🎵 Converting to high quality MP3 and embedding cover...",
         'uploading': "📤 Processed successfully, uploading now...",
         'lang_changed': "✅ Language successfully changed to English.",
         'fav_added': "✅ Added to favorites successfully.",
@@ -151,7 +151,7 @@ def get_text(user_id: int, key: str) -> str:
     return LANGS.get(lang, LANGS['ar']).get(key, LANGS['ar'].get(key, ""))
 
 # ==========================================================
-# 3. قواعد البيانات
+# 3. قواعد البيانات والإحصائيات اليومية
 # ==========================================================
 def init_db():
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
@@ -166,9 +166,6 @@ def init_db():
         
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_seen ON users(last_seen DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_fav_user ON favorites(user_id)")
-        
-        for k in ["requests", "success", "failed", "bytes", "broadcasts"]:
-            conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (k,))
 
 def register_user_sync(user):
     if not user: return
@@ -198,9 +195,15 @@ def is_banned(user_id: int) -> bool:
         return bool(conn.execute("SELECT 1 FROM banned_users WHERE id = ?", (user_id,)).fetchone())
 
 def stat_inc_sync(key: str, value: int = 1):
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    daily_key = f"{key}_{today_str}"
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
+        # إحصائية عامة
         conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (key,))
         conn.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, key))
+        # إحصائية يومية
+        conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (daily_key,))
+        conn.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, daily_key))
 
 def load_stats_sync() -> dict:
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
@@ -418,7 +421,9 @@ async def convert_to_mp3_async(input_file: Path, output_file: Path, req_id: str,
 
 async def compress_video_async(input_file: Path, output_file: Path, duration: int, req_id: str) -> bool:
     target_size = MAX_TELEGRAM_SIZE * 0.95
-    total_bitrate = (target_size * 8) / (duration or 1)
+    # حماية من خطأ القسمة على صفر
+    safe_duration = duration if duration and duration > 0 else 60 
+    total_bitrate = (target_size * 8) / safe_duration
     vid_bitrate = max(50000, total_bitrate - 128000)
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(input_file),
            "-c:v", "libx264", "-b:v", str(int(vid_bitrate)), "-preset", "veryfast",
@@ -437,10 +442,8 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if is_banned(uid): return await update.message.reply_text(get_text(uid, 'banned'))
     text = update.message.text.strip()
     
-    # تجاهل السلاشات تماماً من هذا الموجه لتفادي التداخل
     if text.startswith("/"): return
 
-    # فحص أزرار الكيبورد السفلية (بكل اللغات)
     if text in [get_text(uid, 'btn_links'), "🔗 روابط PlayZone", "🔗 PlayZone Links"]:
         return await show_playzone_links(update, context)
     
@@ -453,7 +456,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if text in [get_text(uid, 'btn_lang'), "🌐 English", "🌐 العربية"]:
         return await lang_cmd(update, context)
 
-    # معالجة الإذاعة للآدمن
     if is_admin(uid) and context.user_data.get("bc_active"):
         return await handle_broadcast_text(update, context, text)
 
@@ -469,7 +471,10 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             opts["skip_download"] = True
             info = await loop.run_in_executor(EXECUTOR, lambda: yt_dlp.YoutubeDL(opts).extract_info(text, download=False))
             await send_media_preview(update, context, info, status, text, uid)
-            stat_inc_sync("requests")
+            
+            domain = urlparse(text).netloc.replace("www.", "")
+            stat_inc_sync(f"plat_{domain}", 1)
+            stat_inc_sync("requests", 1)
         else:
             opts = {"quiet": True, "extract_flat": True, "playlist_items": "1-5"}
             info = await loop.run_in_executor(EXECUTOR, lambda: yt_dlp.YoutubeDL(opts).extract_info(f"ytsearch5:{text}", download=False))
@@ -487,6 +492,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
                     context.user_data[f"src_{sid}"] = {"url": v_url, "timestamp": time.time()}
             
             await status.edit_text("🔍 النتائج:", reply_markup=InlineKeyboardMarkup(kb))
+            stat_inc_sync("searches", 1)
     except Exception as e:
         logger.error(f"Search/Extract Error: {e}")
         await status.edit_text(get_text(uid, 'error_general'))
@@ -516,7 +522,6 @@ async def send_media_preview(update: Update, context: ContextTypes.DEFAULT_TYPE,
     if thumb_url:
         try:
             await status_msg.delete()
-            # استخدام الـ message من التحديث أو رسالة الحالة حسب السياق
             target_msg = update.message if update.message else update.callback_query.message
             return await target_msg.reply_photo(photo=thumb_url, caption=caption, reply_markup=kb, parse_mode="HTML")
         except: pass
@@ -542,7 +547,7 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
             except: fail += 1
         except: fail += 1
     
-    stat_inc_sync("broadcasts")
+    stat_inc_sync("broadcasts", 1)
     await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
 
 # ==========================================================
@@ -555,21 +560,61 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         return await safe_delete(query.message)
     elif data == "adm_stats":
         await query.answer()
-        return await safe_edit(query.message, build_admin_stats_text(), reply_markup=admin_main_keyboard())
+        
+        stats = load_stats_sync()
+        users_count = len(all_user_ids())
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        daily_dl = stats.get(f"success_{today_str}", 0)
+        
+        # ترتيب المنصات الأكثر استخداماً
+        plats = {k.replace("plat_", ""): v for k, v in stats.items() if k.startswith("plat_") and "202" not in k}
+        top_plats = sorted(plats.items(), key=lambda x: x[1], reverse=True)[:3]
+        plats_text = "\n".join([f"• {k}: {v}" for k, v in top_plats]) if top_plats else "لا يوجد"
+
+        text = (
+            "📊 <b>إحصائيات البوت المتقدمة</b>\n\n"
+            f"• إجمالي المستخدمين: {users_count}\n"
+            f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
+            f"• التحميلات الناجحة (الكلي): {stats.get('success', 0)}\n"
+            f"• تحميلات اليوم: {daily_dl}\n"
+            f"• حجم الملفات الكلي: {format_size(stats.get('bytes', 0))}\n\n"
+            f"🌐 <b>أكثر 3 منصات استخداماً:</b>\n{plats_text}"
+        )
+        return await safe_edit(query.message, text, reply_markup=admin_main_keyboard())
+    
     elif data == "adm_users":
         await query.answer()
-        return await safe_edit(query.message, build_admin_users_text(), reply_markup=admin_main_keyboard())
+        users = get_latest_users(10)
+        lines = [f"👥 <b>آخر المستخدمين النشطين:</b>"]
+        for u in users:
+            name = u.get("first_name") or "بدون اسم"
+            username = f"@{u.get('username')}" if u.get("username") else "لا يوجد"
+            lines.append(f"• {esc(name)} — {esc(username)} — ID: <code>{u.get('id')}</code>")
+        return await safe_edit(query.message, "\n".join(lines), reply_markup=admin_main_keyboard())
+        
     elif data == "adm_server":
         await query.answer()
-        return await safe_edit(query.message, build_server_status_text(), reply_markup=admin_main_keyboard())
+        total_size = sum(p.stat().st_size for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
+        file_count = sum(1 for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
+        text = (
+            "📁 <b>حالة السيرفر</b>\n\n"
+            f"• الملفات المؤقتة: {file_count}\n"
+            f"• حجم الكاش: {format_size(total_size)}\n"
+            f"• العمليات النشطة: {len(ACTIVE_USERS)}\n"
+            f"• الحد الأقصى المتزامن: {MAX_WORKERS}"
+        )
+        return await safe_edit(query.message, text, reply_markup=admin_main_keyboard())
+        
     elif data == "adm_clean":
         await query.answer("جاري تنظيف الملفات المؤقتة...")
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
         return await safe_edit(query.message, f"🧹 تم تنظيف الملفات.\n\nالمحذوفة: {removed}", reply_markup=admin_main_keyboard())
+        
     elif data == "adm_bc":
         context.user_data["bc_active"] = True
         await query.answer()
         return await safe_edit(query.message, "📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard())
+        
     elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
         await query.answer()
@@ -598,7 +643,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             row = conn.execute("SELECT url FROM favorites WHERE id = ? AND user_id = ?", (fav_id, uid)).fetchone()
         if not row: return await query.answer("المقطع غير موجود.", show_alert=True)
         
-        # محاكاة إرسال رابط
         update.message = query.message
         update.message.text = row[0]
         await query.message.delete()
@@ -617,7 +661,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(get_text(uid, 'fav_cleared'), show_alert=True)
         return await safe_delete(query.message)
 
-    # --- باقي الأزرار ---
+    # --- الأزرار العامة ---
     if data.startswith("src:"):
         await query.answer()
         sid = data.split(":")[1]
@@ -678,7 +722,6 @@ async def process_download(query, context: ContextTypes.DEFAULT_TYPE, req: dict,
             
             loop = asyncio.get_running_loop()
             
-            # تحميل الغلاف بشكل غير متزامن
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(req.get("thumb_url"), job_dir / "thumb.jpg"))
             
             opts = get_ydl_options(job_dir, prog, mode, req_id)
@@ -688,7 +731,6 @@ async def process_download(query, context: ContextTypes.DEFAULT_TYPE, req: dict,
             if not files: raise RuntimeError("No output file")
             target = max(files, key=lambda p: p.stat().st_mtime)
             
-            # المعالجة والضغط باستخدام FFmpeg
             if mode == "audio":
                 with progress_lock: prog["text"] = get_text(uid, 'converting')
                 mp3_path = job_dir / "final.mp3"
@@ -727,17 +769,17 @@ async def process_download(query, context: ContextTypes.DEFAULT_TYPE, req: dict,
                         read_timeout=120, write_timeout=120
                     )
             
-            stat_inc_sync("success")
+            stat_inc_sync("success", 1)
             stat_inc_sync("bytes", target.stat().st_size)
             await safe_delete(query.message)
             
     except ValueError as e:
         if str(e) == "USER_CANCELLED": await safe_edit(query.message, get_text(uid, 'cancelled'))
     except (TimedOut, NetworkError):
-        stat_inc_sync("failed")
+        stat_inc_sync("failed", 1)
         await safe_edit(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال.")
     except Exception as e:
-        stat_inc_sync("failed")
+        stat_inc_sync("failed", 1)
         logger.error(f"Processing Error: {e}")
         await safe_edit(query.message, get_text(uid, 'error_general'))
     finally:
@@ -747,7 +789,7 @@ async def process_download(query, context: ContextTypes.DEFAULT_TYPE, req: dict,
         shutil.rmtree(job_dir, ignore_errors=True)
 
 # ==========================================================
-# 9. السلاشات والأوامر (مفصولة ومنظمة بدقة)
+# 9. السلاشات والأوامر 
 # ==========================================================
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
@@ -757,7 +799,6 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    # جلب الرسالة الخاصة بالروابط من نص start
     text = get_text(uid, 'start').split("\n\n")[-1]
     await update.message.reply_text(text, reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
 
@@ -777,7 +818,6 @@ async def fav_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_msg=F
         if edit_msg: return await safe_edit(update.callback_query.message, text)
         return await update.message.reply_text(text)
 
-    # إنشاء كيبورد الأزرار الشفافة للمفضلة
     kb = []
     for f_id, f_title in rows:
         title = clean_title(f_title, 35)
@@ -786,16 +826,13 @@ async def fav_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_msg=F
             InlineKeyboardButton("❌", callback_data=f"delfav:{f_id}")
         ])
     
-    # زر مسح الكل
     clear_btn_text = "🗑 مسح المفضلة بالكامل" if get_user_lang(uid) == 'ar' else "🗑 Clear Favorites"
     kb.append([InlineKeyboardButton(clear_btn_text, callback_data="clearfav")])
     
     title_text = "🤍 قائمة المفضلة (آخر 20):\n\nاختر مقطعاً لتحميله:" if get_user_lang(uid) == 'ar' else "🤍 Your Favorites (Last 20):\n\nChoose to download:"
     
-    if edit_msg:
-        await safe_edit(update.callback_query.message, title_text, reply_markup=InlineKeyboardMarkup(kb))
-    else:
-        await update.message.reply_text(title_text, reply_markup=InlineKeyboardMarkup(kb))
+    if edit_msg: await safe_edit(update.callback_query.message, title_text, reply_markup=InlineKeyboardMarkup(kb))
+    else: await update.message.reply_text(title_text, reply_markup=InlineKeyboardMarkup(kb))
 
 async def rate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -861,7 +898,6 @@ async def admin_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 10. الإعداد والتشغيل (Main)
 # ==========================================================
 async def post_init(app: Application):
-    # تثبيت القائمة الجانبية الموحدة لجميع المستخدمين
     commands = [
         BotCommand("start", "بدء استخدام البوت | Start"),
         BotCommand("fav", "عرض مفضلتي | My Favorites"),
@@ -882,24 +918,19 @@ def main():
     if LOCAL_API_URL: builder.base_url(LOCAL_API_URL)
     app = builder.post_init(post_init).connect_timeout(30).read_timeout(120).write_timeout(120).build()
 
-    # --- تسجيل السلاشات (التي تبدأ بـ / فقط) ---
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("lang", lang_cmd))
     app.add_handler(CommandHandler("fav", fav_cmd))
     app.add_handler(CommandHandler("rate", rate_cmd))
     
-    # أوامر الإدارة المحمية
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
     app.add_handler(CommandHandler("backup", backup_db_command))
     app.add_handler(CommandHandler(["msg", "ban", "unban"], admin_actions))
     
-    # استلام الملفات (للكوكيز)
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
-
-    # استلام النصوص والأزرار السفلية والروابط (تتجاهل السلاشات)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
