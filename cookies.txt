@@ -2,5 +2,5 @@
 # http://curl.haxx.se/rfc/cookie_spec.html
 # This is a generated file! Do not edit.
 
-.youtube.com	TRUE	/	TRUE	1799999999	VISITOR_INFO1_LIVE	dummy_value_123
-.youtube.com	TRUE	/	TRUE	1799999999	LOGIN_INFO	dummy_value_456
+.youtube.com	TRUE	/	TRUE	1799999999	VISITOR_INFO1_LIVE	A1b2C3d4E5f
+.youtube.com	TRUE	/	TRUE	1799999999	LOGIN_INFO	        g6H7i8J9k0L...
