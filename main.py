@@ -37,7 +37,7 @@ from telegram.ext import (
 )
 
 # ==========================================================
-# 1. إعدادات PlayZone الأساسية والبيئة
+# 1. إعدادات PlayZone الأساسية والبيئة (الأصلية)
 # ==========================================================
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 LOCAL_API_URL = os.getenv("TELEGRAM_API_URL") 
@@ -68,7 +68,7 @@ CANCEL_FLAGS = set()
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@P1ay_Z0ne_Bot")
 
-# روابط PlayZone
+# روابط PlayZone (محفوظة كما هي)
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
 FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
 INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
@@ -83,7 +83,7 @@ for noisy in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# 2. القاموس واللغات (تم تحديث وتوحيد الأزرار)
+# 2. القاموس واللغات (النصوص الأصلية)
 # ==========================================================
 LANGS = {
     'ar': {
@@ -101,6 +101,8 @@ LANGS = {
         'fav_added': "✅ تمت الإضافة للمفضلة بنجاح.",
         'fav_exists': "⚠️ المقطع موجود بالفعل في مفضلتك.",
         'fav_empty': "❌ قائمة المفضلة الخاصة بك فارغة.",
+        'fav_deleted': "🗑 تم مسح المقطع من المفضلة.",
+        'fav_cleared': "🗑 تم إفراغ قائمة المفضلة بالكامل.",
         'cancelled': "❌ تم إلغاء العملية.",
         'error_size': "❌ حجم الملف النهائي يتجاوز الحد المسموح للتليجرام.",
         'error_general': "❌ فشل المعالجة. تأكد من أن الرابط صحيح ومتاح للعامة.",
@@ -128,6 +130,8 @@ LANGS = {
         'fav_added': "✅ Added to favorites successfully.",
         'fav_exists': "⚠️ Already in your favorites.",
         'fav_empty': "❌ Your favorites list is empty.",
+        'fav_deleted': "🗑 Removed from favorites.",
+        'fav_cleared': "🗑 Favorites list cleared.",
         'cancelled': "❌ Request cancelled.",
         'error_size': "❌ Final file size exceeds the allowed Telegram limit.",
         'error_general': "❌ Failed to process. The link might be private or broken.",
@@ -147,7 +151,7 @@ def get_text(user_id: int, key: str) -> str:
     return LANGS.get(lang, LANGS['ar']).get(key, LANGS['ar'].get(key, ""))
 
 # ==========================================================
-# 3. قواعد البيانات (مع إضافة الفهارس Indexes للتسريع)
+# 3. قواعد البيانات
 # ==========================================================
 def init_db():
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
@@ -160,7 +164,6 @@ def init_db():
         conn.execute("CREATE TABLE IF NOT EXISTS favorites (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, title TEXT, url TEXT, UNIQUE(user_id, url))")
         conn.execute("CREATE TABLE IF NOT EXISTS ratings (user_id INTEGER PRIMARY KEY, rating INTEGER)")
         
-        # إنشاء فهارس لتسريع البحث
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_seen ON users(last_seen DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_fav_user ON favorites(user_id)")
         
@@ -213,7 +216,7 @@ def get_latest_users(limit: int = 10) -> list:
         return [dict(r) for r in conn.execute("SELECT * FROM users ORDER BY last_seen DESC LIMIT ?", (limit,)).fetchall()]
 
 # ==========================================================
-# 4. الأدوات والتحقق والتنظيف
+# 4. الأدوات المساعدة
 # ==========================================================
 def is_admin(user_id: int) -> bool:
     admin_ids = {int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()}
@@ -268,7 +271,6 @@ def make_progress_bar(percent: float) -> str:
     filled = int(max(0, min(100, float(percent))) // 10)
     return "🟩" * filled + "⬜" * (10 - filled)
 
-# فحص كوكيز آمن ومرن (يترك التحليل الدقيق لمحرك yt-dlp)
 def cookie_file_is_usable() -> bool:
     return COOKIES_FILE.exists() and COOKIES_FILE.stat().st_size > 10
 
@@ -290,7 +292,6 @@ def garbage_collect_memory(context: ContextTypes.DEFAULT_TYPE):
 # 5. الكيبورد والواجهات
 # ==========================================================
 def user_main_keyboard(user_id: int) -> ReplyKeyboardMarkup:
-    # الكيبورد الديناميكي حسب لغة المستخدم
     guide = get_text(user_id, 'btn_guide')
     links = get_text(user_id, 'btn_links')
     fav = get_text(user_id, 'btn_fav')
@@ -331,7 +332,7 @@ async def safe_edit(message, text: str, reply_markup=None):
     except: pass
 
 # ==========================================================
-# 6. محرك yt-dlp و FFmpeg اللا متزامن
+# 6. محرك التحميل والمعالجة (yt-dlp & FFmpeg)
 # ==========================================================
 def get_ydl_options(job_dir: Path = None, progress_data: dict = None, mode: str = "video", req_id: str = None):
     opts = {
@@ -352,10 +353,7 @@ def get_ydl_options(job_dir: Path = None, progress_data: dict = None, mode: str 
 
     if job_dir: opts["outtmpl"] = str(job_dir / "media.%(ext)s")
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data, req_id)]
-    
-    # تمرير الكوكيز المطلق
-    if cookie_file_is_usable(): 
-        opts["cookiefile"] = str(COOKIES_FILE)
+    if cookie_file_is_usable(): opts["cookiefile"] = str(COOKIES_FILE)
     
     return opts
 
@@ -438,11 +436,13 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if is_banned(uid): return await update.message.reply_text(get_text(uid, 'banned'))
     text = update.message.text.strip()
+    
+    # تجاهل السلاشات تماماً من هذا الموجه لتفادي التداخل
     if text.startswith("/"): return
 
     # فحص أزرار الكيبورد السفلية (بكل اللغات)
     if text in [get_text(uid, 'btn_links'), "🔗 روابط PlayZone", "🔗 PlayZone Links"]:
-        return await update.message.reply_text(get_text(uid, 'start').split("\n\n")[2], reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
+        return await show_playzone_links(update, context)
     
     if text in [get_text(uid, 'btn_guide'), "📘 دليل الاستخدام", "📘 Usage Guide"]:
         return await update.message.reply_text(get_text(uid, 'guide'), disable_web_page_preview=True)
@@ -516,7 +516,9 @@ async def send_media_preview(update: Update, context: ContextTypes.DEFAULT_TYPE,
     if thumb_url:
         try:
             await status_msg.delete()
-            return await update.message.reply_photo(photo=thumb_url, caption=caption, reply_markup=kb, parse_mode="HTML")
+            # استخدام الـ message من التحديث أو رسالة الحالة حسب السياق
+            target_msg = update.message if update.message else update.callback_query.message
+            return await target_msg.reply_photo(photo=thumb_url, caption=caption, reply_markup=kb, parse_mode="HTML")
         except: pass
     await safe_edit(status_msg, caption, reply_markup=kb)
 
@@ -544,7 +546,7 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
     await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
 
 # ==========================================================
-# 8. إدارة الكول باك والتحميل الفعلي (Core Callbacks)
+# 8. إدارة الكول باك والتحميل (Core Callbacks)
 # ==========================================================
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
@@ -588,6 +590,34 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
 
+    # --- أزرار المفضلة التفاعلية ---
+    if data.startswith("playfav:"):
+        await query.answer()
+        fav_id = data.split(":")[1]
+        with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
+            row = conn.execute("SELECT url FROM favorites WHERE id = ? AND user_id = ?", (fav_id, uid)).fetchone()
+        if not row: return await query.answer("المقطع غير موجود.", show_alert=True)
+        
+        # محاكاة إرسال رابط
+        update.message = query.message
+        update.message.text = row[0]
+        await query.message.delete()
+        return await handle_incoming_text(update, context)
+
+    if data.startswith("delfav:"):
+        fav_id = data.split(":")[1]
+        with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
+            conn.execute("DELETE FROM favorites WHERE id = ? AND user_id = ?", (fav_id, uid))
+        await query.answer(get_text(uid, 'fav_deleted'), show_alert=True)
+        return await fav_cmd(update, context, edit_msg=True)
+
+    if data == "clearfav":
+        with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
+            conn.execute("DELETE FROM favorites WHERE user_id = ?", (uid,))
+        await query.answer(get_text(uid, 'fav_cleared'), show_alert=True)
+        return await safe_delete(query.message)
+
+    # --- باقي الأزرار ---
     if data.startswith("src:"):
         await query.answer()
         sid = data.split(":")[1]
@@ -717,30 +747,55 @@ async def process_download(query, context: ContextTypes.DEFAULT_TYPE, req: dict,
         shutil.rmtree(job_dir, ignore_errors=True)
 
 # ==========================================================
-# 9. الأوامر والإدارة 
+# 9. السلاشات والأوامر (مفصولة ومنظمة بدقة)
 # ==========================================================
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
     uid = update.effective_user.id
     if is_banned(uid): return
-    # إرسال الرسالة مع الكيبورد المترجم
     await update.message.reply_text(get_text(uid, 'start'), reply_markup=user_main_keyboard(uid), disable_web_page_preview=True)
+
+async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    # جلب الرسالة الخاصة بالروابط من نص start
+    text = get_text(uid, 'start').split("\n\n")[-1]
+    await update.message.reply_text(text, reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
 
 async def lang_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     new_lang = 'en' if get_user_lang(uid) == 'ar' else 'ar'
     set_user_lang(uid, new_lang)
-    # تحديث الكيبورد فورا للمستخدم
     await update.message.reply_text(LANGS[new_lang]['lang_changed'], reply_markup=user_main_keyboard(uid))
 
-async def fav_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
+async def fav_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_msg=False):
+    uid = update.effective_user.id if update.message else update.callback_query.from_user.id
     with DB_LOCK, sqlite3.connect(DB_FILE) as conn:
-        rows = conn.execute("SELECT title, url FROM favorites WHERE user_id = ?", (uid,)).fetchall()
-    if not rows: return await update.message.reply_text(get_text(uid, 'fav_empty'))
-    lines = [f"- <a href='{url}'>{clean_title(t, 40)}</a>" for t, url in rows]
-    title_text = "🤍 قائمة المفضلة:\n\n" if get_user_lang(uid) == 'ar' else "🤍 Your Favorites:\n\n"
-    await update.message.reply_text(title_text + "\n".join(lines), parse_mode="HTML", disable_web_page_preview=True)
+        rows = conn.execute("SELECT id, title FROM favorites WHERE user_id = ? ORDER BY id DESC LIMIT 20", (uid,)).fetchall()
+    
+    if not rows:
+        text = get_text(uid, 'fav_empty')
+        if edit_msg: return await safe_edit(update.callback_query.message, text)
+        return await update.message.reply_text(text)
+
+    # إنشاء كيبورد الأزرار الشفافة للمفضلة
+    kb = []
+    for f_id, f_title in rows:
+        title = clean_title(f_title, 35)
+        kb.append([
+            InlineKeyboardButton(f"🎵 {title}", callback_data=f"playfav:{f_id}"),
+            InlineKeyboardButton("❌", callback_data=f"delfav:{f_id}")
+        ])
+    
+    # زر مسح الكل
+    clear_btn_text = "🗑 مسح المفضلة بالكامل" if get_user_lang(uid) == 'ar' else "🗑 Clear Favorites"
+    kb.append([InlineKeyboardButton(clear_btn_text, callback_data="clearfav")])
+    
+    title_text = "🤍 قائمة المفضلة (آخر 20):\n\nاختر مقطعاً لتحميله:" if get_user_lang(uid) == 'ar' else "🤍 Your Favorites (Last 20):\n\nChoose to download:"
+    
+    if edit_msg:
+        await safe_edit(update.callback_query.message, title_text, reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await update.message.reply_text(title_text, reply_markup=InlineKeyboardMarkup(kb))
 
 async def rate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -772,7 +827,7 @@ async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYP
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     if not update.message.document:
-        return await update.message.reply_text("📥 يرجى إرفاق ملف `cookies.txt` كملف (Document) مع الأمر أو بشكل مباشر.")
+        return await update.message.reply_text("📥 يرجى إرفاق ملف `cookies.txt` كملف (Document) مع الأمر.")
     
     file_id = update.message.document.file_id
     new_file = await context.bot.get_file(file_id)
@@ -806,12 +861,13 @@ async def admin_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 10. الإعداد والتشغيل (Main)
 # ==========================================================
 async def post_init(app: Application):
+    # تثبيت القائمة الجانبية الموحدة لجميع المستخدمين
     commands = [
         BotCommand("start", "بدء استخدام البوت | Start"),
-        BotCommand("lang", "تغيير اللغة | Change Language"),
         BotCommand("fav", "عرض مفضلتي | My Favorites"),
-        BotCommand("rate", "تقييم البوت | Rate Us"),
-        BotCommand("links", "روابط الدعم | Support Links")
+        BotCommand("lang", "تغيير اللغة | Change Language"),
+        BotCommand("links", "روابط الدعم | Support Links"),
+        BotCommand("rate", "تقييم البوت | Rate Us")
     ]
     try:
         await app.bot.set_my_commands(commands)
@@ -826,13 +882,14 @@ def main():
     if LOCAL_API_URL: builder.base_url(LOCAL_API_URL)
     app = builder.post_init(post_init).connect_timeout(30).read_timeout(120).write_timeout(120).build()
 
-    # أوامر المستخدمين
+    # --- تسجيل السلاشات (التي تبدأ بـ / فقط) ---
     app.add_handler(CommandHandler("start", start_cmd))
+    app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("lang", lang_cmd))
     app.add_handler(CommandHandler("fav", fav_cmd))
     app.add_handler(CommandHandler("rate", rate_cmd))
     
-    # أوامر الإدارة
+    # أوامر الإدارة المحمية
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
@@ -842,11 +899,11 @@ def main():
     # استلام الملفات (للكوكيز)
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
 
-    # استلام النصوص والأزرار
+    # استلام النصوص والأزرار السفلية والروابط (تتجاهل السلاشات)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 PlayZone Bot Ultimate Edition Started (Fully Optimized & Bug-Free)")
+    logger.info("🚀 PlayZone Bot (Pro Edition) Started Successfully!")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
