@@ -740,21 +740,15 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             title = clean_title(request.get("title", "ملف ميديا"), 80)
             duration = int(request.get("duration") or 0)
             caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"
-                        # نص الرسالة المراد مشاركتهاfrom urllib.parse import quote_plus  # تأكد من إضافتها في الأعلى مع الاستيرادات
+                        # نص الرسالة المراد مشاركتهاfrom urllib.parse import quote_plus  # تأكد من إضافتها في الأعلى مع الاستيراداتfrom urllib.parse import quote_plus
 
-# ... داخل دالة start_download_from_callback ...
-
-# نص الرسالة (يُفضل تقليل الطول لضمان عمل الرابط في كل الأجهزة)
 share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن: https://t.me/MusicPlayZoneBot"
 
-# استخدام quote_plus هو الأكثر أماناً للروابط
 share_link = f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME.replace('@', '')}&text={quote_plus(share_text)}"
 
-# إنشاء الزر
 media_keyboard = InlineKeyboardMarkup([
     [InlineKeyboardButton("🌟 أعجبك البوت؟ شاركه", url=share_link)]
 ])
-
 
             with open(target_file, "rb") as f:
                 if mode == "audio":
