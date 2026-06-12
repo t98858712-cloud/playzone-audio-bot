@@ -750,7 +750,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
             
             media_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌟 أعجبك البوت؟ انشره", url=share_link)]
+                [InlineKeyboardButton("🌟 أعجبك البوت؟ شاركه", url=share_link)]
             ])
 
 
