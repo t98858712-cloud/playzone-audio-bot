@@ -191,11 +191,15 @@ async def start_cmd(upd: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def admin_panel(upd: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if is_admin(upd.effective_user.id): ctx.user_data.pop("bc_active", None); await upd.message.reply_text("🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر:\n/update_dlp - تحديث المحرك\n/setcookie - تجديد الكوكيز\n/backup - نسخة قاعدة البيانات", reply_markup=admin_main_keyboard(), parse_mode="HTML")
 
+async def show_playzone_links(upd: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    register_user_sync(upd.effective_user)
+    await upd.message.reply_text(build_playzone_links_text(), reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
+
 async def text_handler(upd: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not upd.message or not upd.message.text: return
     uid, text = upd.effective_user.id, upd.message.text.strip(); register_user_sync(upd.effective_user)
 
-    if text in ["🔗 روابط PlayZone", "/links"]: return await upd.message.reply_text(build_playzone_links_text(), reply_markup=build_playzone_links_keyboard(), disable_web_page_preview=True)
+    if text in ["🔗 روابط PlayZone", "/links", "\\links"]: return await show_playzone_links(upd, ctx)
     if text == "📘 دليل الاستخدام": return await upd.message.reply_text(build_guide_text())
     if is_admin(uid) and ctx.user_data.get("bc_active"):
         ctx.user_data["bc_active"] = False; s = await upd.message.reply_text("📢 جاري الإرسال..."); sent = fail = 0
