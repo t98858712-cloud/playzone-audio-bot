@@ -740,17 +740,14 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             title = clean_title(request.get("title", "ملف ميديا"), 80)
             duration = int(request.get("duration") or 0)
             caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"
-            share_text = """
-🤖 أستخدم هذا البوت لتحميل الفيديوهات والأغاني بسهولة وسرعة.
-
-🎬 تحميل الفيديوهات
-🎵 تحميل ملفات MP3
-⚡ جودة عالية
-
-جرّبه الآن مجاناً 👇
-
-@MusicPlayZoneBot
-"""
+            share_text = (
+    "🤖 أستخدم هذا البوت لتحميل الفيديوهات والأغاني بسهولة وسرعة.\n\n"
+    "🎬 تحميل الفيديوهات\n"
+    "🎵 تحميل ملفات MP3\n"
+    "⚡ جودة عالية\n\n"
+    "جرّبه الآن مجاناً 👇\n\n"
+    "@MusicPlayZoneBot"
+)
 
 share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
 
