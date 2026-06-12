@@ -112,6 +112,12 @@ async def edit_message_smart(msg, text: str, reply_markup=None, parse_mode: str 
         if "not modified" not in str(e).lower(): raise
     except Exception: pass
 
+async def send_preview(update: Update, thumb: str, caption: str, keyboard: InlineKeyboardMarkup):
+    if thumb and thumb.startswith(("http://", "https://")):
+        try: return await update.message.reply_photo(photo=thumb, caption=caption, reply_markup=keyboard, parse_mode="HTML")
+        except Exception: pass
+    return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+
 # ==========================================================
 # محرك yt-dlp و FFmpeg ومهام التحميل
 # ==========================================================
@@ -279,7 +285,7 @@ def main():
     init_db(); _cleanup_old_downloads_sync()
     app = (Application.builder().token(TOKEN).base_url(LOCAL_API_URL) if LOCAL_API_URL else Application.builder().token(TOKEN)).post_init(post_init).connect_timeout(30).read_timeout(120).write_timeout(120).pool_timeout(30).concurrent_updates(True).build()
     
-    for c, f in [("start", start), ("links", show_playzone_links), ("admin", admin_panel), ("update_dlp", update_ytdlp_cmd), ("setcookie", set_cookie_cmd), ("backup", backup_db_cmd)]: app.add_handler(CommandHandler(c, f))
+    for c, f in [("start", start_cmd), ("links", show_playzone_links), ("admin", admin_panel), ("update_dlp", update_ytdlp_cmd), ("setcookie", set_cookie_cmd), ("backup", backup_db_cmd)]: app.add_handler(CommandHandler(c, f))
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_cmd)); app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler)); app.add_handler(CallbackQueryHandler(cb_handler))
     
     logger.info("🚀 تشغيل النسخة المسرعة والنهائية."); app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
