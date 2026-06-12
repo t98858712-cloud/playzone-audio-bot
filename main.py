@@ -740,8 +740,22 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             title = clean_title(request.get("title", "ملف ميديا"), 80)
             duration = int(request.get("duration") or 0)
             caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"
-            share_link = f"https://t.me/share/url?url={quote(url)}&text={quote('🎬 ' + title)}"
-            media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("📤 مشاركة", url=share_link)]])
+            share_text = """
+🤖 أستخدم هذا البوت لتحميل الفيديوهات والأغاني بسهولة وسرعة.
+
+🎬 تحميل الفيديوهات
+🎵 تحميل ملفات MP3
+⚡ جودة عالية
+
+جرّبه الآن مجاناً 👇
+
+@MusicPlayZoneBot
+"""
+
+share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
+media_keyboard = InlineKeyboardMarkup([
+    [InlineKeyboardButton("🌟 أعجبك البوت؟ انشره", url=share_link)]
+])
 
             with open(target_file, "rb") as f:
                 if mode == "audio":
