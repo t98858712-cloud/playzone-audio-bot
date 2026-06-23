@@ -101,13 +101,19 @@ def init_db():
                     first_name TEXT,
                     last_name TEXT,
                     first_seen INTEGER,
-                    last_seen INTEGER,
-                    is_vip INTEGER DEFAULT 0,
-                    vip_expire_date TEXT,
-                    daily_uses INTEGER DEFAULT 0,
-                    last_use_date TEXT
+                    last_seen INTEGER
                 )
             """)
+            
+            try: conn.execute("ALTER TABLE users ADD COLUMN is_vip INTEGER DEFAULT 0")
+            except Exception: pass
+            try: conn.execute("ALTER TABLE users ADD COLUMN vip_expire_date TEXT")
+            except Exception: pass
+            try: conn.execute("ALTER TABLE users ADD COLUMN daily_uses INTEGER DEFAULT 0")
+            except Exception: pass
+            try: conn.execute("ALTER TABLE users ADD COLUMN last_use_date TEXT")
+            except Exception: pass
+            
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS stats (
                     key TEXT PRIMARY KEY,
@@ -116,6 +122,7 @@ def init_db():
             """)
             for k in ["requests", "success", "failed", "bytes", "broadcasts"]:
                 conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (k,))
+            conn.commit()
 
 def register_user_sync(user):
     if not user: return
@@ -134,11 +141,13 @@ def register_user_sync(user):
                 INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen, is_vip, vip_expire_date, daily_uses, last_use_date)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now, is_vip, vip_expire_date, daily_uses, last_use_date))
+            conn.commit()
 
 def stat_inc_sync(key: str, value: int = 1):
     with DB_LOCK:
         with sqlite3.connect(DB_FILE) as conn:
             conn.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, key))
+            conn.commit()
 
 def load_stats_sync() -> dict:
     with DB_LOCK:
@@ -559,6 +568,34 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
 # ==========================================================
+# التوجيه الذكي للتفعيل السريع للأدمن
+# ==========================================================
+async def handle_forwarded_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ميزة خارقة للأدمن: وجّه رسالة من المستخدم للبوت لتفعيل حسابه فوراً دون نسخ الآيدي"""
+    uid = update.effective_user.id
+    if not is_admin(uid): return
+    
+    origin = update.message.forward_origin
+    if not origin or origin.type != "user":
+        return await update.message.reply_text("❌ يرجى توجيه رسالة من حساب المستخدم المباشر وليس من قناة.", parse_mode="HTML")
+        
+    target_user_id = origin.sender_user.id
+    user_name = origin.sender_user.first_name
+    
+    markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📆 تفعيل أسبوع (7 أيام)", callback_data=f"fwd_act_7_{target_user_id}")],
+        [InlineKeyboardButton("🌟 تفعيل شهر (30 يوم)", callback_data=f"fwd_act_30_{target_user_id}")]
+    ])
+    
+    await update.message.reply_text(
+        f"📥 <b>تم التعرف على المستخدم المحوّل:</b>\n\n"
+        f"👤 الاسم: {esc(user_name)}\n"
+        f"🆔 الآيدي: <code>{target_user_id}</code>\n\n"
+        f"اختر باقة تفعيل الرصيد:",
+        parse_mode="HTML", reply_markup=markup
+    )
+
+# ==========================================================
 # أحداث المستخدم والروابط الموحدة
 # ==========================================================
 
@@ -572,6 +609,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
+    context.user_data.pop("awaiting_manual_vip", None)
     await update.message.reply_text(
         "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
         reply_markup=admin_main_keyboard(), parse_mode="HTML"
@@ -690,7 +728,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_add_vip":
         context.user_data["awaiting_manual_vip"] = True
         await query.answer()
-        return await query.message.edit_text("✍️ **أرسل رصيد المشترك يدوياً بالصيغة التالية:**\n\n`الآيدي الأيام`\nمثال: `59382029 30` لتفعيل 30 يوماً لحساب محدد.", parse_mode="HTML")
+        return await query.message.edit_text("✍️ <b>أرسل رصيد المشترك يدوياً بالصيغة التالية:</b>\n\n<code>الآيدي الأيام</code>\nمثال: <code>59382029 30</code> لتفعيل 30 يوماً لحساب محدد.", parse_mode="HTML")
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -701,6 +739,29 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
+
+    # معالجة أزرار التفعيل عبر التوجيه الذكي
+    if data.startswith("fwd_act_"):
+        if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
+        days = int(data.split("_")[2])
+        target_id = int(data.split("_")[3])
+        expire_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
+        
+        with DB_LOCK:
+            with sqlite3.connect(DB_FILE) as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT id FROM users WHERE id = ?", (target_id,))
+                if cur.fetchone():
+                    conn.execute("UPDATE users SET is_vip = 1, vip_expire_date = ? WHERE id = ?", (expire_date, target_id))
+                else:
+                    conn.execute('INSERT INTO users (id, is_vip, vip_expire_date, daily_uses, last_use_date, username, first_name, last_name, first_seen, last_seen) VALUES (?, 1, ?, 0, "", "", "", "", ?, ?)', (target_id, expire_date, int(time.time()), int(time.time())))
+                conn.commit()
+        
+        await query.edit_message_text(f"✅ تم تفعيل حساب <code>{target_id}</code> لمدة {days} يوم.", parse_mode="HTML")
+        try:
+            await context.bot.send_message(target_id, f"🎉 <b>تم تفعيل باقة VIP الخاصة بك بنجاح!</b>\n⏳ صالحة لـ: {days} يوماً.\n📅 تنتهي: <code>{expire_date}</code>\n🚀 يمكنك الآن التحميل بلا حدود.", parse_mode="HTML")
+        except: pass
+        return
 
     if data.startswith("cancel:"):
         ensure_pending_requests(context).pop(data.split(":")[1], None)
@@ -716,11 +777,10 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not request: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
         if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
         
-        # 🔐 فحص صلاحيات رصيد الـ VIP والمحاولات المجانية اليومية
         allowed, reason_or_msg = check_user_vip_access(uid)
         if not allowed:
             await query.answer("⚠️ انتهى رصيدك المجاني اليومي!", show_alert=True)
-            return await query.message.reply_text(reason_or_msg, parse_mode="HTML")
+            return await query.message.reply_text(reason_or_msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📞 مراسلة الإدارة لتفعيل الاشتراك", url="https://t.me/pl_z0")]]))
             
         await start_download_from_callback(query, context, request, mode)
 
@@ -777,7 +837,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 "👇 جرّبه الآن:"
             )
 
-            # سيقوم تيليجرام بدمج الرابط مع النص تلقائياً
             share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
             
             media_keyboard = InlineKeyboardMarkup([
@@ -831,7 +890,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 def check_user_vip_access(user_id: int) -> tuple[bool, str]:
-    """تفحص حالة حساب المستخدم للتأكد من أحقيته في استخدام ميزة التحميل"""
     today_str = datetime.now().strftime('%Y-%m-%d')
     today_date = datetime.now().date()
     
@@ -842,12 +900,12 @@ def check_user_vip_access(user_id: int) -> tuple[bool, str]:
             row = cur.fetchone()
             
             if not row:
-                conn.execute('INSERT INTO users (id, daily_uses, last_use_date, is_vip, username, first_name, last_name, first_seen, last_seen) VALUES (?, 1, ?, 0, "", "", "", ?, ?)', (user_id, today_str, int(time.time()), int(time.time())))
+                conn.execute('INSERT INTO users (id, daily_uses, last_use_date, is_vip, username, first_name, last_name, first_seen, last_seen) VALUES (?, 1, ?, 0, "", "", "", "", ?, ?)', (user_id, today_str, int(time.time()), int(time.time())))
+                conn.commit()
                 return True, "FREE_ALLOWED"
                 
             is_vip, vip_expire_date, daily_uses, last_use_date = row
             
-            # في حال كان المشترك VIP مفعلاً
             if is_vip == 1 and vip_expire_date:
                 try:
                     expire_date = datetime.strptime(vip_expire_date, '%Y-%m-%d').date()
@@ -855,36 +913,36 @@ def check_user_vip_access(user_id: int) -> tuple[bool, str]:
                         return True, "VIP_ALLOWED"
                     else:
                         conn.execute('UPDATE users SET is_vip = 0 WHERE id = ?', (user_id,))
+                        conn.commit()
                 except Exception:
-                    pass
+                    conn.execute('UPDATE users SET is_vip = 0 WHERE id = ?', (user_id,))
+                    conn.commit()
 
-            # نظام المستخدمين العاديين (محاولة مجانية واحدة باليوم)
             if last_use_date != today_str:
                 conn.execute('UPDATE users SET daily_uses = 1, last_use_date = ? WHERE id = ?', (today_str, user_id))
+                conn.commit()
                 return True, "FREE_ALLOWED"
                 
             if daily_uses < 1:
                 conn.execute('UPDATE users SET daily_uses = daily_uses + 1 WHERE id = ?', (user_id,))
+                conn.commit()
                 return True, "FREE_ALLOWED"
                 
-            # نص التنبيه المالي عند نفاد الرصيد والمطالبة بالاشتراك المالي الجديد
             pay_alert_text = (
-                "⚠️ **لقد استنفدت محاولتك المجانية المتاحة لك اليوم!**\n\n"
+                "⚠️ <b>لقد استنفدت محاولتك المجانية المتاحة لك اليوم!</b>\n\n"
                 "لجلب الميديا بشكل غير محدود وبأقصى سرعة، يرجى الاشتراك في الباقة المميزة (VIP) 🌟\n\n"
-                "💵 **أسعار الاشتراك المعتمدة:**\n"
-                "• **أسبوعي:** 2,000 د.ع\n"
-                "• **شهري:** 5,000 د.ع\n\n"
-                "💳 **طريقة الدفع والتحويل:**\n"
-                "قم بتحويل قيمة الباقة المطلوبة إلى بطاقة **ماستر كارد (سوبر كي)** التالية:\n"
-                "`7113282938` (انقر لنسخ الرقم)\n\n"
-                "📸 بعد إتمام التحويل، أرسل صورة الوصل أو الإيصال مع آيدي حسابك الشخصي الموضح بالأسفل المباشر لتفعيل حسابك فوراً.\n\n"
-                f"🆔 **الآيدي الخاص بك للنسخ:** `{user_id}`\n\n"
-                "💼 للدعم المالي المباشر أو إرسال الإيصالات: [@pl_z0]"
+                "💵 <b>أسعار الاشتراك المعتمدة:</b>\n"
+                "• <b>أسبوعي:</b> 2,000 د.ع\n"
+                "• <b>شهري:</b> 5,000 د.ع\n\n"
+                "💳 <b>طريقة الدفع والتحويل:</b>\n"
+                "قم بتحويل قيمة الباقة المطلوبة إلى بطاقة <b>ماستر كارد (سوبر كي)</b> التالية:\n"
+                "<code>7113282938</code> (انقر لنسخ الرقم)\n\n"
+                "📸 بعد إتمام التحويل، أرسل صورة الوصل أو الإيصال مع آيدي حسابك الشخصي الموضح بالأسفل إلى الإدارة المباشرة لتفعيل حسابك فوراً.\n\n"
+                f"🆔 <b>الآيدي الخاص بك للنسخ:</b> <code>{user_id}</code>"
             )
             return False, pay_alert_text
 
 async def show_user_vip_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """عرض بيانات الاشتراك والتحميل الحالية للمستخدم"""
     user_id = update.effective_user.id
     today_str = datetime.now().strftime('%Y-%m-%d')
     today_date = datetime.now().date()
@@ -896,14 +954,14 @@ async def show_user_vip_status(update: Update, context: ContextTypes.DEFAULT_TYP
             row = cur.fetchone()
 
     prices_info = (
-        "\n\n💎 **باقات VIP المتوفرة للتحميل اللا محدود:**\n"
+        "\n\n💎 <b>باقات VIP المتوفرة للتحميل اللا محدود:</b>\n"
         "• أسبوعي: 2,000 د.ع\n"
         "• شهري: 5,000 د.ع\n\n"
-        "💳 الماستر كارد للتحويل: `7113282938`"
+        "💳 الماستر كارد للتحويل: <code>7113282938</code>"
     )
 
     if not row:
-        msg = "👤 **حالة حسابك:** مستخدم عادي\n🎁 **المحاولات المجانية اليومية المتبقية:** 1 من 1" + prices_info
+        msg = "👤 <b>حالة حسابك:</b> مستخدم عادي\n🎁 <b>المحاولات المجانية اليومية المتبقية:</b> 1 من 1" + prices_info
     else:
         is_vip, vip_expire_date, daily_uses, last_use_date = row
         if is_vip == 1 and vip_expire_date:
@@ -912,53 +970,52 @@ async def show_user_vip_status(update: Update, context: ContextTypes.DEFAULT_TYP
                 if today_date <= expire_date:
                     days_left = (expire_date - today_date).days
                     msg = (
-                        f"🌟 **حالة حسابك:** مشترك VIP متميز\n"
-                        f"📅 **تاريخ انتهاء الصلاحية:** `{vip_expire_date}`\n"
-                        f"⏳ **الأيام المتبقية في الاشتراك:** `{days_left}` يومًا.\n\n"
+                        f"🌟 <b>حالة حسابك:</b> مشترك VIP متميز\n"
+                        f"📅 <b>تاريخ انتهاء الصلاحية:</b> <code>{vip_expire_date}</code>\n"
+                        f"⏳ <b>الأيام المتبقية في الاشتراك:</b> <code>{days_left}</code> يومًا.\n\n"
                         f"🚀 أنت متاح لك التحميل بشكل غير محدود الآن مجاناً!"
                     )
                 else:
-                    msg = "👤 **حالة حسابك:** مستخدم عادي (انتهت صلاحية اشتراكك القديم)." + prices_info
+                    msg = "👤 <b>حالة حسابك:</b> مستخدم عادي (انتهت صلاحية اشتراكك القديم)." + prices_info
             except Exception:
-                msg = "👤 **حالة حسابك:** مستخدم عادي" + prices_info
+                msg = "👤 <b>حالة حسابك:</b> مستخدم عادي" + prices_info
         else:
             remaining = 0 if (last_use_date == today_str and daily_uses >= 1) else 1
-            msg = f"👤 **حالة حسابك:** مستخدم عادي\n🎁 **المحاولات المجانية اليومية المتبقية:** {remaining} من 1" + prices_info
+            msg = f"👤 <b>حالة حسابك:</b> مستخدم عادي\n🎁 <b>المحاولات المجانية اليومية المتبقية:</b> {remaining} من 1" + prices_info
 
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    await update.message.reply_text(msg, parse_mode="HTML")
 
 async def handle_manual_vip_input(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
-    """معالجة أمر إضافة رصيد الأيام للمشتركين يدوياً من الأدمن"""
-    context.user_data["awaiting_manual_vip"] = False
+    context.user_data.pop("awaiting_manual_vip", None)
     try:
         parts = text.split()
         target_id = int(parts[0])
         days = int(parts[1])
-        
         expire_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
         
         with DB_LOCK:
             with sqlite3.connect(DB_FILE) as conn:
-                conn.execute("""
-                    UPDATE users 
-                    SET is_vip = 1, vip_expire_date = ? 
-                    WHERE id = ?
-                """, (expire_date, target_id))
+                cur = conn.cursor()
+                cur.execute("SELECT id FROM users WHERE id = ?", (target_id,))
+                if cur.fetchone():
+                    conn.execute("UPDATE users SET is_vip = 1, vip_expire_date = ? WHERE id = ?", (expire_date, target_id))
+                else:
+                    conn.execute('INSERT INTO users (id, is_vip, vip_expire_date, daily_uses, last_use_date, username, first_name, last_name, first_seen, last_seen) VALUES (?, 1, ?, 0, "", "", "", "", ?, ?)', (target_id, expire_date, int(time.time()), int(time.time())))
+                conn.commit()
                 
-        await update.message.reply_text(f"✅ تم بنجاح تفعيل رصيد الـ VIP للآيدي `{target_id}` لمدة {days} يوماً.\n📅 ينتهي بتاريخ: {expire_date}", parse_mode="Markdown")
+        await update.message.reply_text(f"✅ تم بنجاح تفعيل رصيد الـ VIP للآيدي <code>{target_id}</code> لمدة {days} يوماً.\n📅 ينتهي بتاريخ: {expire_date}", parse_mode="HTML")
         
-        # إشعار المشترك بشكل آلي
         try:
             await context.bot.send_message(
                 chat_id=target_id,
-                text=f"🎉 أهلاً بك، تم تفعيل باقة اشتراك VIP الخاصة بك بنجاح من قبل الإدارة!\n⏳ مدة الصلاحية المضافة: {days} يوماً.\n📅 تاريخ الانتهاء: `{expire_date}`\n\n🚀 يمكنك استخدام ميزات التحميل بلا قيود الآن.",
-                parse_mode="Markdown"
+                text=f"🎉 أهلاً بك، تم تفعيل باقة اشتراك VIP الخاصة بك بنجاح من قبل الإدارة!\n⏳ مدة الصلاحية المضافة: {days} يوماً.\n📅 تاريخ الانتهاء: <code>{expire_date}</code>\n\n🚀 يمكنك استخدام ميزات التحميل بلا قيود الآن.",
+                parse_mode="HTML"
             )
         except Exception:
             pass
             
     except Exception as e:
-        await update.message.reply_text(f"❌ حدث خطأ في صيغة البيانات المرسلة أو أن المستخدم غير مسجل بقاعدة البيانات. خطأ: {e}")
+        await update.message.reply_text(f"❌ حدث خطأ في صيغة البيانات المرسلة. تذكر أن ترسل الأرقام فقط (مثال: <code>112233 30</code>). خطأ: {e}", parse_mode="HTML")
 
 # ==========================================================
 # التشغيل
@@ -993,6 +1050,9 @@ def main():
         .build()
     )
 
+    # 📌 المستمع الخاص بالتوجيه الذكي (يجب أن يكون قبل الرسائل النصية)
+    app.add_handler(MessageHandler(filters.FORWARDED & filters.ChatType.PRIVATE, handle_forwarded_message))
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("vip", show_user_vip_status))
@@ -1004,7 +1064,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية مع نظام الاشتراكات والتوجيه الذكي.")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
