@@ -5,7 +5,7 @@ import shutil
 import glob
 
 # ضع توكن البوت الخاص بك هنا
-TOKEN = 'YOUR_BOT_TOKEN'
+TOKEN = '8733816410:AAGg7di4Ddyj_kTN0FtWfWBMKwdoHrRgE7M'
 bot = telebot.TeleBot(TOKEN)
 
 # إعداد Instaloader (إيقاف تحميل البيانات الوصفية لتسريع العملية وتوفير المساحة)
