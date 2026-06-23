@@ -1,2 +1,2 @@
-pyTelegramBotAPI
-instaloader
+python-telegram-bot==21.11.1
+yt-dlp
