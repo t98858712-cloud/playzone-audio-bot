@@ -19,7 +19,7 @@ L = instaloader.Instaloader(
 
 # 💡 ملاحظة: إنستقرام يمنع أحياناً جلب الستوريات بدون تسجيل دخول.
 # للحفاظ على سريتك، قم بإنشاء حساب إنستقرام "وهمي" وضع بياناته هنا إن لزم الأمر:
-L.login("Panther.6059084", "Hh112233hh")
+L.login("panther.6059084", "Hh112233hh")
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
