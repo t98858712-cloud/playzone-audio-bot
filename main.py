@@ -8,27 +8,21 @@ import glob
 TOKEN = '8733816410:AAGg7di4Ddyj_kTN0FtWfWBMKwdoHrRgE7M'
 bot = telebot.TeleBot(TOKEN)
 
-# إعداد Instaloader مع هوية مستخدم (User-Agent) لتجنب حظر إنستقرام
+# إعداد Instaloader
 L = instaloader.Instaloader(
     download_pictures=True,
     download_videos=True,
     download_video_thumbnails=False,
     save_metadata=False,
-    post_metadata_txt_pattern='',
-    user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
+    post_metadata_txt_pattern=''
 )
 
-# محاولة تسجيل الدخول (سيظن إنستقرام أنه هاتف آيفون وليس سيرفر)
-try:
-    # --- ضع كلمة المرور الجديدة هنا ---
-    L.login("panther.6059084", "Hh112233hh") 
-    print("✅ تم تسجيل الدخول إلى إنستقرام بنجاح!")
-except Exception as e:
-    print(f"⚠️ فشل تسجيل الدخول. قد يعمل البوت جزئياً: {e}")
+# تحديد المسار الدقيق لملف الجلسة بجانب سكريبت التشغيل
+current_dir = os.path.dirname(os.path.abspath(__file__))
+session_path = os.path.join(current_dir, "session-panther")
 
-# ==============================================================
-# --- من هنا يبدأ الكود الأصلي الخاص بك دون تغيير أي حرف ---
-# ==============================================================
+# تحميل ملف الجلسة لتخطي حظر إنستقرام نهائياً
+L.load_session_from_file("panther.6059084", session_path)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
