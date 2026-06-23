@@ -67,6 +67,7 @@ DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(2, MAX_WORKERS))
 
 ACTIVE_USERS = set()
+user_cooldowns = {} # 🛡️ درع الحماية ضد السبام
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@P1ay_Z0ne_Bot")
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
@@ -92,7 +93,7 @@ progress_lock = threading.Lock()
 
 def init_db():
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
+        with sqlite3.connect(DB_FILE, timeout=20) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -128,7 +129,7 @@ def register_user_sync(user):
     if not user: return
     now = int(time.time())
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
+        with sqlite3.connect(DB_FILE, timeout=20) as conn:
             cur = conn.cursor()
             cur.execute("SELECT first_seen, is_vip, vip_expire_date, daily_uses, last_use_date FROM users WHERE id = ?", (user.id,))
             row = cur.fetchone()
@@ -145,25 +146,25 @@ def register_user_sync(user):
 
 def stat_inc_sync(key: str, value: int = 1):
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
+        with sqlite3.connect(DB_FILE, timeout=20) as conn:
             conn.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, key))
             conn.commit()
 
 def load_stats_sync() -> dict:
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
+        with sqlite3.connect(DB_FILE, timeout=20) as conn:
             rows = conn.execute("SELECT key, value FROM stats").fetchall()
             return {k: v for k, v in rows}
 
 def all_user_ids() -> list:
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
+        with sqlite3.connect(DB_FILE, timeout=20) as conn:
             rows = conn.execute("SELECT id FROM users").fetchall()
             return [row[0] for row in rows]
 
 def get_latest_users(limit: int = 10) -> list:
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
+        with sqlite3.connect(DB_FILE, timeout=20) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("SELECT * FROM users ORDER BY last_seen DESC LIMIT ?", (limit,)).fetchall()
             return [dict(r) for r in rows]
@@ -373,7 +374,7 @@ def build_admin_stats_text() -> str:
     users_count = len(all_user_ids())
     
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
+        with sqlite3.connect(DB_FILE, timeout=20) as conn:
             vips_count = conn.execute("SELECT COUNT(*) FROM users WHERE is_vip = 1").fetchone()[0]
 
     return (
@@ -524,13 +525,14 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
 
 def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path = None) -> bool:
     try:
+        # منع تعليق محول الصوت بإضافة stdin=subprocess.DEVNULL
         cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(input_file)]
         if local_thumb and local_thumb.exists():
             cmd.extend(["-i", str(local_thumb), "-map", "0:a", "-map", "1:v", "-c:v", "mjpeg", "-id3v2_version", "3", "-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
         else:
             cmd.extend(["-vn"])
         cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "48000", "-ac", "2", "-threads", "0", str(output_file)])
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
+        subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
     except Exception as e:
         logger.error(f"فشل التحويل المحلي لـ MP3: {e}")
@@ -576,8 +578,14 @@ async def handle_forwarded_message(update: Update, context: ContextTypes.DEFAULT
     if not is_admin(uid): return
     
     origin = update.message.forward_origin
-    if not origin or origin.type != "user":
-        return await update.message.reply_text("❌ يرجى توجيه رسالة من حساب المستخدم المباشر وليس من قناة.", parse_mode="HTML")
+    if not origin: return
+    
+    # حماية من انهيار البوت إذا كان المستخدم يخفي حسابه عبر إعدادات الخصوصية
+    if origin.type == "hidden_user":
+        return await update.message.reply_text("❌ لا يمكن جلب آيدي هذا المستخدم بسبب إعدادات الخصوصية لديه (حساب مخفي). يرجى التفعيل يدوياً باستخدام زر (تفعيل رصيد يدوي) في لوحة التحكم.", parse_mode="HTML")
+        
+    if origin.type != "user":
+        return await update.message.reply_text("❌ يرجى توجيه رسالة من حساب المستخدم المباشر وليس من قناة أو مجموعة.", parse_mode="HTML")
         
     target_user_id = origin.sender_user.id
     user_name = origin.sender_user.first_name
@@ -664,6 +672,14 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if is_admin(uid) and context.user_data.get("awaiting_manual_vip"):
         return await handle_manual_vip_input(update, context, text)
     
+    # 🛡️ نظام الحماية من السبام (يمنع الضغط العالي على سيرفر البوت والانستغرام)
+    current_time = time.time()
+    if uid in user_cooldowns:
+        time_passed = current_time - user_cooldowns[uid]
+        if time_passed < 10:
+            return await update.message.reply_text(f"⏳ <b>نظام الحماية:</b> يرجى الانتظار {int(10 - time_passed)} ثوانٍ قبل إرسال رابط جديد.", parse_mode="HTML")
+    user_cooldowns[uid] = current_time
+
     if uid in ACTIVE_USERS:
         return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
     if not is_valid_url(text):
@@ -748,7 +764,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         expire_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
         
         with DB_LOCK:
-            with sqlite3.connect(DB_FILE) as conn:
+            with sqlite3.connect(DB_FILE, timeout=20) as conn:
                 cur = conn.cursor()
                 cur.execute("SELECT id FROM users WHERE id = ?", (target_id,))
                 if cur.fetchone():
@@ -777,6 +793,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not request: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
         if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
         
+        # 🔐 فحص صلاحيات رصيد الـ VIP والمحاولات المجانية اليومية قبل البدء في التحميل
         allowed, reason_or_msg = check_user_vip_access(uid)
         if not allowed:
             await query.answer("⚠️ انتهى رصيدك المجاني اليومي!", show_alert=True)
@@ -894,7 +911,7 @@ def check_user_vip_access(user_id: int) -> tuple[bool, str]:
     today_date = datetime.now().date()
     
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
+        with sqlite3.connect(DB_FILE, timeout=20) as conn:
             cur = conn.cursor()
             cur.execute('SELECT is_vip, vip_expire_date, daily_uses, last_use_date FROM users WHERE id = ?', (user_id,))
             row = cur.fetchone()
@@ -948,7 +965,7 @@ async def show_user_vip_status(update: Update, context: ContextTypes.DEFAULT_TYP
     today_date = datetime.now().date()
     
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
+        with sqlite3.connect(DB_FILE, timeout=20) as conn:
             cur = conn.cursor()
             cur.execute('SELECT is_vip, vip_expire_date, daily_uses, last_use_date FROM users WHERE id = ?', (user_id,))
             row = cur.fetchone()
@@ -994,7 +1011,7 @@ async def handle_manual_vip_input(update: Update, context: ContextTypes.DEFAULT_
         expire_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
         
         with DB_LOCK:
-            with sqlite3.connect(DB_FILE) as conn:
+            with sqlite3.connect(DB_FILE, timeout=20) as conn:
                 cur = conn.cursor()
                 cur.execute("SELECT id FROM users WHERE id = ?", (target_id,))
                 if cur.fetchone():
@@ -1015,7 +1032,7 @@ async def handle_manual_vip_input(update: Update, context: ContextTypes.DEFAULT_
             pass
             
     except Exception as e:
-        await update.message.reply_text(f"❌ حدث خطأ في صيغة البيانات المرسلة. تذكر أن ترسل الأرقام فقط (مثال: <code>112233 30</code>). خطأ: {e}", parse_mode="HTML")
+        await update.message.reply_text(f"❌ حدث خطأ في صيغة البيانات المرسلة. تذكر أن ترسل الأرقام فقط (مثال: <code>112233 30</code>).", parse_mode="HTML")
 
 # ==========================================================
 # التشغيل
@@ -1050,7 +1067,7 @@ def main():
         .build()
     )
 
-    # 📌 المستمع الخاص بالتوجيه الذكي (يجب أن يكون قبل الرسائل النصية)
+    # 📌 المستمع الخاص بالتوجيه الذكي (يجب أن يكون في البداية)
     app.add_handler(MessageHandler(filters.FORWARDED & filters.ChatType.PRIVATE, handle_forwarded_message))
 
     app.add_handler(CommandHandler("start", start))
@@ -1064,7 +1081,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية مع نظام الاشتراكات والتوجيه الذكي.")
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية والمستقرة جداً.")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
