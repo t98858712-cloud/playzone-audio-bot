@@ -16,6 +16,8 @@ from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
 
 import yt_dlp
+import instaloader  # <--- [الفكرة الجديدة]: استدعاء مكتبة الانستغرام
+
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -542,7 +544,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
 # ==========================================================
-# أحداث المستخدم والروابط الموحدة (الكود الأصلي بدون مساس)
+# أحداث المستخدم والروابط الموحدة
 # ==========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -797,13 +799,11 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
-# 🟢 القسم المعزول كلياً: فلتر ومعالج ستوريات الانستغرام
-# (لا يتدخل أبداً في الأوامر ولا الروابط العادية)
+# [الفكرة الجديدة]: قسم معزول بالكامل لسحب الستوريات
 # ==========================================================
-import instaloader
 
 class InstaProfileOnlyFilter(filters.MessageFilter):
-    """فلتر ذكي يلتقط روابط 'البروفايل' فقط ويتجاهل Reels/Posts/Stories"""
+    """فلتر ذكي يلتقط روابط 'البروفايل' فقط ويتجاهل الروابط العادية مثل Reels/Posts"""
     def filter(self, message):
         if not message.text: return False
         text = message.text.strip()
@@ -812,10 +812,9 @@ class InstaProfileOnlyFilter(filters.MessageFilter):
             parsed = urlparse(text)
             path = parsed.path.strip('/')
             parts = path.split('/')
-            # إذا كان الرابط يحتوي على جزء واحد فقط وليس من الممنوعات، فهو بروفايل يوزر
             forbidden_paths = {'p', 'reel', 'tv', 'stories', 'explore', 'reels'}
             if len(parts) == 1 and parts[0].lower() not in forbidden_paths:
-                message._isolated_insta_username = parts[0]  # تخزين اليوزر لسهولة استخدامه
+                message._isolated_insta_username = parts[0]
                 return True
         except Exception:
             pass
@@ -931,12 +930,10 @@ def main():
     app.add_handler(CommandHandler("backup", backup_db_command))
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
     
-    # 🟢 المعالج المعزول (يتم إضافته قبل المعالج الأساسي ليلتقط اليوزرات فقط ويتجاهل الباقي)
+    # [الفكرة الجديدة]: إضافة أمر تشغيل الميزة المعزولة هنا قبل الأوامر العادية
     app.add_handler(MessageHandler(InstaProfileOnlyFilter() & ~filters.COMMAND, handle_isolated_insta_story))
     
-    # المعالج الأساسي الخاص بك (باقي كما هو دون أي تغيير)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
-    
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
     logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
