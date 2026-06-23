@@ -14,6 +14,7 @@ import ipaddress
 from pathlib import Path
 from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 
 import yt_dlp
 from telegram import (
@@ -100,7 +101,11 @@ def init_db():
                     first_name TEXT,
                     last_name TEXT,
                     first_seen INTEGER,
-                    last_seen INTEGER
+                    last_seen INTEGER,
+                    is_vip INTEGER DEFAULT 0,
+                    vip_expire_date TEXT,
+                    daily_uses INTEGER DEFAULT 0,
+                    last_use_date TEXT
                 )
             """)
             conn.execute("""
@@ -118,13 +123,17 @@ def register_user_sync(user):
     with DB_LOCK:
         with sqlite3.connect(DB_FILE) as conn:
             cur = conn.cursor()
-            cur.execute("SELECT first_seen FROM users WHERE id = ?", (user.id,))
+            cur.execute("SELECT first_seen, is_vip, vip_expire_date, daily_uses, last_use_date FROM users WHERE id = ?", (user.id,))
             row = cur.fetchone()
-            first_seen = row[0] if row else now
+            if row:
+                first_seen, is_vip, vip_expire_date, daily_uses, last_use_date = row
+            else:
+                first_seen, is_vip, vip_expire_date, daily_uses, last_use_date = now, 0, None, 0, ""
+                
             conn.execute("""
-                INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now))
+                INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen, is_vip, vip_expire_date, daily_uses, last_use_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now, is_vip, vip_expire_date, daily_uses, last_use_date))
 
 def stat_inc_sync(key: str, value: int = 1):
     with DB_LOCK:
@@ -294,7 +303,7 @@ def _force_cleanup_all_sync() -> int:
 
 def user_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [[KeyboardButton("📘 دليل الاستخدام")], [KeyboardButton("🔗 روابط PlayZone")]],
+        [[KeyboardButton("📘 دليل الاستخدام")], [KeyboardButton("🔗 روابط PlayZone")], [KeyboardButton("🌟 حالة اشتراكي VIP")]],
         resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط هنا..."
     )
 
@@ -319,7 +328,8 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 الإحصائيات", callback_data="adm_stats"), InlineKeyboardButton("👥 المستخدمون", callback_data="adm_users")],
         [InlineKeyboardButton("📢 إذاعة", callback_data="adm_bc"), InlineKeyboardButton("🧹 تنظيف الكاش", callback_data="adm_clean")],
-        [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
+        [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("➕ تفعيل رصيد يدوي", callback_data="adm_add_vip")],
+        [InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
     ])
 
 def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
@@ -352,12 +362,18 @@ def build_preview_caption(title: str, artist: str, duration: str, est_size: str)
 def build_admin_stats_text() -> str:
     stats = load_stats_sync()
     users_count = len(all_user_ids())
+    
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            vips_count = conn.execute("SELECT COUNT(*) FROM users WHERE is_vip = 1").fetchone()[0]
+
     return (
-        "📊 <b>إحصائيات البوت</b>\n\n"
+        "📊 <b>إحصائيات البوت المتقدمة</b>\n\n"
         f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
         f"• التحميلات الناجحة: {stats.get('success', 0)}\n"
         f"• العمليات الفاشلة: {stats.get('failed', 0)}\n"
-        f"• عدد المستخدمين: {users_count}\n"
+        f"• عدد المستخدمين الكلي: {users_count}\n"
+        f"• عدد مشتركي VIP النشطين: {vips_count}\n"
         f"• حجم الملفات المرسلة: {format_size(stats.get('bytes', 0))}\n"
         f"• عدد الإذاعات: {stats.get('broadcasts', 0)}"
     )
@@ -368,7 +384,8 @@ def build_admin_users_text(limit: int = 10) -> str:
     for u in users:
         name = u.get("first_name") or "بدون اسم"
         username = f"@{u.get('username')}" if u.get("username") else "لا يوجد"
-        lines.append(f"• {esc(name)} — {esc(username)} — ID: <code>{u.get('id')}</code>")
+        vip_status = "🌟 VIP" if u.get("is_vip") == 1 else "👤 عادي"
+        lines.append(f"• {esc(name)} — {esc(username)} — [{vip_status}] — ID: <code>{u.get('id')}</code>")
     return "\n".join(lines)
 
 def build_server_status_text() -> str:
@@ -601,9 +618,13 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         return await show_playzone_links(update, context)
     if text == "📘 دليل الاستخدام":
         return await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
-    
+    if text == "🌟 حالة اشتراكي VIP":
+        return await show_user_vip_status(update, context)
+        
     if is_admin(uid) and context.user_data.get("bc_active"):
         return await handle_broadcast_text(update, context, text)
+    if is_admin(uid) and context.user_data.get("awaiting_manual_vip"):
+        return await handle_manual_vip_input(update, context, text)
     
     if uid in ACTIVE_USERS:
         return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
@@ -666,6 +687,10 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["bc_active"] = False
         await query.answer("تم إلغاء الإذاعة")
         return await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard(), parse_mode="HTML")
+    elif data == "adm_add_vip":
+        context.user_data["awaiting_manual_vip"] = True
+        await query.answer()
+        return await query.message.edit_text("✍️ **أرسل رصيد المشترك يدوياً بالصيغة التالية:**\n\n`الآيدي الأيام`\nمثال: `59382029 30` لتفعيل 30 يوماً لحساب محدد.", parse_mode="HTML")
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -691,6 +716,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not request: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
         if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
         
+        # 🔐 فحص صلاحيات رصيد الـ VIP والمحاولات المجانية اليومية
+        allowed, reason_or_msg = check_user_vip_access(uid)
+        if not allowed:
+            await query.answer("⚠️ انتهى رصيدك المجاني اليومي!", show_alert=True)
+            return await query.message.reply_text(reason_or_msg, parse_mode="HTML")
+            
         await start_download_from_callback(query, context, request, mode)
 
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str):
@@ -753,7 +784,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 [InlineKeyboardButton("🌟 أعجبك البوت؟ شاركه", url=share_link)]
             ])
 
-
             with open(target_file, "rb") as f:
                 if mode == "audio":
                     t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
@@ -797,11 +827,149 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
+# 💎 نظام إدارة الـ VIP والاشتراكات المدمج
+# ==========================================================
+
+def check_user_vip_access(user_id: int) -> tuple[bool, str]:
+    """تفحص حالة حساب المستخدم للتأكد من أحقيته في استخدام ميزة التحميل"""
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    today_date = datetime.now().date()
+    
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            cur = conn.cursor()
+            cur.execute('SELECT is_vip, vip_expire_date, daily_uses, last_use_date FROM users WHERE id = ?', (user_id,))
+            row = cur.fetchone()
+            
+            if not row:
+                conn.execute('INSERT INTO users (id, daily_uses, last_use_date, is_vip, username, first_name, last_name, first_seen, last_seen) VALUES (?, 1, ?, 0, "", "", "", ?, ?)', (user_id, today_str, int(time.time()), int(time.time())))
+                return True, "FREE_ALLOWED"
+                
+            is_vip, vip_expire_date, daily_uses, last_use_date = row
+            
+            # في حال كان المشترك VIP مفعلاً
+            if is_vip == 1 and vip_expire_date:
+                try:
+                    expire_date = datetime.strptime(vip_expire_date, '%Y-%m-%d').date()
+                    if today_date <= expire_date:
+                        return True, "VIP_ALLOWED"
+                    else:
+                        conn.execute('UPDATE users SET is_vip = 0 WHERE id = ?', (user_id,))
+                except Exception:
+                    pass
+
+            # نظام المستخدمين العاديين (محاولة مجانية واحدة باليوم)
+            if last_use_date != today_str:
+                conn.execute('UPDATE users SET daily_uses = 1, last_use_date = ? WHERE id = ?', (today_str, user_id))
+                return True, "FREE_ALLOWED"
+                
+            if daily_uses < 1:
+                conn.execute('UPDATE users SET daily_uses = daily_uses + 1 WHERE id = ?', (user_id,))
+                return True, "FREE_ALLOWED"
+                
+            # نص التنبيه المالي عند نفاد الرصيد والمطالبة بالاشتراك المالي الجديد
+            pay_alert_text = (
+                "⚠️ **لقد استنفدت محاولتك المجانية المتاحة لك اليوم!**\n\n"
+                "لجلب الميديا بشكل غير محدود وبأقصى سرعة، يرجى الاشتراك في الباقة المميزة (VIP) 🌟\n\n"
+                "💵 **أسعار الاشتراك المعتمدة:**\n"
+                "• **أسبوعي:** 2,000 د.ع\n"
+                "• **شهري:** 5,000 د.ع\n\n"
+                "💳 **طريقة الدفع والتحويل:**\n"
+                "قم بتحويل قيمة الباقة المطلوبة إلى بطاقة **ماستر كارد (سوبر كي)** التالية:\n"
+                "`7113282938` (انقر لنسخ الرقم)\n\n"
+                "📸 بعد إتمام التحويل، أرسل صورة الوصل أو الإيصال مع آيدي حسابك الشخصي الموضح بالأسفل المباشر لتفعيل حسابك فوراً.\n\n"
+                f"🆔 **الآيدي الخاص بك للنسخ:** `{user_id}`\n\n"
+                "💼 للدعم المالي المباشر أو إرسال الإيصالات: [@pl_z0]"
+            )
+            return False, pay_alert_text
+
+async def show_user_vip_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """عرض بيانات الاشتراك والتحميل الحالية للمستخدم"""
+    user_id = update.effective_user.id
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    today_date = datetime.now().date()
+    
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            cur = conn.cursor()
+            cur.execute('SELECT is_vip, vip_expire_date, daily_uses, last_use_date FROM users WHERE id = ?', (user_id,))
+            row = cur.fetchone()
+
+    prices_info = (
+        "\n\n💎 **باقات VIP المتوفرة للتحميل اللا محدود:**\n"
+        "• أسبوعي: 2,000 د.ع\n"
+        "• شهري: 5,000 د.ع\n\n"
+        "💳 الماستر كارد للتحويل: `7113282938`"
+    )
+
+    if not row:
+        msg = "👤 **حالة حسابك:** مستخدم عادي\n🎁 **المحاولات المجانية اليومية المتبقية:** 1 من 1" + prices_info
+    else:
+        is_vip, vip_expire_date, daily_uses, last_use_date = row
+        if is_vip == 1 and vip_expire_date:
+            try:
+                expire_date = datetime.strptime(vip_expire_date, '%Y-%m-%d').date()
+                if today_date <= expire_date:
+                    days_left = (expire_date - today_date).days
+                    msg = (
+                        f"🌟 **حالة حسابك:** مشترك VIP متميز\n"
+                        f"📅 **تاريخ انتهاء الصلاحية:** `{vip_expire_date}`\n"
+                        f"⏳ **الأيام المتبقية في الاشتراك:** `{days_left}` يومًا.\n\n"
+                        f"🚀 أنت متاح لك التحميل بشكل غير محدود الآن مجاناً!"
+                    )
+                else:
+                    msg = "👤 **حالة حسابك:** مستخدم عادي (انتهت صلاحية اشتراكك القديم)." + prices_info
+            except Exception:
+                msg = "👤 **حالة حسابك:** مستخدم عادي" + prices_info
+        else:
+            remaining = 0 if (last_use_date == today_str and daily_uses >= 1) else 1
+            msg = f"👤 **حالة حسابك:** مستخدم عادي\n🎁 **المحاولات المجانية اليومية المتبقية:** {remaining} من 1" + prices_info
+
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+async def handle_manual_vip_input(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    """معالجة أمر إضافة رصيد الأيام للمشتركين يدوياً من الأدمن"""
+    context.user_data["awaiting_manual_vip"] = False
+    try:
+        parts = text.split()
+        target_id = int(parts[0])
+        days = int(parts[1])
+        
+        expire_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
+        
+        with DB_LOCK:
+            with sqlite3.connect(DB_FILE) as conn:
+                conn.execute("""
+                    UPDATE users 
+                    SET is_vip = 1, vip_expire_date = ? 
+                    WHERE id = ?
+                """, (expire_date, target_id))
+                
+        await update.message.reply_text(f"✅ تم بنجاح تفعيل رصيد الـ VIP للآيدي `{target_id}` لمدة {days} يوماً.\n📅 ينتهي بتاريخ: {expire_date}", parse_mode="Markdown")
+        
+        # إشعار المشترك بشكل آلي
+        try:
+            await context.bot.send_message(
+                chat_id=target_id,
+                text=f"🎉 أهلاً بك، تم تفعيل باقة اشتراك VIP الخاصة بك بنجاح من قبل الإدارة!\n⏳ مدة الصلاحية المضافة: {days} يوماً.\n📅 تاريخ الانتهاء: `{expire_date}`\n\n🚀 يمكنك استخدام ميزات التحميل بلا قيود الآن.",
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+            
+    except Exception as e:
+        await update.message.reply_text(f"❌ حدث خطأ في صيغة البيانات المرسلة أو أن المستخدم غير مسجل بقاعدة البيانات. خطأ: {e}")
+
+# ==========================================================
 # التشغيل
 # ==========================================================
 
 async def post_init(app: Application):
-    commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
+    commands = [
+        BotCommand("start", "بدء استخدام البوت"), 
+        BotCommand("links", "دعم روابط PlayZone"),
+        BotCommand("vip", "عرض حالة اشتراك VIP الخاص بي")
+    ]
     try:
         await app.bot.set_my_commands(commands)
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
@@ -827,6 +995,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
+    app.add_handler(CommandHandler("vip", show_user_vip_status))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
@@ -836,7 +1005,6 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
     logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
-    # تفعيل drop_pending_updates بشكل إجباري لتجنب مشاكل الـ Conflict عند تكرار تشغيل الحاوية
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
