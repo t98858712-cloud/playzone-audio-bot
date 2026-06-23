@@ -17,8 +17,7 @@ L = instaloader.Instaloader(
     post_metadata_txt_pattern=''
 )
 
-# 💡 ملاحظة: إنستقرام يمنع أحياناً جلب الستوريات بدون تسجيل دخول.
-# للحفاظ على سريتك، قم بإنشاء حساب إنستقرام "وهمي" وضع بياناته هنا إن لزم الأمر:
+# تحميل ملف الجلسة بدلاً من تسجيل الدخول المباشر لتخطي حظر سيرفرات الاستضافة
 L.load_session_from_file("panther.6059084", "session-panther")
 
 @bot.message_handler(commands=['start'])
