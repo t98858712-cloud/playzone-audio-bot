@@ -16,7 +16,6 @@ from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
 
 import yt_dlp
-import instaloader  # [إضافة]: مكتبة سحب الستوريات
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -411,83 +410,6 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# سحب ستوريات الانستغرام (ميزة التخفي) [إضافة]
-# ==========================================================
-
-def fetch_stories_sync(username: str, job_dir: Path) -> list:
-    L = instaloader.Instaloader(
-        dirname_pattern=str(job_dir),
-        download_pictures=True,
-        download_videos=True,
-        download_video_thumbnails=False,
-        save_metadata=False,
-        quiet=True
-    )
-    
-    insta_user = os.getenv("INSTA_USERNAME")
-    insta_pass = os.getenv("INSTA_PASSWORD")
-    
-    if insta_user:
-        session_path = str(DATA_DIR / f"session_{insta_user}")
-        try:
-            L.load_session_from_file(insta_user, session_path)
-        except FileNotFoundError:
-            if insta_pass:
-                try:
-                    L.login(insta_user, insta_pass)
-                    L.save_session_to_file(session_path)
-                except Exception as e:
-                    logger.error(f"Instaloader Login Error: {e}")
-
-    try:
-        profile = instaloader.Profile.from_username(L.context, username)
-        for story in L.get_stories(userids=[profile.userid]):
-            for item in story.get_items():
-                L.download_storyitem(item, str(job_dir))
-        
-        files = [p for p in job_dir.rglob("*") if p.is_file() and p.suffix in [".mp4", ".jpg", ".jpeg"]]
-        files.sort(key=lambda x: x.name)
-        return files
-    except Exception as e:
-        logger.error(f"Instaloader Error: {e}")
-        return []
-
-async def handle_instagram_story(update: Update, context: ContextTypes.DEFAULT_TYPE, username: str):
-    uid = update.effective_user.id
-    ACTIVE_USERS.add(uid)
-    status = await update.message.reply_text(f"🔍 جاري سحب الستوريات الحالية للحساب: @{username}\nبوضع التخفي 🥷...")
-    job_dir = BASE_DOWNLOAD_DIR / f"insta_{uid}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
-    job_dir.mkdir(parents=True, exist_ok=True)
-    
-    try:
-        loop = asyncio.get_running_loop()
-        files = await loop.run_in_executor(EXECUTOR, lambda: fetch_stories_sync(username, job_dir))
-        
-        if not files:
-            await status.edit_text("❌ لم يتم العثور على ستوريات، أو أن الحساب خاص (Private)، أو يلزم إضافة حساب وهمي في السيرفر.")
-            return
-        
-        await status.edit_text(f"📤 تم جلب {len(files)} ستوري. جاري الإرسال...")
-        
-        for file_path in files:
-            with open(file_path, "rb") as f:
-                if file_path.suffix == ".mp4":
-                    await context.bot.send_video(chat_id=uid, video=f, read_timeout=60, write_timeout=60)
-                else:
-                    await context.bot.send_photo(chat_id=uid, photo=f, read_timeout=60, write_timeout=60)
-                    
-        stat_inc_sync("success")
-        await safe_delete(status)
-    except Exception as e:
-        logger.error(f"Story download failed: {e}")
-        await status.edit_text("❌ حدث خطأ أثناء سحب الستوريات.")
-        stat_inc_sync("failed")
-    finally:
-        ACTIVE_USERS.discard(uid)
-        try: shutil.rmtree(job_dir)
-        except Exception: pass
-
-# ==========================================================
 # yt-dlp و FFmpeg
 # ==========================================================
 
@@ -620,7 +542,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
 # ==========================================================
-# أحداث المستخدم والروابط الموحدة
+# أحداث المستخدم والروابط الموحدة (الكود الأصلي بدون مساس)
 # ==========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -687,14 +609,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
     if not is_valid_url(text):
         return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
-
-    # ==========================================================
-    # [إضافة]: التقاط روابط حسابات الانستغرام لغرض سحب الستوري
-    # ==========================================================
-    insta_match = re.search(r"instagram\.com/([^/?#]+)", text)
-    if insta_match and not any(x in text for x in ["/p/", "/reel/", "/tv/", "/stories/"]):
-        username = insta_match.group(1)
-        return await handle_instagram_story(update, context, username)
 
     status = await update.message.reply_text("🔍 جاري فحص الرابط وتجهيز المعاينة...")
     try:
@@ -883,6 +797,104 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
+# 🟢 القسم المعزول كلياً: فلتر ومعالج ستوريات الانستغرام
+# (لا يتدخل أبداً في الأوامر ولا الروابط العادية)
+# ==========================================================
+import instaloader
+
+class InstaProfileOnlyFilter(filters.MessageFilter):
+    """فلتر ذكي يلتقط روابط 'البروفايل' فقط ويتجاهل Reels/Posts/Stories"""
+    def filter(self, message):
+        if not message.text: return False
+        text = message.text.strip()
+        if "instagram.com" not in text.lower(): return False
+        try:
+            parsed = urlparse(text)
+            path = parsed.path.strip('/')
+            parts = path.split('/')
+            # إذا كان الرابط يحتوي على جزء واحد فقط وليس من الممنوعات، فهو بروفايل يوزر
+            forbidden_paths = {'p', 'reel', 'tv', 'stories', 'explore', 'reels'}
+            if len(parts) == 1 and parts[0].lower() not in forbidden_paths:
+                message._isolated_insta_username = parts[0]  # تخزين اليوزر لسهولة استخدامه
+                return True
+        except Exception:
+            pass
+        return False
+
+def _fetch_isolated_stories_sync(username: str, job_dir: Path) -> list:
+    L = instaloader.Instaloader(
+        dirname_pattern=str(job_dir),
+        download_pictures=True,
+        download_videos=True,
+        download_video_thumbnails=False,
+        save_metadata=False,
+        quiet=True
+    )
+    insta_user = os.getenv("INSTA_USERNAME")
+    insta_pass = os.getenv("INSTA_PASSWORD")
+    if insta_user:
+        session_path = str(DATA_DIR / f"session_{insta_user}")
+        try:
+            L.load_session_from_file(insta_user, session_path)
+        except FileNotFoundError:
+            if insta_pass:
+                try:
+                    L.login(insta_user, insta_pass)
+                    L.save_session_to_file(session_path)
+                except Exception:
+                    pass
+    try:
+        profile = instaloader.Profile.from_username(L.context, username)
+        for story in L.get_stories(userids=[profile.userid]):
+            for item in story.get_items():
+                L.download_storyitem(item, str(job_dir))
+        files = [p for p in job_dir.rglob("*") if p.is_file() and p.suffix in [".mp4", ".jpg", ".jpeg"]]
+        files.sort(key=lambda x: x.name)
+        return files
+    except Exception:
+        return []
+
+async def handle_isolated_insta_story(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if uid in ACTIVE_USERS:
+        return await update.message.reply_text("⏳ لديك عملية قيد التنفيذ.\n\nانتظر حتى تكتمل.")
+    
+    username = getattr(update.message, "_isolated_insta_username", None)
+    if not username: return
+    
+    ACTIVE_USERS.add(uid)
+    status = await update.message.reply_text(f"🔍 جاري سحب الستوريات الحالية للحساب: @{username}\nبوضع التخفي 🥷...")
+    job_dir = BASE_DOWNLOAD_DIR / f"isolated_insta_{uid}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+    job_dir.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        loop = asyncio.get_running_loop()
+        files = await loop.run_in_executor(EXECUTOR, lambda: _fetch_isolated_stories_sync(username, job_dir))
+        
+        if not files:
+            await status.edit_text("❌ لم يتم العثور على ستوريات، أو أن الحساب خاص (Private)، أو يلزم إضافة حساب وهمي في إعدادات السيرفر.")
+            return
+        
+        await status.edit_text(f"📤 تم جلب {len(files)} ستوري. جاري الإرسال...")
+        for file_path in files:
+            with open(file_path, "rb") as f:
+                if file_path.suffix == ".mp4":
+                    await context.bot.send_video(chat_id=uid, video=f, read_timeout=60, write_timeout=60)
+                else:
+                    await context.bot.send_photo(chat_id=uid, photo=f, read_timeout=60, write_timeout=60)
+        
+        stat_inc_sync("success")
+        await safe_delete(status)
+    except Exception as e:
+        logger.error(f"Isolated Story Error: {e}")
+        await status.edit_text("❌ حدث خطأ أثناء سحب الستوريات.")
+        stat_inc_sync("failed")
+    finally:
+        ACTIVE_USERS.discard(uid)
+        try: shutil.rmtree(job_dir)
+        except Exception: pass
+
+# ==========================================================
 # التشغيل
 # ==========================================================
 
@@ -918,11 +930,16 @@ def main():
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
     app.add_handler(CommandHandler("backup", backup_db_command))
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
+    
+    # 🟢 المعالج المعزول (يتم إضافته قبل المعالج الأساسي ليلتقط اليوزرات فقط ويتجاهل الباقي)
+    app.add_handler(MessageHandler(InstaProfileOnlyFilter() & ~filters.COMMAND, handle_isolated_insta_story))
+    
+    # المعالج الأساسي الخاص بك (باقي كما هو دون أي تغيير)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
+    
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
     logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
-    # تفعيل drop_pending_updates بشكل إجباري لتجنب مشاكل الـ Conflict عند تكرار تشغيل الحاوية
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
