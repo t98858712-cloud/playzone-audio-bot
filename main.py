@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 import yt_dlp
+import instaloader # <-- المكتبة الجديدة للانستغرام
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -67,7 +68,7 @@ DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(2, MAX_WORKERS))
 
 ACTIVE_USERS = set()
-user_cooldowns = {} # 🛡️ درع الحماية ضد السبام
+user_cooldowns = {}
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@P1ay_Z0ne_Bot")
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
@@ -350,7 +351,8 @@ def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
 def build_start_text(first_name: str) -> str:
     return (
         f"أهلاً {esc(first_name)} 👋\n\n"
-        "أرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n"
+        "أرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n"
+        "أو أرسل رابط حساب انستغرام وسأقوم بجلب الستوريات الحالية لك.\n\n"
         "💚 دعمك يصنع الفرق\n\n"
         "تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
         "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
@@ -525,7 +527,6 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
 
 def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path = None) -> bool:
     try:
-        # منع تعليق محول الصوت بإضافة stdin=subprocess.DEVNULL
         cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(input_file)]
         if local_thumb and local_thumb.exists():
             cmd.extend(["-i", str(local_thumb), "-map", "0:a", "-map", "1:v", "-c:v", "mjpeg", "-id3v2_version", "3", "-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
@@ -568,40 +569,6 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياطية من قاعدة البيانات.")
     except Exception as e:
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
-
-# ==========================================================
-# التوجيه الذكي للتفعيل السريع للأدمن
-# ==========================================================
-async def handle_forwarded_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """ميزة خارقة للأدمن: وجّه رسالة من المستخدم للبوت لتفعيل حسابه فوراً دون نسخ الآيدي"""
-    uid = update.effective_user.id
-    if not is_admin(uid): return
-    
-    origin = update.message.forward_origin
-    if not origin: return
-    
-    # حماية من انهيار البوت إذا كان المستخدم يخفي حسابه عبر إعدادات الخصوصية
-    if origin.type == "hidden_user":
-        return await update.message.reply_text("❌ لا يمكن جلب آيدي هذا المستخدم بسبب إعدادات الخصوصية لديه (حساب مخفي). يرجى التفعيل يدوياً باستخدام زر (تفعيل رصيد يدوي) في لوحة التحكم.", parse_mode="HTML")
-        
-    if origin.type != "user":
-        return await update.message.reply_text("❌ يرجى توجيه رسالة من حساب المستخدم المباشر وليس من قناة أو مجموعة.", parse_mode="HTML")
-        
-    target_user_id = origin.sender_user.id
-    user_name = origin.sender_user.first_name
-    
-    markup = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📆 تفعيل أسبوع (7 أيام)", callback_data=f"fwd_act_7_{target_user_id}")],
-        [InlineKeyboardButton("🌟 تفعيل شهر (30 يوم)", callback_data=f"fwd_act_30_{target_user_id}")]
-    ])
-    
-    await update.message.reply_text(
-        f"📥 <b>تم التعرف على المستخدم المحوّل:</b>\n\n"
-        f"👤 الاسم: {esc(user_name)}\n"
-        f"🆔 الآيدي: <code>{target_user_id}</code>\n\n"
-        f"اختر باقة تفعيل الرصيد:",
-        parse_mode="HTML", reply_markup=markup
-    )
 
 # ==========================================================
 # أحداث المستخدم والروابط الموحدة
@@ -672,12 +639,12 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if is_admin(uid) and context.user_data.get("awaiting_manual_vip"):
         return await handle_manual_vip_input(update, context, text)
     
-    # 🛡️ نظام الحماية من السبام (يمنع الضغط العالي على سيرفر البوت والانستغرام)
+    # 🛡️ نظام الحماية من السبام
     current_time = time.time()
     if uid in user_cooldowns:
         time_passed = current_time - user_cooldowns[uid]
-        if time_passed < 10:
-            return await update.message.reply_text(f"⏳ <b>نظام الحماية:</b> يرجى الانتظار {int(10 - time_passed)} ثوانٍ قبل إرسال رابط جديد.", parse_mode="HTML")
+        if time_passed < 5:
+            return await update.message.reply_text(f"⏳ <b>نظام الحماية:</b> يرجى الانتظار {int(5 - time_passed)} ثوانٍ.", parse_mode="HTML")
     user_cooldowns[uid] = current_time
 
     if uid in ACTIVE_USERS:
@@ -685,6 +652,15 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if not is_valid_url(text):
         return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
 
+    # 🔗 تحويل رابط الانستغرام إلى وحدة المعالجة الجديدة المضافة للـ Stories (بدون المساس بـ yt-dlp)
+    if "instagram.com" in text.lower():
+        # فحص الصلاحية قبل الجلب لتقليل الضغط
+        allowed, reason_or_msg = check_user_vip_access(uid)
+        if not allowed:
+            return await update.message.reply_text(reason_or_msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📞 مراسلة الإدارة لتفعيل الاشتراك", url="https://t.me/pl_z0")]]))
+        return await process_instagram_stories(update, context, text)
+
+    # ⏬ المعالجة القياسية لبقية المواقع (كما هي في الكود الأصلي)
     status = await update.message.reply_text("🔍 جاري فحص الرابط وتجهيز المعاينة...")
     try:
         loop = asyncio.get_running_loop()
@@ -756,7 +732,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
 
-    # معالجة أزرار التفعيل عبر التوجيه الذكي
     if data.startswith("fwd_act_"):
         if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
         days = int(data.split("_")[2])
@@ -793,7 +768,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not request: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
         if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
         
-        # 🔐 فحص صلاحيات رصيد الـ VIP والمحاولات المجانية اليومية قبل البدء في التحميل
         allowed, reason_or_msg = check_user_vip_access(uid)
         if not allowed:
             await query.answer("⚠️ انتهى رصيدك المجاني اليومي!", show_alert=True)
@@ -947,7 +921,7 @@ def check_user_vip_access(user_id: int) -> tuple[bool, str]:
                 
             pay_alert_text = (
                 "⚠️ <b>لقد استنفدت محاولتك المجانية المتاحة لك اليوم!</b>\n\n"
-                "لجلب الميديا بشكل غير محدود وبأقصى سرعة، يرجى الاشتراك في الباقة المميزة (VIP) 🌟\n\n"
+                "لجلب الميديا والستوريات بشكل غير محدود وبأقصى سرعة، يرجى الاشتراك في الباقة المميزة (VIP) 🌟\n\n"
                 "💵 <b>أسعار الاشتراك المعتمدة:</b>\n"
                 "• <b>أسبوعي:</b> 2,000 د.ع\n"
                 "• <b>شهري:</b> 5,000 د.ع\n\n"
@@ -1034,6 +1008,114 @@ async def handle_manual_vip_input(update: Update, context: ContextTypes.DEFAULT_
     except Exception as e:
         await update.message.reply_text(f"❌ حدث خطأ في صيغة البيانات المرسلة. تذكر أن ترسل الأرقام فقط (مثال: <code>112233 30</code>).", parse_mode="HTML")
 
+async def handle_forwarded_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if not is_admin(uid): return
+    
+    origin = update.message.forward_origin
+    if not origin: return
+    
+    if origin.type == "hidden_user":
+        return await update.message.reply_text("❌ لا يمكن جلب آيدي هذا المستخدم بسبب إعدادات الخصوصية لديه (حساب مخفي). يرجى التفعيل يدوياً باستخدام زر (تفعيل رصيد يدوي) في لوحة التحكم.", parse_mode="HTML")
+        
+    if origin.type != "user":
+        return await update.message.reply_text("❌ يرجى توجيه رسالة من حساب المستخدم المباشر وليس من قناة أو مجموعة.", parse_mode="HTML")
+        
+    target_user_id = origin.sender_user.id
+    user_name = origin.sender_user.first_name
+    
+    markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📆 تفعيل أسبوع (7 أيام)", callback_data=f"fwd_act_7_{target_user_id}")],
+        [InlineKeyboardButton("🌟 تفعيل شهر (30 يوم)", callback_data=f"fwd_act_30_{target_user_id}")]
+    ])
+    
+    await update.message.reply_text(
+        f"📥 <b>تم التعرف على المستخدم المحوّل:</b>\n\n"
+        f"👤 الاسم: {esc(user_name)}\n"
+        f"🆔 الآيدي: <code>{target_user_id}</code>\n\n"
+        f"اختر باقة تفعيل الرصيد:",
+        parse_mode="HTML", reply_markup=markup
+    )
+
+# ==========================================================
+# 🕵️‍♂️ وحدة مراقبة ستوريات انستغرام المضافة (IG Proxy)
+# ==========================================================
+
+IG_USERNAME = os.getenv("IG_USERNAME", "YOUR_IG_USER")
+IG_PASSWORD = os.getenv("IG_PASSWORD", "YOUR_IG_PASS")
+IG_SESSION_FILE = Path(DATA_DIR / f"{IG_USERNAME}.session")
+INSTA_L = instaloader.Instaloader()
+
+def init_instagram():
+    try:
+        if IG_SESSION_FILE.exists():
+            INSTA_L.load_session_from_file(IG_USERNAME, filename=str(IG_SESSION_FILE))
+        else:
+            INSTA_L.login(IG_USERNAME, IG_PASSWORD)
+            INSTA_L.save_session_to_file(filename=str(IG_SESSION_FILE))
+    except Exception as e:
+        logger.error(f"Instagram Login Error: {e}")
+
+# استدعاء أولي لتسجيل الدخول
+init_instagram()
+
+def extract_ig_username(url):
+    match = re.search(r'instagram\.com/(?:stories/)?([^/?#]+)', url)
+    return match.group(1) if match else None
+
+async def process_instagram_stories(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
+    """دالة مستقلة لجلب الستوريات دون التأثير على yt-dlp"""
+    username = extract_ig_username(url)
+    if not username or username.lower() in ['p', 'reel', 'reels', 'tv']:
+        return await update.message.reply_text("⚠️ يرجى إرسال رابط ملف شخصي (Profile) أو رابط ستوري صحيح لجلب الستوريات.")
+
+    msg_wait = await update.message.reply_text("⏳ جاري جلب الستوريات الحالية مجهولاً...")
+    
+    try:
+        loop = asyncio.get_running_loop()
+        
+        def fetch_stories():
+            profile = instaloader.Profile.from_username(INSTA_L.context, username)
+            if profile.is_private and not profile.followed_by_viewer:
+                return "PRIVATE"
+                
+            story_items = []
+            for story in INSTA_L.get_stories(userids=[profile.userid]):
+                for item in story.get_items():
+                    story_items.append({
+                        "is_video": item.is_video,
+                        "video_url": item.video_url if item.is_video else None,
+                        "url": item.url
+                    })
+            return story_items
+
+        result = await loop.run_in_executor(EXECUTOR, fetch_stories)
+        
+        if result == "PRIVATE":
+            return await msg_wait.edit_text("🔒 هذا الحساب خاص (Private)، لا يمكن جلب ستورياته.")
+            
+        if not result:
+            await safe_delete(msg_wait)
+            return await update.message.reply_text(f"📭 الحساب @{username} لا يملك أي ستوريات نشطة حالياً.")
+            
+        await msg_wait.edit_text("📤 تم سحب الستوريات، جاري الإرسال...")
+        
+        for item in result:
+            if item["is_video"]:
+                await context.bot.send_video(update.message.chat_id, item["video_url"])
+            else:
+                await context.bot.send_photo(update.message.chat_id, item["url"])
+                
+        await safe_delete(msg_wait)
+        stat_inc_sync("requests")
+        stat_inc_sync("success")
+
+    except instaloader.exceptions.ProfileNotExistsException:
+        await msg_wait.edit_text("❌ الحساب غير موجود. تأكد من صحة الرابط.")
+    except Exception as e:
+        logger.error(f"IG Story Fetch Error: {e}")
+        await msg_wait.edit_text("❌ حدث خطأ، قد يكون انستغرام قام بتقييد الطلبات مؤقتاً.")
+
 # ==========================================================
 # التشغيل
 # ==========================================================
@@ -1067,9 +1149,7 @@ def main():
         .build()
     )
 
-    # 📌 المستمع الخاص بالتوجيه الذكي (يجب أن يكون في البداية)
     app.add_handler(MessageHandler(filters.FORWARDED & filters.ChatType.PRIVATE, handle_forwarded_message))
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("vip", show_user_vip_status))
@@ -1081,7 +1161,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية والمستقرة جداً.")
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية مع نظام الانستغرام المجهول والـ VIP.")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
