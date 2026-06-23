@@ -16,7 +16,7 @@ from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
 
 import yt_dlp
-import instaloader  # <--- [الفكرة الجديدة]: استدعاء مكتبة الانستغرام
+import instaloader
 
 from telegram import (
     Update,
@@ -799,7 +799,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
-# [الفكرة الجديدة]: قسم معزول بالكامل لسحب الستوريات
+# قسم معزول بالكامل لسحب الستوريات (Instagram Module)
 # ==========================================================
 
 class InstaProfileOnlyFilter(filters.MessageFilter):
@@ -831,6 +831,7 @@ def _fetch_isolated_stories_sync(username: str, job_dir: Path) -> list:
     )
     insta_user = os.getenv("INSTA_USERNAME")
     insta_pass = os.getenv("INSTA_PASSWORD")
+    
     if insta_user:
         session_path = str(DATA_DIR / f"session_{insta_user}")
         try:
@@ -840,17 +841,27 @@ def _fetch_isolated_stories_sync(username: str, job_dir: Path) -> list:
                 try:
                     L.login(insta_user, insta_pass)
                     L.save_session_to_file(session_path)
-                except Exception:
-                    pass
+                except instaloader.exceptions.TwoFactorAuthRequiredException:
+                    logger.error("Instagram 2FA is required. Please disable it for the bot account.")
+                except Exception as e:
+                    logger.error(f"Instaloader Login Error: {e}")
+        except Exception as e:
+            logger.error(f"Instaloader Session Load Error: {e}")
+
     try:
         profile = instaloader.Profile.from_username(L.context, username)
+        if profile.is_private and not profile.followed_by_viewer:
+            return []
+            
         for story in L.get_stories(userids=[profile.userid]):
             for item in story.get_items():
                 L.download_storyitem(item, str(job_dir))
+                
         files = [p for p in job_dir.rglob("*") if p.is_file() and p.suffix in [".mp4", ".jpg", ".jpeg"]]
         files.sort(key=lambda x: x.name)
         return files
-    except Exception:
+    except Exception as e:
+        logger.error(f"Instaloader Story Fetch Error: {e}")
         return []
 
 async def handle_isolated_insta_story(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -886,7 +897,7 @@ async def handle_isolated_insta_story(update: Update, context: ContextTypes.DEFA
         await safe_delete(status)
     except Exception as e:
         logger.error(f"Isolated Story Error: {e}")
-        await status.edit_text("❌ حدث خطأ أثناء سحب الستوريات.")
+        await status.edit_text("❌ حدث خطأ أثناء سحب الستوريات. قد يكون الحساب محظوراً أو يتطلب تحديث الجلسة.")
         stat_inc_sync("failed")
     finally:
         ACTIVE_USERS.discard(uid)
@@ -930,7 +941,7 @@ def main():
     app.add_handler(CommandHandler("backup", backup_db_command))
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
     
-    # [الفكرة الجديدة]: إضافة أمر تشغيل الميزة المعزولة هنا قبل الأوامر العادية
+    # 🟢 إضافة أمر تشغيل الميزة المعزولة هنا قبل الأوامر العادية
     app.add_handler(MessageHandler(InstaProfileOnlyFilter() & ~filters.COMMAND, handle_isolated_insta_story))
     
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
