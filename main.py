@@ -17,8 +17,12 @@ L = instaloader.Instaloader(
     post_metadata_txt_pattern=''
 )
 
-# تحميل ملف الجلسة بدلاً من تسجيل الدخول المباشر لتخطي حظر سيرفرات الاستضافة
-L.load_session_from_file("panther.6059084", "session-panther")
+# --- التعديل هنا فقط: تحديد مسار ملف الجلسة برمجياً ---
+current_dir = os.path.dirname(os.path.abspath(__file__))
+session_path = os.path.join(current_dir, "session-panther")
+
+L.load_session_from_file("panther.6059084", session_path)
+# -----------------------------------------------------
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
