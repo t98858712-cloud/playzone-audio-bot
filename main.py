@@ -14,15 +14,38 @@ L = instaloader.Instaloader(
     download_videos=True,
     download_video_thumbnails=False,
     save_metadata=False,
-    post_metadata_txt_pattern=''
+    post_metadata_txt_pattern='',
+    user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1"
 )
 
-# تحديد المسار الدقيق لملف الجلسة بجانب سكريبت التشغيل
+# --- قسم المعالجة الذاتية للجلسة ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 session_path = os.path.join(current_dir, "session-panther")
 
-# تحميل ملف الجلسة لتخطي حظر إنستقرام نهائياً
-L.load_session_from_file("panther.6059084", session_path)
+username_insta = "panther.6059084"
+password_insta = "Hh112233hh"
+
+# التحقق مما إذا كان ملف الجلسة موجوداً، وإذا لم يكن موجوداً، قم بإنشائه
+if not os.path.exists(session_path):
+    try:
+        print("⏳ ملف الجلسة غير موجود. جاري إنشاء جلسة جديدة...")
+        L.login(username_insta, password_insta)
+        L.save_session_to_file(session_path)
+        print("✅ تم إنشاء ملف الجلسة بنجاح!")
+    except Exception as e:
+        print(f"⚠️ فشل في تسجيل الدخول وإنشاء الجلسة: {e}")
+else:
+    try:
+        print("⏳ جاري تحميل ملف الجلسة الموجود...")
+        L.load_session_from_file(username_insta, session_path)
+        print("✅ تم تحميل الجلسة بنجاح!")
+    except Exception as e:
+         print(f"⚠️ فشل في تحميل الجلسة: {e}")
+# ------------------------------------
+
+# ==============================================================
+# --- من هنا يبدأ الكود الأصلي الخاص بك دون تغيير أي حرف ---
+# ==============================================================
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
