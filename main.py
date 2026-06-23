@@ -14,10 +14,9 @@ import ipaddress
 from pathlib import Path
 from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
 
 import yt_dlp
-import instaloader
+import instaloader  # [إضافة]: مكتبة سحب الستوريات
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -68,7 +67,6 @@ DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(2, MAX_WORKERS))
 
 ACTIVE_USERS = set()
-user_cooldowns = {} # حماية ضد السبام
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@P1ay_Z0ne_Bot")
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
@@ -76,13 +74,6 @@ FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
 INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
 THREADS_PLAYZONE = "https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ=="
 TELEGRAM_BOT_PLAYZONE = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
-
-IG_USERNAME = os.getenv("IG_USERNAME", "YOUR_IG_USER")
-IG_PASSWORD = os.getenv("IG_PASSWORD", "YOUR_IG_PASS")
-IG_SESSION_FILE = Path(DATA_DIR / f"{IG_USERNAME}.session")
-
-# 🟢 تم تصحيح download_videos بدلاً من download_video
-INSTA_L = instaloader.Instaloader(download_pictures=True, download_video_thumbnails=False, download_videos=True, download_geotags=False, download_comments=False, save_metadata=False)
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -101,7 +92,7 @@ progress_lock = threading.Lock()
 
 def init_db():
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE, timeout=20) as conn:
+        with sqlite3.connect(DB_FILE) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -113,16 +104,6 @@ def init_db():
                     last_seen INTEGER
                 )
             """)
-            
-            try: conn.execute("ALTER TABLE users ADD COLUMN is_vip INTEGER DEFAULT 0")
-            except Exception: pass
-            try: conn.execute("ALTER TABLE users ADD COLUMN vip_expire_date TEXT")
-            except Exception: pass
-            try: conn.execute("ALTER TABLE users ADD COLUMN daily_uses INTEGER DEFAULT 0")
-            except Exception: pass
-            try: conn.execute("ALTER TABLE users ADD COLUMN last_use_date TEXT")
-            except Exception: pass
-            
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS stats (
                     key TEXT PRIMARY KEY,
@@ -131,48 +112,41 @@ def init_db():
             """)
             for k in ["requests", "success", "failed", "bytes", "broadcasts"]:
                 conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (k,))
-            conn.commit()
 
 def register_user_sync(user):
     if not user: return
     now = int(time.time())
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE, timeout=20) as conn:
+        with sqlite3.connect(DB_FILE) as conn:
             cur = conn.cursor()
-            cur.execute("SELECT first_seen, is_vip, vip_expire_date, daily_uses, last_use_date FROM users WHERE id = ?", (user.id,))
+            cur.execute("SELECT first_seen FROM users WHERE id = ?", (user.id,))
             row = cur.fetchone()
-            if row:
-                first_seen, is_vip, vip_expire_date, daily_uses, last_use_date = row
-            else:
-                first_seen, is_vip, vip_expire_date, daily_uses, last_use_date = now, 0, None, 0, ""
-                
+            first_seen = row[0] if row else now
             conn.execute("""
-                INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen, is_vip, vip_expire_date, daily_uses, last_use_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now, is_vip, vip_expire_date, daily_uses, last_use_date))
-            conn.commit()
+                INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now))
 
 def stat_inc_sync(key: str, value: int = 1):
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE, timeout=20) as conn:
+        with sqlite3.connect(DB_FILE) as conn:
             conn.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, key))
-            conn.commit()
 
 def load_stats_sync() -> dict:
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE, timeout=20) as conn:
+        with sqlite3.connect(DB_FILE) as conn:
             rows = conn.execute("SELECT key, value FROM stats").fetchall()
             return {k: v for k, v in rows}
 
 def all_user_ids() -> list:
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE, timeout=20) as conn:
+        with sqlite3.connect(DB_FILE) as conn:
             rows = conn.execute("SELECT id FROM users").fetchall()
             return [row[0] for row in rows]
 
 def get_latest_users(limit: int = 10) -> list:
     with DB_LOCK:
-        with sqlite3.connect(DB_FILE, timeout=20) as conn:
+        with sqlite3.connect(DB_FILE) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute("SELECT * FROM users ORDER BY last_seen DESC LIMIT ?", (limit,)).fetchall()
             return [dict(r) for r in rows]
@@ -321,7 +295,7 @@ def _force_cleanup_all_sync() -> int:
 
 def user_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [[KeyboardButton("📘 دليل الاستخدام")], [KeyboardButton("🔗 روابط PlayZone")], [KeyboardButton("🌟 حالة اشتراكي VIP")]],
+        [[KeyboardButton("📘 دليل الاستخدام")], [KeyboardButton("🔗 روابط PlayZone")]],
         resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط هنا..."
     )
 
@@ -346,9 +320,7 @@ def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 الإحصائيات", callback_data="adm_stats"), InlineKeyboardButton("👥 المستخدمون", callback_data="adm_users")],
         [InlineKeyboardButton("📢 إذاعة", callback_data="adm_bc"), InlineKeyboardButton("🧹 تنظيف الكاش", callback_data="adm_clean")],
-        [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("➕ تفعيل رصيد يدوي", callback_data="adm_add_vip")],
-        [InlineKeyboardButton("🔄 تجديد جلسة الانستغرام", callback_data="adm_reset_ig")],
-        [InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
+        [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
     ])
 
 def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
@@ -359,8 +331,7 @@ def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
 def build_start_text(first_name: str) -> str:
     return (
         f"أهلاً {esc(first_name)} 👋\n\n"
-        "أرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n"
-        "أو أرسل رابط حساب انستغرام وسأقوم بجلب الستوريات الحالية لك.\n\n"
+        "أرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n"
         "💚 دعمك يصنع الفرق\n\n"
         "تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
         "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
@@ -382,20 +353,12 @@ def build_preview_caption(title: str, artist: str, duration: str, est_size: str)
 def build_admin_stats_text() -> str:
     stats = load_stats_sync()
     users_count = len(all_user_ids())
-    
-    vips_count = 0
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE, timeout=20) as conn:
-            try: vips_count = conn.execute("SELECT COUNT(*) FROM users WHERE is_vip = 1").fetchone()[0]
-            except Exception: pass
-
     return (
-        "📊 <b>إحصائيات البوت المتقدمة</b>\n\n"
+        "📊 <b>إحصائيات البوت</b>\n\n"
         f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
         f"• التحميلات الناجحة: {stats.get('success', 0)}\n"
         f"• العمليات الفاشلة: {stats.get('failed', 0)}\n"
-        f"• عدد المستخدمين الكلي: {users_count}\n"
-        f"• مشتركي الـ VIP النشطين: {vips_count}\n"
+        f"• عدد المستخدمين: {users_count}\n"
         f"• حجم الملفات المرسلة: {format_size(stats.get('bytes', 0))}\n"
         f"• عدد الإذاعات: {stats.get('broadcasts', 0)}"
     )
@@ -406,8 +369,7 @@ def build_admin_users_text(limit: int = 10) -> str:
     for u in users:
         name = u.get("first_name") or "بدون اسم"
         username = f"@{u.get('username')}" if u.get("username") else "لا يوجد"
-        vip_status = "🌟 VIP" if u.get("is_vip") == 1 else "👤 عادي"
-        lines.append(f"• {esc(name)} — {esc(username)} — [{vip_status}] — ID: <code>{u.get('id')}</code>")
+        lines.append(f"• {esc(name)} — {esc(username)} — ID: <code>{u.get('id')}</code>")
     return "\n".join(lines)
 
 def build_server_status_text() -> str:
@@ -447,6 +409,83 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
             return await update.message.reply_photo(photo=thumb, caption=caption, reply_markup=keyboard, parse_mode="HTML")
         except Exception: pass
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+
+# ==========================================================
+# سحب ستوريات الانستغرام (ميزة التخفي) [إضافة]
+# ==========================================================
+
+def fetch_stories_sync(username: str, job_dir: Path) -> list:
+    L = instaloader.Instaloader(
+        dirname_pattern=str(job_dir),
+        download_pictures=True,
+        download_videos=True,
+        download_video_thumbnails=False,
+        save_metadata=False,
+        quiet=True
+    )
+    
+    insta_user = os.getenv("INSTA_USERNAME")
+    insta_pass = os.getenv("INSTA_PASSWORD")
+    
+    if insta_user:
+        session_path = str(DATA_DIR / f"session_{insta_user}")
+        try:
+            L.load_session_from_file(insta_user, session_path)
+        except FileNotFoundError:
+            if insta_pass:
+                try:
+                    L.login(insta_user, insta_pass)
+                    L.save_session_to_file(session_path)
+                except Exception as e:
+                    logger.error(f"Instaloader Login Error: {e}")
+
+    try:
+        profile = instaloader.Profile.from_username(L.context, username)
+        for story in L.get_stories(userids=[profile.userid]):
+            for item in story.get_items():
+                L.download_storyitem(item, str(job_dir))
+        
+        files = [p for p in job_dir.rglob("*") if p.is_file() and p.suffix in [".mp4", ".jpg", ".jpeg"]]
+        files.sort(key=lambda x: x.name)
+        return files
+    except Exception as e:
+        logger.error(f"Instaloader Error: {e}")
+        return []
+
+async def handle_instagram_story(update: Update, context: ContextTypes.DEFAULT_TYPE, username: str):
+    uid = update.effective_user.id
+    ACTIVE_USERS.add(uid)
+    status = await update.message.reply_text(f"🔍 جاري سحب الستوريات الحالية للحساب: @{username}\nبوضع التخفي 🥷...")
+    job_dir = BASE_DOWNLOAD_DIR / f"insta_{uid}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+    job_dir.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        loop = asyncio.get_running_loop()
+        files = await loop.run_in_executor(EXECUTOR, lambda: fetch_stories_sync(username, job_dir))
+        
+        if not files:
+            await status.edit_text("❌ لم يتم العثور على ستوريات، أو أن الحساب خاص (Private)، أو يلزم إضافة حساب وهمي في السيرفر.")
+            return
+        
+        await status.edit_text(f"📤 تم جلب {len(files)} ستوري. جاري الإرسال...")
+        
+        for file_path in files:
+            with open(file_path, "rb") as f:
+                if file_path.suffix == ".mp4":
+                    await context.bot.send_video(chat_id=uid, video=f, read_timeout=60, write_timeout=60)
+                else:
+                    await context.bot.send_photo(chat_id=uid, photo=f, read_timeout=60, write_timeout=60)
+                    
+        stat_inc_sync("success")
+        await safe_delete(status)
+    except Exception as e:
+        logger.error(f"Story download failed: {e}")
+        await status.edit_text("❌ حدث خطأ أثناء سحب الستوريات.")
+        stat_inc_sync("failed")
+    finally:
+        ACTIVE_USERS.discard(uid)
+        try: shutil.rmtree(job_dir)
+        except Exception: pass
 
 # ==========================================================
 # yt-dlp و FFmpeg
@@ -543,7 +582,7 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         else:
             cmd.extend(["-vn"])
         cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "48000", "-ac", "2", "-threads", "0", str(output_file)])
-        subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
     except Exception as e:
         logger.error(f"فشل التحويل المحلي لـ MP3: {e}")
@@ -581,44 +620,6 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
 # ==========================================================
-# التوجيه الذكي للتفعيل السريع للأدمن
-# ==========================================================
-
-async def handle_forwarded_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if not is_admin(uid): return
-    
-    origin = update.message.forward_origin if hasattr(update.message, 'forward_origin') else None
-    
-    if origin and getattr(origin, 'type', '') == "hidden_user":
-        return await update.message.reply_text("❌ لا يمكن جلب آيدي هذا المستخدم بسبب إعدادات الخصوصية لديه (حساب مخفي). يرجى التفعيل يدوياً باستخدام لوحة التحكم.", parse_mode="HTML")
-        
-    target_user_id = None
-    user_name = "مجهول"
-    
-    if origin and getattr(origin, 'type', '') == "user":
-        target_user_id = origin.sender_user.id
-        user_name = origin.sender_user.first_name
-    elif update.message.forward_from:
-        target_user_id = update.message.forward_from.id
-        user_name = update.message.forward_from.first_name
-        
-    if not target_user_id:
-        return await update.message.reply_text("❌ يرجى توجيه رسالة من حساب المستخدم المباشر.", parse_mode="HTML")
-        
-    markup = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📆 تفعيل أسبوع (7 أيام)", callback_data=f"fwd_act_7_{target_user_id}")],
-        [InlineKeyboardButton("🌟 تفعيل شهر (30 يوم)", callback_data=f"fwd_act_30_{target_user_id}")]
-    ])
-    await update.message.reply_text(
-        f"📥 <b>تم التعرف على المستخدم المحوّل:</b>\n\n"
-        f"👤 الاسم: {esc(user_name)}\n"
-        f"🆔 الآيدي: <code>{target_user_id}</code>\n\n"
-        f"اختر باقة تفعيل الرصيد:",
-        parse_mode="HTML", reply_markup=markup
-    )
-
-# ==========================================================
 # أحداث المستخدم والروابط الموحدة
 # ==========================================================
 
@@ -632,7 +633,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
-    context.user_data.pop("awaiting_manual_vip", None)
     await update.message.reply_text(
         "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
         reply_markup=admin_main_keyboard(), parse_mode="HTML"
@@ -679,31 +679,22 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         return await show_playzone_links(update, context)
     if text == "📘 دليل الاستخدام":
         return await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
-    if text == "🌟 حالة اشتراكي VIP":
-        return await show_user_vip_status(update, context)
-        
+    
     if is_admin(uid) and context.user_data.get("bc_active"):
         return await handle_broadcast_text(update, context, text)
-    if is_admin(uid) and context.user_data.get("awaiting_manual_vip"):
-        return await handle_manual_vip_input(update, context, text)
     
-    current_time = time.time()
-    if uid in user_cooldowns:
-        time_passed = current_time - user_cooldowns[uid]
-        if time_passed < 5:
-            return await update.message.reply_text(f"⏳ <b>نظام الحماية:</b> يرجى الانتظار {int(5 - time_passed)} ثوانٍ قبل إرسال رابط جديد.", parse_mode="HTML")
-    user_cooldowns[uid] = current_time
-
     if uid in ACTIVE_USERS:
         return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
     if not is_valid_url(text):
         return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
 
-    if "instagram.com" in text.lower():
-        allowed, reason_or_msg = check_user_vip_access(uid)
-        if not allowed:
-            return await update.message.reply_text(reason_or_msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📞 مراسلة الإدارة لتفعيل الاشتراك", url="https://t.me/pl_z0")]]))
-        return await process_instagram_stories(update, context, text)
+    # ==========================================================
+    # [إضافة]: التقاط روابط حسابات الانستغرام لغرض سحب الستوري
+    # ==========================================================
+    insta_match = re.search(r"instagram\.com/([^/?#]+)", text)
+    if insta_match and not any(x in text for x in ["/p/", "/reel/", "/tv/", "/stories/"]):
+        username = insta_match.group(1)
+        return await handle_instagram_story(update, context, username)
 
     status = await update.message.reply_text("🔍 جاري فحص الرابط وتجهيز المعاينة...")
     try:
@@ -761,23 +752,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["bc_active"] = False
         await query.answer("تم إلغاء الإذاعة")
         return await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard(), parse_mode="HTML")
-    elif data == "adm_add_vip":
-        context.user_data["awaiting_manual_vip"] = True
-        await query.answer()
-        return await query.message.edit_text("✍️ <b>أرسل رصيد المشترك يدوياً بالصيغة التالية:</b>\n\n<code>الآيدي الأيام</code>\nمثال: <code>59382029 30</code> لتفعيل 30 يوماً لحساب محدد.", parse_mode="HTML")
-    elif data == "adm_reset_ig":
-        await query.answer("جاري تجديد الجلسة...")
-        def relogin():
-            try:
-                if IG_SESSION_FILE.exists():
-                    IG_SESSION_FILE.unlink()
-                INSTA_L.login(IG_USERNAME, IG_PASSWORD)
-                INSTA_L.save_session_to_file(str(IG_SESSION_FILE))
-                return True
-            except Exception: return False
-        success = await asyncio.get_running_loop().run_in_executor(None, relogin)
-        msg = "✅ تم تجديد جلسة الانستغرام بنجاح." if success else "❌ فشل تسجيل الدخول، راجع بيانات الحساب."
-        return await query.message.edit_text(msg, reply_markup=admin_main_keyboard(), parse_mode="HTML")
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -788,28 +762,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
-
-    if data.startswith("fwd_act_"):
-        if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
-        days = int(data.split("_")[2])
-        target_id = int(data.split("_")[3])
-        expire_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
-        
-        with DB_LOCK:
-            with sqlite3.connect(DB_FILE, timeout=20) as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT id FROM users WHERE id = ?", (target_id,))
-                if cur.fetchone():
-                    conn.execute("UPDATE users SET is_vip = 1, vip_expire_date = ? WHERE id = ?", (expire_date, target_id))
-                else:
-                    conn.execute('INSERT INTO users (id, is_vip, vip_expire_date, daily_uses, last_use_date, username, first_name, last_name, first_seen, last_seen) VALUES (?, 1, ?, 0, "", "", "", "", ?, ?)', (target_id, expire_date, int(time.time()), int(time.time())))
-                conn.commit()
-        
-        await query.edit_message_text(f"✅ تم تفعيل حساب <code>{target_id}</code> لمدة {days} يوم.", parse_mode="HTML")
-        try:
-            await context.bot.send_message(target_id, f"🎉 <b>تم تفعيل باقة VIP الخاصة بك بنجاح!</b>\n⏳ صالحة لـ: {days} يوماً.\n📅 تنتهي: <code>{expire_date}</code>\n🚀 يمكنك الآن التحميل بلا حدود.", parse_mode="HTML")
-        except: pass
-        return
 
     if data.startswith("cancel:"):
         ensure_pending_requests(context).pop(data.split(":")[1], None)
@@ -825,11 +777,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not request: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
         if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
         
-        allowed, reason_or_msg = check_user_vip_access(uid)
-        if not allowed:
-            await query.answer("⚠️ انتهى رصيدك المجاني اليومي!", show_alert=True)
-            return await query.message.reply_text(reason_or_msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📞 مراسلة الإدارة لتفعيل الاشتراك", url="https://t.me/pl_z0")]]))
-            
         await start_download_from_callback(query, context, request, mode)
 
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str):
@@ -885,6 +832,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 "👇 جرّبه الآن:"
             )
 
+            # سيقوم تيليجرام بدمج الرابط مع النص تلقائياً
             share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
             
             media_keyboard = InlineKeyboardMarkup([
@@ -935,217 +883,11 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
-# 💎 نظام إدارة الـ VIP والاشتراكات المدمج
-# ==========================================================
-
-def check_user_vip_access(user_id: int) -> tuple[bool, str]:
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    today_date = datetime.now().date()
-    
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE, timeout=20) as conn:
-            cur = conn.cursor()
-            try:
-                cur.execute('SELECT is_vip, vip_expire_date, daily_uses, last_use_date FROM users WHERE id = ?', (user_id,))
-                row = cur.fetchone()
-            except Exception:
-                return True, "FREE_ALLOWED"
-            
-            if not row:
-                return True, "FREE_ALLOWED"
-                
-            is_vip, vip_expire_date, daily_uses, last_use_date = row
-            
-            if is_vip == 1 and vip_expire_date:
-                try:
-                    expire_date = datetime.strptime(vip_expire_date, '%Y-%m-%d').date()
-                    if today_date <= expire_date:
-                        return True, "VIP_ALLOWED"
-                    else:
-                        conn.execute('UPDATE users SET is_vip = 0 WHERE id = ?', (user_id,))
-                        conn.commit()
-                except Exception:
-                    pass
-
-            if last_use_date != today_str:
-                conn.execute('UPDATE users SET daily_uses = 1, last_use_date = ? WHERE id = ?', (today_str, user_id))
-                conn.commit()
-                return True, "FREE_ALLOWED"
-                
-            if daily_uses < 1:
-                conn.execute('UPDATE users SET daily_uses = daily_uses + 1 WHERE id = ?', (user_id,))
-                conn.commit()
-                return True, "FREE_ALLOWED"
-                
-            pay_alert_text = (
-                "⚠️ <b>لقد استنفدت محاولتك المجانية المتاحة لك اليوم!</b>\n\n"
-                "لجلب الميديا والستوريات بشكل غير محدود وبأقصى سرعة، يرجى الاشتراك في الباقة المميزة (VIP) 🌟\n\n"
-                "💵 <b>أسعار الاشتراك المعتمدة:</b>\n"
-                "• <b>أسبوعي:</b> 2,000 د.ع\n"
-                "• <b>شهري:</b> 5,000 د.ع\n\n"
-                "💳 <b>طريقة الدفع والتحويل:</b>\n"
-                "قم بتحويل قيمة الباقة المطلوبة إلى بطاقة <b>ماستر كارد (سوبر كي)</b> التالية:\n"
-                "<code>7113282938</code> (انقر لنسخ الرقم)\n\n"
-                "📸 بعد إتمام التحويل، أرسل صورة الوصل أو الإيصال مع آيدي حسابك الشخصي الموضح بالأسفل إلى الإدارة المباشرة لتفعيل حسابك فوراً.\n\n"
-                f"🆔 <b>الآيدي الخاص بك للنسخ:</b> <code>{user_id}</code>"
-            )
-            return False, pay_alert_text
-
-async def show_user_vip_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    today_date = datetime.now().date()
-    
-    row = None
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE, timeout=20) as conn:
-            cur = conn.cursor()
-            try:
-                cur.execute('SELECT is_vip, vip_expire_date, daily_uses, last_use_date FROM users WHERE id = ?', (user_id,))
-                row = cur.fetchone()
-            except Exception: pass
-
-    prices_info = (
-        "\n\n💎 <b>باقات VIP المتوفرة للتحميل اللا محدود:</b>\n"
-        "• أسبوعي: 2,000 د.ع\n"
-        "• شهري: 5,000 د.ع\n\n"
-        "💳 الماستر كارد للتحويل: <code>7113282938</code>"
-    )
-
-    if not row:
-        msg = "👤 <b>حالة حسابك:</b> مستخدم عادي\n🎁 <b>المحاولات المجانية اليومية المتبقية:</b> 1 من 1" + prices_info
-    else:
-        is_vip, vip_expire_date, daily_uses, last_use_date = row
-        if is_vip == 1 and vip_expire_date:
-            try:
-                expire_date = datetime.strptime(vip_expire_date, '%Y-%m-%d').date()
-                if today_date <= expire_date:
-                    days_left = (expire_date - today_date).days
-                    msg = (
-                        f"🌟 <b>حالة حسابك:</b> مشترك VIP متميز\n"
-                        f"📅 <b>تاريخ انتهاء الصلاحية:</b> <code>{vip_expire_date}</code>\n"
-                        f"⏳ <b>الأيام المتبقية في الاشتراك:</b> <code>{days_left}</code> يومًا.\n\n"
-                        f"🚀 أنت متاح لك التحميل بشكل غير محدود الآن مجاناً!"
-                    )
-                else:
-                    msg = "👤 <b>حالة حسابك:</b> مستخدم عادي (انتهت صلاحية اشتراكك القديم)." + prices_info
-            except Exception:
-                msg = "👤 <b>حالة حسابك:</b> مستخدم عادي" + prices_info
-        else:
-            remaining = 0 if (last_use_date == today_str and daily_uses >= 1) else 1
-            msg = f"👤 <b>حالة حسابك:</b> مستخدم عادي\n🎁 <b>المحاولات المجانية اليومية المتبقية:</b> {remaining} من 1" + prices_info
-
-    await update.message.reply_text(msg, parse_mode="HTML")
-
-async def handle_manual_vip_input(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
-    context.user_data.pop("awaiting_manual_vip", None)
-    try:
-        parts = text.split()
-        target_id = int(parts[0])
-        days = int(parts[1])
-        expire_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
-        
-        with DB_LOCK:
-            with sqlite3.connect(DB_FILE, timeout=20) as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT id FROM users WHERE id = ?", (target_id,))
-                if cur.fetchone():
-                    conn.execute("UPDATE users SET is_vip = 1, vip_expire_date = ? WHERE id = ?", (expire_date, target_id))
-                else:
-                    conn.execute('INSERT INTO users (id, is_vip, vip_expire_date, daily_uses, last_use_date, username, first_name, last_name, first_seen, last_seen) VALUES (?, 1, ?, 0, "", "", "", "", ?, ?)', (target_id, expire_date, int(time.time()), int(time.time())))
-                conn.commit()
-                
-        await update.message.reply_text(f"✅ تم بنجاح تفعيل رصيد الـ VIP للآيدي <code>{target_id}</code> لمدة {days} يوماً.\n📅 ينتهي بتاريخ: {expire_date}", parse_mode="HTML")
-        try:
-            await context.bot.send_message(
-                chat_id=target_id,
-                text=f"🎉 أهلاً بك، تم تفعيل باقة اشتراك VIP الخاصة بك بنجاح من قبل الإدارة!\n⏳ مدة الصلاحية المضافة: {days} يوماً.\n📅 تاريخ الانتهاء: <code>{expire_date}</code>\n\n🚀 يمكنك استخدام ميزات التحميل بلا قيود الآن.",
-                parse_mode="HTML"
-            )
-        except Exception: pass
-    except Exception as e:
-        await update.message.reply_text("❌ حدث خطأ في صيغة البيانات المرسلة. تذكر أن ترسل الأرقام فقط (مثال: <code>112233 30</code>).", parse_mode="HTML")
-
-# ==========================================================
-# 🕵️‍♂️ وحدة مراقبة ستوريات انستغرام (IG Proxy)
-# ==========================================================
-
-def extract_ig_username(url):
-    match = re.search(r'instagram\.com/(?:stories/)?([^/?#]+)', url)
-    return match.group(1) if match else None
-
-async def process_instagram_stories(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str):
-    username = extract_ig_username(url)
-    if not username or username.lower() in ['p', 'reel', 'reels', 'tv']:
-        return await update.message.reply_text("⚠️ يرجى إرسال رابط ملف شخصي (Profile) للستوريات.")
-
-    uid = update.effective_user.id
-    ACTIVE_USERS.add(uid)
-    msg_wait = await update.message.reply_text("⏳ جاري جلب الستوريات الحالية مجهولاً...")
-    
-    job_dir = BASE_DOWNLOAD_DIR / f"ig_{uid}_{int(time.time())}"
-    job_dir.mkdir(parents=True, exist_ok=True)
-    
-    try:
-        loop = asyncio.get_running_loop()
-        
-        def fetch_and_download_stories():
-            profile = instaloader.Profile.from_username(INSTA_L.context, username)
-            if profile.is_private and not profile.followed_by_viewer:
-                return "PRIVATE"
-            
-            has_stories = False
-            for story in INSTA_L.get_stories(userids=[profile.userid]):
-                for item in story.get_items():
-                    has_stories = True
-                    INSTA_L.download_storyitem(item, target=str(job_dir))
-            return has_stories
-
-        result = await loop.run_in_executor(EXECUTOR, fetch_and_download_stories)
-        
-        if result == "PRIVATE":
-            return await msg_wait.edit_text("🔒 هذا الحساب خاص (Private)، لا يمكن جلب ستورياته.")
-            
-        if not result:
-            return await msg_wait.edit_text(f"📭 الحساب @{username} لا يملك أي ستوريات نشطة حالياً.")
-            
-        await msg_wait.edit_text("📤 تم سحب الستوريات، جاري الإرسال...")
-        
-        sent_any = False
-        for file in sorted(job_dir.iterdir(), key=os.path.getmtime):
-            if file.suffix in ['.mp4']:
-                with open(file, 'rb') as f:
-                    await context.bot.send_video(update.message.chat_id, video=f, read_timeout=120, write_timeout=120)
-                    sent_any = True
-            elif file.suffix in ['.jpg', '.webp']:
-                with open(file, 'rb') as f:
-                    await context.bot.send_photo(update.message.chat_id, photo=f, read_timeout=120, write_timeout=120)
-                    sent_any = True
-                    
-        await safe_delete(msg_wait)
-        if sent_any:
-            stat_inc_sync("requests")
-            stat_inc_sync("success")
-
-    except instaloader.exceptions.ProfileNotExistsException:
-        await msg_wait.edit_text("❌ الحساب غير موجود. تأكد من صحة الرابط.")
-    except Exception as e:
-        logger.error(f"IG Story Fetch Error: {e}")
-        await msg_wait.edit_text("❌ حدث خطأ أو قيد مؤقت من الانستغرام، يرجى المحاولة لاحقاً.")
-    finally:
-        ACTIVE_USERS.discard(uid)
-        shutil.rmtree(job_dir, ignore_errors=True)
-
-# ==========================================================
 # التشغيل
 # ==========================================================
 
 async def post_init(app: Application):
-    commands = [
-        BotCommand("start", "بدء استخدام البوت"), 
-        BotCommand("links", "دعم روابط PlayZone"),
-        BotCommand("vip", "عرض حالة اشتراك VIP الخاص بي")
-    ]
+    commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
     try:
         await app.bot.set_my_commands(commands)
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
@@ -1169,10 +911,8 @@ def main():
         .build()
     )
 
-    app.add_handler(MessageHandler(filters.FORWARDED & filters.ChatType.PRIVATE, handle_forwarded_message))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
-    app.add_handler(CommandHandler("vip", show_user_vip_status))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
@@ -1181,7 +921,8 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية والمستقرة جداً.")
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
+    # تفعيل drop_pending_updates بشكل إجباري لتجنب مشاكل الـ Conflict عند تكرار تشغيل الحاوية
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
