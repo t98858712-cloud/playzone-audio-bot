@@ -450,24 +450,17 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "no_check_certificate": True,
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
             "Connection": "keep-alive"
         },
-        "extractor_args": {
-            "youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}
-        },
     }
 
     # دعم فيسبوك
     if is_facebook:
-        opts["extractor_args"]["facebook"] = {
-            "player_client": ["android", "web"],
-            "no_webpage": False
-        }
         if cookie_file_is_usable(FACEBOOK_COOKIES_FILE):
             opts["cookiefile"] = str(FACEBOOK_COOKIES_FILE)
         if mode == "audio":
