@@ -826,6 +826,19 @@ async def post_init(app: Application):
         logger.warning(f"فشل تهيئة الأوامر: {e}")
 
 def main():
+    def main():
+    if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
+
+    # ✅ تحديث yt-dlp تلقائياً
+    try:
+        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
+        logger.info("✅ تم تحديث yt-dlp إلى أحدث إصدار")
+    except Exception as e:
+        logger.error(f"❌ فشل تحديث yt-dlp: {e}")
+
+    init_db()
+    _cleanup_old_downloads_sync()
+    # ... باقي الكود
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     init_db()
