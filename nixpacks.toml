@@ -1,5 +1,12 @@
 [phases.setup]
 nixPkgs = ["python313", "ffmpeg", "aria2"]
 
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
 [start]
 cmd = "python main.py"
+
+[build]
+# منع تشغيل عمليات متعددة
+env.WEB_CONCURRENCY = "1"
