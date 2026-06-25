@@ -8,5 +8,4 @@ cmds = ["pip install -r requirements.txt"]
 cmd = "python main.py"
 
 [build]
-# منع تشغيل عمليات متعددة
 env.WEB_CONCURRENCY = "1"
