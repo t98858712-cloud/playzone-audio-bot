@@ -82,7 +82,7 @@ REQUEST_EXPIRE_SECONDS = int(os.getenv("REQUEST_EXPIRE_SECONDS", str(15 * 60)))
 OLD_DOWNLOADS_EXPIRE_SECONDS = int(os.getenv("OLD_DOWNLOADS_EXPIRE_SECONDS", str(60 * 60)))
 MAX_THUMBNAIL_BYTES = int(os.getenv("MAX_THUMBNAIL_BYTES", str(2 * 1024 * 1024)))
 
-MAX_WORKERS = int(os.getenv("MAX_WORKERS", "1"))  # منع التشغيل المتزامن
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", "1"))
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(1, MAX_WORKERS))
 
@@ -666,7 +666,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     # ==========================================================
     # 🔥 Instagram Stories - يتم معالجتها أولاً
     # ==========================================================
-    if "instagram.com" in text.lower() and ("/stories/" in text.lower() or "/stories" in text.lower()):
+    if is_instagram_stories_url(text):
         return await handle_instagram_stories(update, context)
 
     # الأزرار السريعة
@@ -947,7 +947,6 @@ def main():
         logger.error(f"❌ تعارض في الاتصال: {e}")
         logger.info("🔄 جاري المحاولة مرة أخرى بعد 5 ثوان...")
         time.sleep(5)
-        # محاولة إعادة التشغيل
         app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
