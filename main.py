@@ -676,6 +676,15 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     text = update.message.text.strip()
 
+    # ✅ تحويل روابط فيسبوك القصيرة إلى روابط مباشرة (جديد)
+    if "facebook.com/share/v/" in text:
+        try:
+            video_id = text.split("/share/v/")[1].split("/")[0]
+            text = f"https://www.facebook.com/watch?v={video_id}"
+            logger.info(f"✅ تم تحويل رابط فيسبوك إلى: {text}")
+        except Exception as e:
+            logger.error(f"❌ فشل تحويل رابط فيسبوك: {e}")
+
     if text in ["🔗 روابط PlayZone", "/links", "\\links"]:
         return await show_playzone_links(update, context)
     if text == "📘 دليل الاستخدام":
