@@ -1,3 +1,7 @@
+"""
+النسخة المدمجة من البوت مع دعم Instagram Stories
+"""
+
 import os
 import re
 import time
@@ -35,6 +39,17 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+
+# ==========================================================
+# استيراد ميزة Instagram
+# ==========================================================
+
+from instagram_integration import (
+    setup_instagram_integration,
+    is_instagram_stories_url,
+    ACTIVE_INSTAGRAM_DOWNLOADS
+)
+from instagram_handlers import handle_instagram_stories, handle_instagram_callbacks
 
 # ==========================================================
 # إعدادات PlayZone / Railway
@@ -151,7 +166,7 @@ def get_latest_users(limit: int = 10) -> list:
             return [dict(r) for r in rows]
 
 # ==========================================================
-# أدوات الفحص والتنسيق
+# أدوات الفحص والتنسيق (نفس الكود الأصلي)
 # ==========================================================
 
 def parse_admin_ids():
@@ -289,7 +304,7 @@ def _force_cleanup_all_sync() -> int:
     return removed
 
 # ==========================================================
-# الواجهات والأزرار
+# الواجهات والأزرار (نفس الكود الأصلي)
 # ==========================================================
 
 def user_main_keyboard() -> ReplyKeyboardMarkup:
@@ -331,6 +346,7 @@ def build_start_text(first_name: str) -> str:
     return (
         f"أهلاً {esc(first_name)} 👋\n\n"
         "أرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n"
+        "📸 يمكنك أيضاً إرسال رابط قصص Instagram للتحميل.\n\n"
         "💚 دعمك يصنع الفرق\n\n"
         "تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
         "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
@@ -340,10 +356,10 @@ def build_start_text(first_name: str) -> str:
 def build_guide_text() -> str:
     return (
         "📘 طريقة الاستخدام\n\n"
-        "1) انسخ رابط المقطع.\n"
+        "1) انسخ رابط المقطع أو رابط قصص Instagram.\n"
         "2) أرسله هنا في البوت.\n"
         "3) انتظر ظهور المعاينة.\n"
-        "4) اختر التحميل صوت أو فيديو."
+        "4) اختر التحميل صوت أو فيديو (لليوتيوب) أو تحميل القصص (لإنستغرام)."
     )
 
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
@@ -384,7 +400,7 @@ def build_server_status_text() -> str:
     )
 
 # ==========================================================
-# الرسائل الآمنة
+# الرسائل الآمنة (نفس الكود الأصلي)
 # ==========================================================
 
 async def safe_delete(message):
@@ -410,7 +426,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و FFmpeg
+# yt-dlp و FFmpeg (نفس الكود الأصلي)
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
@@ -511,7 +527,7 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         return False
 
 # ==========================================================
-# أوامر الإدارة الديناميكية
+# أوامر الإدارة الديناميكية (نفس الكود الأصلي)
 # ==========================================================
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -542,7 +558,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
 # ==========================================================
-# أحداث المستخدم والروابط الموحدة
+# أحداث المستخدم والروابط الموحدة (مع دعم Instagram)
 # ==========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -596,6 +612,12 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     register_user_sync(update.effective_user)
     uid = update.effective_user.id
     text = update.message.text.strip()
+
+    # ==========================================================
+    # الكشف عن روابط Instagram Stories أولاً
+    # ==========================================================
+    if is_instagram_stories_url(text):
+        return await handle_instagram_stories(update, context)
 
     if text in ["🔗 روابط PlayZone", "/links", "\\links"]:
         return await show_playzone_links(update, context)
@@ -673,6 +695,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data or ""
     uid = query.from_user.id
 
+    # معالجة كولباك Instagram
+    if data.startswith("ig_") or data.startswith("cancel_ig"):
+        # معالج Instagram موجود في instagram_handlers
+        from instagram_handlers import handle_instagram_callbacks as ig_callback_handler
+        return await ig_callback_handler(update, context)
+
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
@@ -746,13 +774,11 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 "👇 جرّبه الآن:"
             )
 
-            # سيقوم تيليجرام بدمج الرابط مع النص تلقائياً
             share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
             
             media_keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🌟 أعجبك البوت؟ شاركه", url=share_link)]
             ])
-
 
             with open(target_file, "rb") as f:
                 if mode == "audio":
@@ -801,12 +827,35 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 async def post_init(app: Application):
-    commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
+    commands = [
+        BotCommand("start", "بدء استخدام البوت"),
+        BotCommand("links", "دعم روابط PlayZone"),
+        BotCommand("instagram", "تعليمات تحميل قصص Instagram"),
+    ]
     try:
         await app.bot.set_my_commands(commands)
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
     except Exception as e:
         logger.warning(f"فشل تهيئة الأوامر: {e}")
+
+async def instagram_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """أمر مساعدة لتحميل قصص Instagram"""
+    help_text = (
+        "📸 <b>كيفية تحميل قصص Instagram</b>\n\n"
+        "1. انسخ رابط القصة أو الهايلايت من Instagram.\n"
+        "2. أرسل الرابط هنا في البوت.\n"
+        "3. سيقوم البوت بجلب القصص المتاحة.\n"
+        "4. اختر تحميل القصص.\n\n"
+        "<b>أمثلة على الروابط:</b>\n"
+        "• https://www.instagram.com/stories/username/\n"
+        "• https://www.instagram.com/username/stories/\n"
+        "• https://www.instagram.com/stories/highlights/highlight_id/\n\n"
+        "⚠️ <b>ملاحظات:</b>\n"
+        "• الحسابات الخاصة تتطلب تسجيل الدخول عبر البوت.\n"
+        "• يتم تحميل القصص الحالية فقط (آخر 24 ساعة).\n"
+        "• يتم حفظ القصص مؤقتاً ثم حذفها بعد الإرسال."
+    )
+    await update.message.reply_text(help_text, parse_mode="HTML")
 
 def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
@@ -825,8 +874,15 @@ def main():
         .build()
     )
 
+    # ==========================================================
+    # دمج ميزة Instagram مع البوت
+    # ==========================================================
+    setup_instagram_integration(app, BASE_DOWNLOAD_DIR)
+
+    # إضافة المعالجات
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
+    app.add_handler(CommandHandler("instagram", instagram_help))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
@@ -835,8 +891,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
-    # تفعيل drop_pending_updates بشكل إجباري لتجنب مشاكل الـ Conflict عند تكرار تشغيل الحاوية
+    logger.info("🚀 تم تشغيل البوت بالنسخة المدمجة (YouTube + Instagram Stories).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
