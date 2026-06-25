@@ -6,6 +6,7 @@ import asyncio
 import logging
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -105,6 +106,9 @@ async def process_stories_download(update: Update, context: ContextTypes.DEFAULT
         await query.answer("جاري تحميل القصص...")
         await query.message.edit_text(f"📥 جاري جلب قصص {username}...")
         
+        # انتظار قبل المحاولة لتجنب الحظر
+        await asyncio.sleep(2)
+        
         # محاولة جلب القصص مع إعادة المحاولة
         stories = []
         for attempt in range(3):
@@ -113,7 +117,7 @@ async def process_stories_download(update: Update, context: ContextTypes.DEFAULT
                 break
             if attempt < 2:
                 await query.message.edit_text(f"📥 محاولة {attempt + 2}/3 لجلب القصص...")
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
         
         if not stories:
             await query.message.edit_text(
@@ -230,6 +234,3 @@ async def handle_instagram_callbacks(update: Update, context: ContextTypes.DEFAU
             await query.message.delete()
         except Exception:
             pass
-
-# استيراد time
-import time
