@@ -16,6 +16,7 @@ from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
 
 import yt_dlp
+import facebook_scraper as fb
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -25,7 +26,6 @@ from telegram import (
     BotCommand,
     MenuButtonCommands,
 )
-from telegram.constants import ChatAction
 from telegram.error import BadRequest, RetryAfter, TimedOut, NetworkError
 from telegram.ext import (
     Application,
@@ -41,7 +41,7 @@ from telegram.ext import (
 # ==========================================================
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-LOCAL_API_URL = os.getenv("TELEGRAM_API_URL") 
+LOCAL_API_URL = os.getenv("TELEGRAM_API_URL")
 
 BASE_DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "./downloads"))
 BASE_DOWNLOAD_DIR.mkdir(exist_ok=True)
@@ -262,7 +262,6 @@ def cookie_file_is_usable(path: Path) -> bool:
                 try: exp = int(expires)
                 except Exception: exp = 0
                 if value.strip() and (exp == 0 or exp > now):
-                    # التحقق من كوكيز مهمة لفيسبوك
                     if name in ["c_user", "xs", "fr", "datr", "sb"]:
                         has_valid_cookie = True
                         break
@@ -413,6 +412,34 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
+# دوال فيسبوك المتقدمة (facebook-scraper)
+# ==========================================================
+
+async def get_facebook_video_url(share_url: str) -> str | None:
+    try:
+        # استخراج معرف الفيديو من أنواع الروابط المختلفة
+        video_id = None
+        if "share/v/" in share_url:
+            video_id = share_url.split("/share/v/")[1].split("/")[0]
+        elif "videos/" in share_url:
+            video_id = share_url.split("/videos/")[1].split("/")[0]
+        elif "watch?v=" in share_url:
+            video_id = share_url.split("watch?v=")[1].split("&")[0]
+        
+        if not video_id:
+            # استخدام الرابط مباشرة إذا لم نجد معرف
+            video_id = share_url
+
+        # استخدام facebook-scraper للحصول على الرابط المباشر
+        for post in fb.get_posts(post_urls=[share_url], options={"download": False}):
+            if post and "video" in post:
+                return post["video"]
+        return None
+    except Exception as e:
+        logger.error(f"فشل فيسبوك سكرابر: {e}")
+        return None
+
+# ==========================================================
 # yt-dlp و FFmpeg
 # ==========================================================
 
@@ -432,7 +459,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         },
     }
 
-    # ✅ دعم فيسبوك
+    # دعم فيسبوك
     if is_facebook:
         opts["extractor_args"]["facebook"] = {
             "player_client": ["android", "web"],
@@ -461,6 +488,21 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
 
 def extract_metadata(url: str):
     is_facebook = "facebook.com" in url or "fb.watch" in url
+    
+    # إذا كان رابط فيسبوك، حاول الحصول على الرابط المباشر
+    if is_facebook:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            direct_url = loop.run_until_complete(get_facebook_video_url(url))
+            if direct_url:
+                url = direct_url
+                logger.info(f"✅ تم الحصول على رابط فيسبوك مباشر: {url}")
+        except Exception:
+            pass
+        finally:
+            loop.close()
+    
     opts = get_ydl_options(mode="video", is_facebook=is_facebook)
     opts["skip_download"] = True
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -500,6 +542,21 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
     is_facebook = "facebook.com" in url or "fb.watch" in url
+    
+    # إذا كان رابط فيسبوك، حاول الحصول على الرابط المباشر
+    if is_facebook:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            direct_url = loop.run_until_complete(get_facebook_video_url(url))
+            if direct_url:
+                url = direct_url
+                logger.info(f"✅ تم الحصول على رابط فيسبوك مباشر: {url}")
+        except Exception:
+            pass
+        finally:
+            loop.close()
+    
     opts = get_ydl_options(job_dir, progress_data, mode, is_facebook=is_facebook)
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
@@ -826,7 +883,8 @@ async def post_init(app: Application):
         logger.warning(f"فشل تهيئة الأوامر: {e}")
 
 def main():
-    if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
+    if not TOKEN: 
+        raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     # ✅ تحديث yt-dlp تلقائياً
     try:
@@ -834,11 +892,6 @@ def main():
         logger.info("✅ تم تحديث yt-dlp إلى أحدث إصدار")
     except Exception as e:
         logger.error(f"❌ فشل تحديث yt-dlp: {e}")
-
-    init_db()
-    _cleanup_old_downloads_sync()
-    # ... باقي الكود
-    if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     init_db()
     _cleanup_old_downloads_sync()
