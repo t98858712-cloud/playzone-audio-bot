@@ -55,6 +55,7 @@ DB_LOCK = threading.Lock()
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
 COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt"))
+FACEBOOK_COOKIES_FILE = Path(os.getenv("FACEBOOK_COOKIES_FILE", "www.facebook.com_cookies.txt"))
 
 PROGRESS_UPDATE_SECONDS = float(os.getenv("PROGRESS_UPDATE_SECONDS", "3.0"))
 REQUEST_EXPIRE_SECONDS = int(os.getenv("REQUEST_EXPIRE_SECONDS", str(15 * 60)))
@@ -250,7 +251,6 @@ def cookie_file_is_usable(path: Path) -> bool:
     try:
         if not path.exists() or path.stat().st_size <= 0: return False
         now = int(time.time())
-        has_youtube = False
         has_valid_cookie = False
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for line in f:
@@ -259,11 +259,14 @@ def cookie_file_is_usable(path: Path) -> bool:
                 parts = line.split("\t")
                 if len(parts) < 7: continue
                 domain, _, _, _, expires, name, value = parts[:7]
-                if "youtube.com" in domain: has_youtube = True
                 try: exp = int(expires)
                 except Exception: exp = 0
-                if value.strip() and (exp == 0 or exp > now): has_valid_cookie = True
-        return has_youtube and has_valid_cookie
+                if value.strip() and (exp == 0 or exp > now):
+                    # التحقق من كوكيز مهمة لفيسبوك
+                    if name in ["c_user", "xs", "fr", "datr", "sb"]:
+                        has_valid_cookie = True
+                        break
+        return has_valid_cookie
     except Exception: return False
 
 def _cleanup_old_downloads_sync():
@@ -413,7 +416,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
 # yt-dlp و FFmpeg
 # ==========================================================
 
-def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
+def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", is_facebook: bool = False):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
@@ -424,26 +427,41 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             "Accept-Language": "en-US,en;q=0.9",
             "Connection": "keep-alive"
         },
-        "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
+        "extractor_args": {
+            "youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}
+        },
     }
 
-    if mode == "audio":
-        opts["format"] = "bestaudio/best"
+    # ✅ دعم فيسبوك
+    if is_facebook:
+        opts["extractor_args"]["facebook"] = {
+            "player_client": ["android", "web"],
+            "no_webpage": False
+        }
+        if cookie_file_is_usable(FACEBOOK_COOKIES_FILE):
+            opts["cookiefile"] = str(FACEBOOK_COOKIES_FILE)
+        if mode == "audio":
+            opts["format"] = "bestaudio/best"
+        else:
+            opts["format"] = "best[height<=720]/best"
     else:
-        max_fs = "50M" if not LOCAL_API_URL else "2000M"
-        opts["format"] = f"bestvideo[height<=720][filesize<{max_fs}]+bestaudio/best[height<=720][filesize<{max_fs}]/best"
-        opts["merge_output_format"] = "mp4"
-        opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
-
-    if cookie_file_is_usable(COOKIES_FILE):
-        opts["cookiefile"] = str(COOKIES_FILE)
+        if cookie_file_is_usable(COOKIES_FILE):
+            opts["cookiefile"] = str(COOKIES_FILE)
+        if mode == "audio":
+            opts["format"] = "bestaudio/best"
+        else:
+            max_fs = "50M" if not LOCAL_API_URL else "2000M"
+            opts["format"] = f"bestvideo[height<=720][filesize<{max_fs}]+bestaudio/best[height<=720][filesize<{max_fs}]/best"
+            opts["merge_output_format"] = "mp4"
+            opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
 
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
 
 def extract_metadata(url: str):
-    opts = get_ydl_options(mode="video")
+    is_facebook = "facebook.com" in url or "fb.watch" in url
+    opts = get_ydl_options(mode="video", is_facebook=is_facebook)
     opts["skip_download"] = True
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
@@ -481,7 +499,8 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
-    opts = get_ydl_options(job_dir, progress_data, mode)
+    is_facebook = "facebook.com" in url or "fb.watch" in url
+    opts = get_ydl_options(job_dir, progress_data, mode, is_facebook=is_facebook)
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
@@ -746,13 +765,11 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 "👇 جرّبه الآن:"
             )
 
-            # سيقوم تيليجرام بدمج الرابط مع النص تلقائياً
             share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
             
             media_keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🌟 أعجبك البوت؟ شاركه", url=share_link)]
             ])
-
 
             with open(target_file, "rb") as f:
                 if mode == "audio":
@@ -836,7 +853,6 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
     logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
-    # تفعيل drop_pending_updates بشكل إجباري لتجنب مشاكل الـ Conflict عند تكرار تشغيل الحاوية
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
