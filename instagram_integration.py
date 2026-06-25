@@ -22,6 +22,7 @@ INSTAGRAM_PATTERNS = [
     r'instagram\.com/stories/',
     r'instagram\.com/[^/]+/stories',
     r'instagram\.com/[^/]+/story',
+    r'instagr\.am/stories/',
 ]
 
 def is_instagram_stories_url(text: str) -> bool:
