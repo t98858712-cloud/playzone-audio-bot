@@ -1,10 +1,11 @@
 """
-معالجات Telegram لقصص Instagram
+معالجات Telegram لقصص Instagram - نسخة محسنة
 """
 
 import asyncio
 import logging
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -59,7 +60,11 @@ async def handle_instagram_stories(update: Update, context: ContextTypes.DEFAULT
     
     username = STORY_DOWNLOADER.extract_username_from_url(url)
     if not username:
-        return await update.message.reply_text("❌ لم أتمكن من استخراج اسم المستخدم")
+        return await update.message.reply_text(
+            "❌ لم أتمكن من استخراج اسم المستخدم\n\n"
+            "تأكد من الرابط، مثال:\n"
+            "https://www.instagram.com/stories/username/"
+        )
     
     import uuid
     request_id = uuid.uuid4().hex[:10]
@@ -74,7 +79,7 @@ async def handle_instagram_stories(update: Update, context: ContextTypes.DEFAULT
         f"📸 <b>قصص Instagram</b>\n\n"
         f"👤 المستخدم: <b>{username}</b>\n"
         f"📋 سيتم جلب القصص الحالية\n\n"
-        f"هل تريد تحميل قصص هذا الحساب؟"
+        f"⚠️ إذا كان الحساب خاصاً، قد لا تعمل الميزة"
     )
     
     await update.message.reply_text(
@@ -100,20 +105,31 @@ async def process_stories_download(update: Update, context: ContextTypes.DEFAULT
         await query.answer("جاري تحميل القصص...")
         await query.message.edit_text(f"📥 جاري جلب قصص {username}...")
         
-        stories = STORY_DOWNLOADER.get_user_stories(username)
+        # محاولة جلب القصص مع إعادة المحاولة
+        stories = []
+        for attempt in range(3):
+            stories = STORY_DOWNLOADER.get_user_stories(username)
+            if stories:
+                break
+            if attempt < 2:
+                await query.message.edit_text(f"📥 محاولة {attempt + 2}/3 لجلب القصص...")
+                await asyncio.sleep(2)
         
         if not stories:
             await query.message.edit_text(
                 f"⚠️ لا توجد قصص متاحة لـ {username}\n\n"
-                f"قد يكون الحساب خاصاً أو لا توجد قصص حالية"
+                f"• الحساب قد يكون خاصاً\n"
+                f"• قد لا توجد قصص حالية\n"
+                f"• قد يكون Instagram يحظر الطلبات"
             )
             return
         
-        import tempfile
+        # إنشاء مجلد مؤقت
         temp_dir = Path(tempfile.mkdtemp())
         
         await query.message.edit_text(f"📤 جاري تحميل {len(stories)} قصة...")
         
+        downloaded_count = 0
         for idx, story in enumerate(stories, 1):
             try:
                 file_path = STORY_DOWNLOADER.download_story(story, temp_dir)
@@ -122,51 +138,77 @@ async def process_stories_download(update: Update, context: ContextTypes.DEFAULT
                 
                 caption = f"📸 قصة من {username}\n{idx}/{len(stories)}"
                 
-                if file_path.suffix in ['.mp4', '.mov']:
-                    with open(file_path, 'rb') as f:
-                        await context.bot.send_video(
+                try:
+                    if file_path.suffix in ['.mp4', '.mov']:
+                        with open(file_path, 'rb') as f:
+                            await context.bot.send_video(
+                                chat_id=query.message.chat_id,
+                                video=f,
+                                caption=caption,
+                                supports_streaming=True,
+                                timeout=120
+                            )
+                    else:
+                        with open(file_path, 'rb') as f:
+                            await context.bot.send_photo(
+                                chat_id=query.message.chat_id,
+                                photo=f,
+                                caption=caption,
+                                timeout=120
+                            )
+                    downloaded_count += 1
+                except (TimedOut, NetworkError) as e:
+                    logger.error(f"فشل إرسال القصة {idx} (اتصال): {e}")
+                    try:
+                        await context.bot.send_message(
                             chat_id=query.message.chat_id,
-                            video=f,
-                            caption=caption,
-                            supports_streaming=True,
-                            timeout=120
+                            text=f"⚠️ فشل إرسال القصة {idx} بسبب ضعف الاتصال"
                         )
-                else:
-                    with open(file_path, 'rb') as f:
-                        await context.bot.send_photo(
-                            chat_id=query.message.chat_id,
-                            photo=f,
-                            caption=caption,
-                            timeout=120
-                        )
+                    except:
+                        pass
+                except Exception as e:
+                    logger.error(f"فشل إرسال القصة {idx}: {e}")
                 
                 await asyncio.sleep(0.5)
+                
             except Exception as e:
-                logger.error(f"فشل إرسال القصة {idx}: {e}")
+                logger.error(f"خطأ في معالجة القصة {idx}: {e}")
         
         try:
             await query.message.delete()
         except Exception:
             pass
         
-        share_text = "📥 حمّل قصص Instagram بسهولة!\n⚡ بوت سريع ومجاني\n👇 جرّبه الآن:"
+        # رسالة نجاح مع زر المشاركة
+        share_text = "📥 حمّل قصص Instagram بسهولة!\n⚡ بوت سريع ومجاني"
         from urllib.parse import quote
         share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
         
+        result_text = f"✅ تم تحميل {downloaded_count} قصة من {username}"
+        if downloaded_count < len(stories):
+            result_text += f"\n⚠️ {len(stories) - downloaded_count} قصة فشل تحميلها"
+        
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"✅ تم تحميل {len(stories)} قصة من {username}",
+            text=result_text,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🌟 شارك البوت", url=share_link)]
             ])
         )
         
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        # تنظيف الملفات المؤقتة
+        try:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        except:
+            pass
         
     except Exception as e:
         logger.error(f"فشل تحميل القصص: {e}")
         try:
-            await query.message.edit_text(f"❌ فشل تحميل القصص\n\nالسبب: {str(e)}")
+            await query.message.edit_text(
+                f"❌ فشل تحميل القصص\n\n"
+                f"السبب: {str(e)[:200]}"
+            )
         except Exception:
             pass
     finally:
@@ -189,5 +231,5 @@ async def handle_instagram_callbacks(update: Update, context: ContextTypes.DEFAU
         except Exception:
             pass
 
-# استيراد time للاستخدام في الكود
+# استيراد time
 import time
