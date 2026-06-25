@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
 
-import yt_dlp
+import youtube_dl
 from telegram import (
     Update,
     InlineKeyboardButton,
