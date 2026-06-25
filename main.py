@@ -826,7 +826,6 @@ async def post_init(app: Application):
         logger.warning(f"فشل تهيئة الأوامر: {e}")
 
 def main():
-    def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     # ✅ تحديث yt-dlp تلقائياً
