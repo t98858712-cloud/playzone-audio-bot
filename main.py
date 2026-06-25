@@ -411,30 +411,29 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# دوال فيسبوك المبسطة (تعتمد فقط على yt-dlp)
+# دوال فيسبوك المبسطة (تعتمد فقط على youtube-dl)
 # ==========================================================
 
 async def get_facebook_video_url(share_url: str) -> str | None:
     try:
-        # محاولة استخراج الرابط المباشر باستخدام yt-dlp
+        # تحويل رابط فيسبوك القصير إلى رابط مباشر
+        if "facebook.com/share/v/" in share_url:
+            video_id = share_url.split("/share/v/")[1].split("/")[0]
+            share_url = f"https://www.facebook.com/watch?v={video_id}"
+            logger.info(f"✅ تم تحويل رابط فيسبوك في الدالة إلى: {share_url}")
+        
         opts = {
             "quiet": True,
             "no_warnings": True,
             "skip_download": True,
-            "extractor_args": {
-                "facebook": {"player_client": ["android", "web"], "no_webpage": False}
-            }
+            "cookiefile": str(FACEBOOK_COOKIES_FILE) if cookie_file_is_usable(FACEBOOK_COOKIES_FILE) else None
         }
-        if cookie_file_is_usable(FACEBOOK_COOKIES_FILE):
-            opts["cookiefile"] = str(FACEBOOK_COOKIES_FILE)
         
-        with yt_dlp.YoutubeDL(opts) as ydl:
+        with youtube_dl.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(share_url, download=False)
             if info and "url" in info:
                 return info["url"]
-            # محاولة الحصول على أفضل تنسيق
             if info and "formats" in info and info["formats"]:
-                # اختر أفضل جودة
                 best = sorted(info["formats"], key=lambda x: (x.get("height") or 0) * (x.get("width") or 0), reverse=True)[0]
                 return best.get("url")
         return None
@@ -443,7 +442,7 @@ async def get_facebook_video_url(share_url: str) -> str | None:
         return None
 
 # ==========================================================
-# yt-dlp و FFmpeg
+# youtube-dl و FFmpeg
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", is_facebook: bool = False):
@@ -501,7 +500,7 @@ def extract_metadata(url: str):
     
     opts = get_ydl_options(mode="video", is_facebook=is_facebook)
     opts["skip_download"] = True
-    with yt_dlp.YoutubeDL(opts) as ydl:
+    with youtube_dl.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
 def download_hook(progress_data: dict):
@@ -554,7 +553,7 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
             loop.close()
     
     opts = get_ydl_options(job_dir, progress_data, mode, is_facebook=is_facebook)
-    with yt_dlp.YoutubeDL(opts) as ydl:
+    with youtube_dl.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
@@ -586,12 +585,12 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
 # أوامر الإدارة الديناميكية
 # ==========================================================
 
-async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def update_ydlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
     try:
-        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
-        await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار.")
+        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "youtube-dl"])
+        await msg.edit_text("✅ تم تحديث محرك `youtube-dl` بنجاح إلى أحدث إصدار.")
     except Exception as e:
         await msg.edit_text(f"❌ فشل التحديث: {e}")
 
@@ -669,7 +668,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     text = update.message.text.strip()
 
-    # ✅ تحويل روابط فيسبوك القصيرة إلى روابط مباشرة (جديد)
+    # ✅ تحويل روابط فيسبوك القصيرة إلى روابط مباشرة
     if "facebook.com/share/v/" in text:
         try:
             video_id = text.split("/share/v/")[1].split("/")[0]
@@ -891,12 +890,12 @@ def main():
     if not TOKEN: 
         raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
-    # ✅ تحديث yt-dlp تلقائياً
+    # ✅ تحديث youtube-dl تلقائياً
     try:
-        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
-        logger.info("✅ تم تحديث yt-dlp إلى أحدث إصدار")
+        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "youtube-dl"])
+        logger.info("✅ تم تحديث youtube-dl إلى أحدث إصدار")
     except Exception as e:
-        logger.error(f"❌ فشل تحديث yt-dlp: {e}")
+        logger.error(f"❌ فشل تحديث youtube-dl: {e}")
 
     init_db()
     _cleanup_old_downloads_sync()
@@ -915,7 +914,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
+    app.add_handler(CommandHandler("update_dlp", update_ydlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
     app.add_handler(CommandHandler("backup", backup_db_command))
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
