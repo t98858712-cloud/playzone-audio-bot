@@ -55,7 +55,7 @@ DB_LOCK = threading.Lock()
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
 COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt"))
-FACEBOOK_COOKIES_FILE = Path(os.getenv("FACEBOOK_COOKIES_FILE", "www.facebook.com_cookies.txt"))
+FACEBOOK_COOKIES_FILE = Path(os.getenv("FACEBOOK_COOKIES_FILE", "face.txt"))
 
 PROGRESS_UPDATE_SECONDS = float(os.getenv("PROGRESS_UPDATE_SECONDS", "3.0"))
 REQUEST_EXPIRE_SECONDS = int(os.getenv("REQUEST_EXPIRE_SECONDS", str(15 * 60)))
