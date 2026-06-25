@@ -16,7 +16,6 @@ from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
 
 import yt_dlp
-import facebook_scraper as fb
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -412,31 +411,35 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# دوال فيسبوك المتقدمة (facebook-scraper)
+# دوال فيسبوك المبسطة (تعتمد فقط على yt-dlp)
 # ==========================================================
 
 async def get_facebook_video_url(share_url: str) -> str | None:
     try:
-        # استخراج معرف الفيديو من أنواع الروابط المختلفة
-        video_id = None
-        if "share/v/" in share_url:
-            video_id = share_url.split("/share/v/")[1].split("/")[0]
-        elif "videos/" in share_url:
-            video_id = share_url.split("/videos/")[1].split("/")[0]
-        elif "watch?v=" in share_url:
-            video_id = share_url.split("watch?v=")[1].split("&")[0]
+        # محاولة استخراج الرابط المباشر باستخدام yt-dlp
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "extractor_args": {
+                "facebook": {"player_client": ["android", "web"], "no_webpage": False}
+            }
+        }
+        if cookie_file_is_usable(FACEBOOK_COOKIES_FILE):
+            opts["cookiefile"] = str(FACEBOOK_COOKIES_FILE)
         
-        if not video_id:
-            # استخدام الرابط مباشرة إذا لم نجد معرف
-            video_id = share_url
-
-        # استخدام facebook-scraper للحصول على الرابط المباشر
-        for post in fb.get_posts(post_urls=[share_url], options={"download": False}):
-            if post and "video" in post:
-                return post["video"]
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(share_url, download=False)
+            if info and "url" in info:
+                return info["url"]
+            # محاولة الحصول على أفضل تنسيق
+            if info and "formats" in info and info["formats"]:
+                # اختر أفضل جودة
+                best = sorted(info["formats"], key=lambda x: (x.get("height") or 0) * (x.get("width") or 0), reverse=True)[0]
+                return best.get("url")
         return None
     except Exception as e:
-        logger.error(f"فشل فيسبوك سكرابر: {e}")
+        logger.error(f"فشل استخراج رابط فيسبوك: {e}")
         return None
 
 # ==========================================================
