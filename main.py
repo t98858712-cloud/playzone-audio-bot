@@ -1,5 +1,6 @@
 """
-النسخة المدمجة من البوت مع دعم Instagram Stories
+PlayZone Bot - النسخة النهائية
+يدعم YouTube و Instagram Stories
 """
 
 import os
@@ -15,6 +16,8 @@ import threading
 import subprocess
 import urllib.request
 import ipaddress
+import fcntl
+import signal
 from pathlib import Path
 from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
@@ -30,7 +33,7 @@ from telegram import (
     MenuButtonCommands,
 )
 from telegram.constants import ChatAction
-from telegram.error import BadRequest, RetryAfter, TimedOut, NetworkError
+from telegram.error import BadRequest, RetryAfter, TimedOut, NetworkError, Conflict
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -47,12 +50,12 @@ from telegram.ext import (
 from instagram_integration import (
     setup_instagram_integration,
     is_instagram_stories_url,
-    ACTIVE_INSTAGRAM_DOWNLOADS
+    ACTIVE_DOWNLOADS as ACTIVE_IG_DOWNLOADS
 )
 from instagram_handlers import handle_instagram_stories, handle_instagram_callbacks
 
 # ==========================================================
-# إعدادات PlayZone / Railway
+# إعدادات PlayZone
 # ==========================================================
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -67,6 +70,9 @@ DATA_DIR.mkdir(exist_ok=True)
 DB_FILE = DATA_DIR / "bot_database.db"
 DB_LOCK = threading.Lock()
 
+# ملف القفل لمنع تشغيل نسختين
+LOCK_FILE = Path("/tmp/bot_playzone.lock")
+
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
 COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt"))
@@ -76,9 +82,9 @@ REQUEST_EXPIRE_SECONDS = int(os.getenv("REQUEST_EXPIRE_SECONDS", str(15 * 60)))
 OLD_DOWNLOADS_EXPIRE_SECONDS = int(os.getenv("OLD_DOWNLOADS_EXPIRE_SECONDS", str(60 * 60)))
 MAX_THUMBNAIL_BYTES = int(os.getenv("MAX_THUMBNAIL_BYTES", str(2 * 1024 * 1024)))
 
-MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(os.cpu_count() or 2)))
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", "1"))  # منع التشغيل المتزامن
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
-EXECUTOR = ThreadPoolExecutor(max_workers=max(2, MAX_WORKERS))
+EXECUTOR = ThreadPoolExecutor(max_workers=max(1, MAX_WORKERS))
 
 ACTIVE_USERS = set()
 
@@ -93,7 +99,7 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("PlayZoneEnterpriseBot")
+logger = logging.getLogger("PlayZoneBot")
 
 for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
     logging.getLogger(noisy_logger).setLevel(logging.WARNING)
@@ -101,7 +107,36 @@ for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# إدارة قاعدة البيانات (SQLite3 WAL Mode)
+# منع تشغيل نسختين
+# ==========================================================
+
+def acquire_lock() -> bool:
+    """الحصول على قفل لمنع تشغيل نسختين"""
+    try:
+        lock_fd = open(LOCK_FILE, 'w')
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            logger.warning("⚠️ عملية أخرى تعمل، جاري إنهاؤها...")
+            try:
+                with open(LOCK_FILE, 'r') as f:
+                    old_pid = int(f.read().strip())
+                os.kill(old_pid, signal.SIGTERM)
+                time.sleep(2)
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except Exception as e:
+                logger.error(f"فشل إنهاء العملية القديمة: {e}")
+                return False
+        lock_fd.seek(0)
+        lock_fd.write(str(os.getpid()))
+        lock_fd.flush()
+        return True
+    except Exception as e:
+        logger.error(f"فشل الحصول على القفل: {e}")
+        return False
+
+# ==========================================================
+# إدارة قاعدة البيانات
 # ==========================================================
 
 def init_db():
@@ -166,7 +201,7 @@ def get_latest_users(limit: int = 10) -> list:
             return [dict(r) for r in rows]
 
 # ==========================================================
-# أدوات الفحص والتنسيق (نفس الكود الأصلي)
+# أدوات الفحص والتنسيق
 # ==========================================================
 
 def parse_admin_ids():
@@ -304,7 +339,7 @@ def _force_cleanup_all_sync() -> int:
     return removed
 
 # ==========================================================
-# الواجهات والأزرار (نفس الكود الأصلي)
+# الواجهات والأزرار
 # ==========================================================
 
 def user_main_keyboard() -> ReplyKeyboardMarkup:
@@ -400,7 +435,7 @@ def build_server_status_text() -> str:
     )
 
 # ==========================================================
-# الرسائل الآمنة (نفس الكود الأصلي)
+# الرسائل الآمنة
 # ==========================================================
 
 async def safe_delete(message):
@@ -426,7 +461,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و FFmpeg (نفس الكود الأصلي)
+# yt-dlp و FFmpeg
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
@@ -459,6 +494,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     return opts
 
 def extract_metadata(url: str):
+    # تجاهل روابط Instagram في yt-dlp
+    if "instagram.com" in url.lower():
+        raise ValueError("رابط Instagram غير مدعوم في YouTube Downloader")
+    
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -482,7 +521,7 @@ def download_hook(progress_data: dict):
                 else:
                     progress_data["text"] = f"📥 جاري التحميل...\n📦 تم تحميل: {format_size(downloaded)}"
             elif d.get("status") == "finished":
-                progress_data["text"] = "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي..."
+                progress_data["text"] = "⚙️ اكتمل التحميل، جاري التجهيز..."
     return hook
 
 async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event):
@@ -527,7 +566,7 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         return False
 
 # ==========================================================
-# أوامر الإدارة الديناميكية (نفس الكود الأصلي)
+# أوامر الإدارة
 # ==========================================================
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -535,19 +574,19 @@ async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYP
     msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
     try:
         subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
-        await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار.")
+        await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح.")
     except Exception as e:
         await msg.edit_text(f"❌ فشل التحديث: {e}")
 
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     if not update.message.document:
-        return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود يوتيوب.")
+        return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document")
     
     file_id = update.message.document.file_id
     new_file = await context.bot.get_file(file_id)
     await new_file.download_to_drive(COOKIES_FILE)
-    await update.message.reply_text("✅ تم استلام وتركيب ملف الكوكيز بنجاح!")
+    await update.message.reply_text("✅ تم استلام ملف الكوكيز!")
 
 async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
@@ -558,7 +597,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
 
 # ==========================================================
-# أحداث المستخدم والروابط الموحدة (مع دعم Instagram)
+# أحداث المستخدم
 # ==========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -568,11 +607,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=user_main_keyboard(), parse_mode="HTML", disable_web_page_preview=True
     )
 
+async def instagram_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = (
+        "📸 <b>كيفية تحميل قصص Instagram</b>\n\n"
+        "1. انسخ رابط القصة من Instagram.\n"
+        "2. أرسل الرابط هنا في البوت.\n"
+        "3. سيظهر زر تحميل القصص.\n\n"
+        "<b>أمثلة:</b>\n"
+        "• https://www.instagram.com/stories/username/\n"
+        "• https://www.instagram.com/username/stories/\n\n"
+        "⚠️ الحسابات الخاصة تتطلب تسجيل دخول عبر المتغيرات البيئية."
+    )
+    await update.message.reply_text(help_text, parse_mode="HTML")
+
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
     await update.message.reply_text(
-        "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
+        "🛠 <b>لوحة الإدارة</b>\n\n/update_dlp - تحديث محرك التحميل\n/setcookie - تجديد ملف الكوكيز\n/backup - نسخ قاعدة البيانات",
         reply_markup=admin_main_keyboard(), parse_mode="HTML"
     )
 
@@ -587,25 +639,23 @@ async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     context.user_data["bc_active"] = False
     users = all_user_ids()
-    if not users: return await update.message.reply_text("لا يوجد مستخدمون مسجلون.")
+    if not users: return await update.message.reply_text("لا يوجد مستخدمون.")
     
-    status = await update.message.reply_text("📢 جاري إرسال الرسالة للمستخدمين...")
+    status = await update.message.reply_text("📢 جاري إرسال الرسالة...")
     sent, fail = 0, 0
     for user_id in users:
         try:
             await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
             sent += 1
             await asyncio.sleep(0.05)
-        except RetryAfter as e: 
-            await asyncio.sleep(int(e.retry_after) + 1)
-            try:
-                await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
-                sent += 1
-            except Exception: fail += 1
         except Exception: fail += 1
     
     stat_inc_sync("broadcasts")
-    await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
+    await status.edit_text(f"✅ تم الإرسال.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
+
+# ==========================================================
+# المعالج الرئيسي
+# ==========================================================
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
@@ -614,25 +664,31 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     text = update.message.text.strip()
 
     # ==========================================================
-    # الكشف عن روابط Instagram Stories أولاً
+    # 🔥 Instagram Stories - يتم معالجتها أولاً
     # ==========================================================
-    if is_instagram_stories_url(text):
+    if "instagram.com" in text.lower() and ("/stories/" in text.lower() or "/stories" in text.lower()):
         return await handle_instagram_stories(update, context)
 
+    # الأزرار السريعة
     if text in ["🔗 روابط PlayZone", "/links", "\\links"]:
         return await show_playzone_links(update, context)
     if text == "📘 دليل الاستخدام":
         return await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
     
+    # البث الإداري
     if is_admin(uid) and context.user_data.get("bc_active"):
         return await handle_broadcast_text(update, context, text)
     
+    # التحقق من التحميلات النشطة
     if uid in ACTIVE_USERS:
-        return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
+        return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل.")
+    
+    # التحقق من الرابط
     if not is_valid_url(text):
-        return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
-
-    status = await update.message.reply_text("🔍 جاري فحص الرابط وتجهيز المعاينة...")
+        return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابطاً صالحاً.")
+    
+    # معالجة روابط YouTube
+    status = await update.message.reply_text("🔍 جاري فحص الرابط...")
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(EXECUTOR, lambda: extract_metadata(text))
@@ -656,10 +712,10 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         stat_inc_sync("requests")
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
-        await status.edit_text("❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة وغير محذوف، ثم حاول مرة أخرى.")
+        await status.edit_text("❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة.")
 
 # ==========================================================
-# الأزرار ونظام الطابور الذكي (Semaphore Queue)
+# الأزرار
 # ==========================================================
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
@@ -677,16 +733,16 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_clean":
-        await query.answer("جاري تنظيف الملفات المؤقتة...")
+        await query.answer("جاري التنظيف...")
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
-        return await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text(f"🧹 تم تنظيف الملفات.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard(), parse_mode="HTML")
     elif data == "adm_bc":
         context.user_data["bc_active"] = True
         await query.answer()
-        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text("📢 أرسل نص الرسالة:", reply_markup=admin_broadcast_keyboard(), parse_mode="HTML")
     elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
-        await query.answer("تم إلغاء الإذاعة")
+        await query.answer("تم الإلغاء")
         return await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard(), parse_mode="HTML")
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -695,29 +751,32 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data or ""
     uid = query.from_user.id
 
-    # معالجة كولباك Instagram
+    # ==========================================================
+    # Instagram Callbacks
+    # ==========================================================
     if data.startswith("ig_") or data.startswith("cancel_ig"):
-        # معالج Instagram موجود في instagram_handlers
-        from instagram_handlers import handle_instagram_callbacks as ig_callback_handler
-        return await ig_callback_handler(update, context)
+        return await handle_instagram_callbacks(update, context)
 
+    # Admin Callbacks
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
 
+    # Cancel
     if data.startswith("cancel:"):
         ensure_pending_requests(context).pop(data.split(":")[1], None)
-        await query.answer("تم إلغاء طلب التحميل")
+        await query.answer("تم الإلغاء")
         return await safe_delete(query.message)
 
+    # Audio/Video Download
     if data.startswith("aud:") or data.startswith("vid:"):
         mode = "audio" if data.startswith("aud:") else "video"
         request_id = data.split(":")[1]
         request = ensure_pending_requests(context).pop(request_id, None)
         trim_old_pending_requests(context)
         
-        if not request: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
-        if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
+        if not request: return await query.answer("انتهت جلسة الطلب.", show_alert=True)
+        if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ.", show_alert=True)
         
         await start_download_from_callback(query, context, request, mode)
 
@@ -738,19 +797,19 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception: pass
 
         async with DOWNLOAD_SEMAPHORE:
-            with progress_lock: progress_data["text"] = "🚀 بدأ التحميل... يرجى الانتظار ⏬"
+            with progress_lock: progress_data["text"] = "🚀 بدأ التحميل..."
             
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
             
             await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data))
             files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
-            if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
+            if not files: raise RuntimeError("فشل حفظ الملف")
 
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
             if mode == "audio":
-                with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
+                with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت..."
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
                 target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
@@ -763,7 +822,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 return await edit_message_smart(query.message, f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}", reply_markup=None)
 
             stop_event.set()
-            await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
+            await edit_message_smart(query.message, "📤 جاري الإرسال...", reply_markup=None)
 
             title = clean_title(request.get("title", "ملف ميديا"), 80)
             duration = int(request.get("duration") or 0)
@@ -777,7 +836,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
             
             media_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌟 أعجبك البوت؟ شاركه", url=share_link)]
+                [InlineKeyboardButton("🌟 شارك البوت", url=share_link)]
             ])
 
             with open(target_file, "rb") as f:
@@ -806,13 +865,13 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
     except (TimedOut, NetworkError) as e:
         stat_inc_sync("failed")
-        logger.error(f"فشل اتصال تيليجرام: {e}")
-        try: await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.")
+        logger.error(f"فشل اتصال: {e}")
+        try: await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال.")
         except Exception: pass
     except Exception as e:
         stat_inc_sync("failed")
         logger.error(f"فشل المعالجة: {e}")
-        try: await edit_message_smart(query.message, "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.")
+        try: await edit_message_smart(query.message, "❌ فشل تحميل المقطع.")
         except Exception: pass
     finally:
         stop_event.set()
@@ -838,27 +897,14 @@ async def post_init(app: Application):
     except Exception as e:
         logger.warning(f"فشل تهيئة الأوامر: {e}")
 
-async def instagram_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """أمر مساعدة لتحميل قصص Instagram"""
-    help_text = (
-        "📸 <b>كيفية تحميل قصص Instagram</b>\n\n"
-        "1. انسخ رابط القصة أو الهايلايت من Instagram.\n"
-        "2. أرسل الرابط هنا في البوت.\n"
-        "3. سيقوم البوت بجلب القصص المتاحة.\n"
-        "4. اختر تحميل القصص.\n\n"
-        "<b>أمثلة على الروابط:</b>\n"
-        "• https://www.instagram.com/stories/username/\n"
-        "• https://www.instagram.com/username/stories/\n"
-        "• https://www.instagram.com/stories/highlights/highlight_id/\n\n"
-        "⚠️ <b>ملاحظات:</b>\n"
-        "• الحسابات الخاصة تتطلب تسجيل الدخول عبر البوت.\n"
-        "• يتم تحميل القصص الحالية فقط (آخر 24 ساعة).\n"
-        "• يتم حفظ القصص مؤقتاً ثم حذفها بعد الإرسال."
-    )
-    await update.message.reply_text(help_text, parse_mode="HTML")
-
 def main():
-    if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
+    if not TOKEN:
+        raise RuntimeError("TELEGRAM_TOKEN غير متوفر!")
+    
+    # الحصول على قفل لمنع تشغيل نسختين
+    if not acquire_lock():
+        logger.error("❌ لا يمكن تشغيل البوت، عملية أخرى تعمل")
+        return
 
     init_db()
     _cleanup_old_downloads_sync()
@@ -875,11 +921,13 @@ def main():
     )
 
     # ==========================================================
-    # دمج ميزة Instagram مع البوت
+    # دمج ميزة Instagram
     # ==========================================================
     setup_instagram_integration(app, BASE_DOWNLOAD_DIR)
 
+    # ==========================================================
     # إضافة المعالجات
+    # ==========================================================
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("instagram", instagram_help))
@@ -891,8 +939,16 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة المدمجة (YouTube + Instagram Stories).")
-    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    logger.info("🚀 تم تشغيل البوت (YouTube + Instagram Stories)")
+    
+    try:
+        app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    except Conflict as e:
+        logger.error(f"❌ تعارض في الاتصال: {e}")
+        logger.info("🔄 جاري المحاولة مرة أخرى بعد 5 ثوان...")
+        time.sleep(5)
+        # محاولة إعادة التشغيل
+        app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
