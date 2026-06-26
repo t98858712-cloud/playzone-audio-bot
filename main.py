@@ -295,8 +295,9 @@ def _force_cleanup_all_sync() -> int:
 def user_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
-            [KeyboardButton("📘 دليل الاستخدام")],
-            [KeyboardButton("🔗 روابط PlayZone")],
+            # الصف الأول: زرين بجوار بعضهما
+            [KeyboardButton("📘 دليل الاستخدام"), KeyboardButton("🔗 روابط PlayZone")],
+            # الصف الثاني: زر إضافة البوت (يأخذ العرض بالكامل)
             [KeyboardButton("➕ أضف البوت لمجموعتك")]
         ],
         resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط هنا..."
