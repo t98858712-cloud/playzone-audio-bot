@@ -294,7 +294,11 @@ def _force_cleanup_all_sync() -> int:
 
 def user_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        [[KeyboardButton("📘 دليل الاستخدام")], [KeyboardButton("🔗 روابط PlayZone")]],
+        [
+            [KeyboardButton("📘 دليل الاستخدام")],
+            [KeyboardButton("🔗 روابط PlayZone")],
+            [KeyboardButton("➕ أضف البوت لمجموعتك")]
+        ],
         resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط هنا..."
     )
 
@@ -601,6 +605,16 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         return await show_playzone_links(update, context)
     if text == "📘 دليل الاستخدام":
         return await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
+        # إضافة هذا الجزء داخل دالة handle_incoming_text
+    if text == "➕ أضف البوت لمجموعتك":
+        # إنشاء زر انلاين يحتوي على الرابط
+        add_btn = InlineKeyboardMarkup([
+            [InlineKeyboardButton("اضغط هنا للإضافة", url=f"https://t.me/{BOT_USERNAME.replace('@', '')}?startgroup=true")]
+        ])
+        return await update.message.reply_text(
+            "🤩 يسعدنا جداً أنك تريد إضافة البوت لمجموعتك!\n\nاضغط على الزر أدناه لاختيار المجموعة وإضافة البوت:",
+            reply_markup=add_btn
+        )
     
     if is_admin(uid) and context.user_data.get("bc_active"):
         return await handle_broadcast_text(update, context, text)
