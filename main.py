@@ -433,11 +433,24 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
 
     if mode == "audio":
+        # في وضع الصوت نجلب أفضل صوت ممكن لأننا سنعالجه في دالة convert_to_mp3_local
         opts["format"] = "bestaudio/best"
     else:
+        # في وضع الفيديو: 
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         opts["format"] = f"bestvideo[height<=720][filesize<{max_fs}]+bestaudio/best[height<=720][filesize<{max_fs}]/best"
         opts["merge_output_format"] = "mp4"
+        
+        # 🌟 الإضافة السحرية للفيديو: تنقية وتحسين مسار الصوت المدمج مع الفيديو
+        opts["postprocessor_args"] = {
+            # إجبار FFmpeg على نسخ الفيديو كما هو (بدون خسارة جودة) وتطبيق فلاتر التنقية على الصوت فقط
+            'Merger': [
+                '-c:v', 'copy',
+                '-af', 'afftdn=nf=-25,highpass=f=80,loudnorm=I=-16:LRA=11:TP=-1.5',
+                '-c:a', 'aac', '-b:a', '256k', '-ar', '48000'
+            ]
+        }
+        
         opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
 
     if cookie_file_is_usable(COOKIES_FILE):
@@ -504,11 +517,38 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
 def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path = None) -> bool:
     try:
         cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(input_file)]
+        
         if local_thumb and local_thumb.exists():
-            cmd.extend(["-i", str(local_thumb), "-map", "0:a", "-map", "1:v", "-c:v", "mjpeg", "-id3v2_version", "3", "-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
+            cmd.extend([
+                "-i", str(local_thumb), 
+                "-map", "0:a", "-map", "1:v", 
+                "-c:v", "mjpeg", 
+                "-id3v2_version", "3", 
+                "-metadata:s:v", "title=Album cover", 
+                "-metadata:s:v", "comment=Cover (front)"
+            ])
         else:
             cmd.extend(["-vn"])
-        cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "48000", "-ac", "2", "-threads", "0", str(output_file)])
+            
+        # ==========================================================
+        # 🎛️ سلسلة الفلاتر الاحترافية (المعايير العالمية)
+        # ==========================================================
+        # 1. afftdn: عزل الضجيج الخلفي (Hiss) باستخدام الذكاء الرياضي (FFT)
+        # 2. highpass=f=80: إزالة طنين المايكروفون والهواء تحت تردد 80 هرتز
+        # 3. loudnorm: معيار البث EBU R128 (ثبات الصوت بدون تشويه أو ذبذبة)
+        # 4. aresample=resampler=soxr: استخدام محرك SoX للحصول على أنقى تصدير
+        audio_filters = "afftdn=nf=-25,highpass=f=80,loudnorm=I=-16:LRA=11:TP=-1.5,aresample=resampler=soxr:precision=28"
+
+        cmd.extend([
+            "-c:a", "libmp3lame", 
+            "-b:a", "320k", 
+            "-ar", "48000", 
+            "-ac", "2", 
+            "-af", audio_filters, # تطبيق الفلاتر
+            "-threads", "0", 
+            str(output_file)
+        ])
+        
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
     except Exception as e:
