@@ -86,7 +86,139 @@ for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# إدارة قاعدة البيانات (SQLite3 WAL Mode)
+# نظام اللغات الشامل
+# ==========================================================
+
+LANG_DICT = {
+    "ar": {
+        "btn_guide": "📘 دليل الاستخدام",
+        "btn_links": "🔗 روابط PlayZone",
+        "btn_add_group": "➕ إضافة البوت للمجموعة",
+        "btn_audio": "🎵 تحميل صوت",
+        "btn_video": "🎬 تحميل فيديو",
+        "btn_cancel": "❌ إلغاء",
+        "btn_best_quality": "أفضل جودة",
+        "btn_back": "🔙 رجوع",
+        "msg_start": "أهلاً {first_name} 👋\n\nأرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\nابدأ بإرسال الرابط مباشرة.",
+        "msg_guide": "📘 طريقة الاستخدام\n\n1) انسخ رابط المقطع.\n2) أرسله هنا في البوت.\n3) انتظر ظهور المعاينة.\n4) اختر التحميل صوت أو فيديو.",
+        "msg_add_group": "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل المباشر، اضغط على الزر أدناه:",
+        "btn_add_group_url": "➕ اضغط هنا لإضافة البوت",
+        "msg_links": "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.",
+        "msg_check_link": "🔍 جاري فحص الرابط وتجهيز المعاينة...",
+        "msg_invalid_link": "❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://",
+        "msg_wait_current": "⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.",
+        "msg_link_error": "❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة وغير محذوف، ثم حاول مرة أخرى.",
+        "msg_select_res": "يرجى اختيار الدقة",
+        "msg_prep_audio": "جاري تجهيز الصوت...",
+        "msg_prep_video": "جاري التجهيز...",
+        "msg_session_expired": "انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.",
+        "msg_dl_started": "🚀 بدأ التحميل... يرجى الانتظار ⏬",
+        "msg_converting": "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي...",
+        "msg_too_large": "❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {size}\nالحد: {limit}",
+        "msg_uploading": "📤 تم تجهيز الملف، جاري الإرسال...",
+        "msg_dl_failed": "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.",
+        "msg_network_error": "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.",
+        "msg_cancel_done": "تم إلغاء طلب التحميل",
+        "msg_back": "رجوع",
+        "msg_lang_changed": "✅ تم تغيير لغة البوت إلى العربية.",
+        "txt_unknown": "غير معروف",
+        "txt_media_file": "ملف ميديا",
+        "msg_dl_progress": "📥 <b>جاري تحميل الملف...</b>\n\n{bar}  {percent}%\n📦 الحجم: {downloaded} / {total}\n🚀 السرعة: {speed}/ث",
+        "msg_dl_progress_no_total": "📥 جاري التحميل...\n📦 تم تحميل: {downloaded}",
+        "msg_dl_finished": "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي...",
+        "share_text": "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:",
+        "btn_share": "🌟 أعجبك البوت؟ شاركه",
+        
+        # نصوص الإدارة
+        "btn_adm_stats": "📊 الإحصائيات",
+        "btn_adm_users": "👥 المستخدمون",
+        "btn_adm_bc": "📢 إذاعة",
+        "btn_adm_clean": "🧹 تنظيف الكاش",
+        "btn_adm_srv": "📁 حالة السيرفر",
+        "btn_adm_close": "✖️ إغلاق",
+        "btn_adm_cancel_bc": "❌ إلغاء العملية",
+        "msg_adm_panel": "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
+        "msg_adm_only": "صلاحية إدارة فقط.",
+        "msg_adm_close": "تم الإغلاق",
+        "msg_adm_clean": "جاري تنظيف الملفات المؤقتة...",
+        "msg_adm_cleaned": "🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}",
+        "msg_adm_bc_ask": "📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:",
+        "msg_adm_bc_cancel": "تم إلغاء الإذاعة",
+        "msg_adm_bc_cancelled": "تم إلغاء العملية.",
+        "msg_adm_no_users": "لا يوجد مستخدمون مسجلون.",
+        "msg_adm_bc_start": "📢 جاري إرسال الرسالة للمستخدمين...",
+        "msg_adm_bc_done": "✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}"
+    },
+    "en": {
+        "btn_guide": "📘 User Guide",
+        "btn_links": "🔗 PlayZone Links",
+        "btn_add_group": "➕ Add Bot to Group",
+        "btn_audio": "🎵 Download Audio",
+        "btn_video": "🎬 Download Video",
+        "btn_cancel": "❌ Cancel",
+        "btn_best_quality": "Best Quality",
+        "btn_back": "🔙 Back",
+        "msg_start": "Hello {first_name} 👋\n\nSend a video or audio link, and I'll show you a preview before downloading.\n\n💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.\n\nStart by sending a link directly.",
+        "msg_guide": "📘 How to use\n\n1) Copy the media link.\n2) Send it here in the bot.\n3) Wait for the preview.\n4) Choose to download audio or video.",
+        "msg_add_group": "🤖 To add the bot to your group and enjoy direct downloading, click the button below:",
+        "btn_add_group_url": "➕ Click here to add the bot",
+        "msg_links": "💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.",
+        "msg_check_link": "🔍 Checking link and preparing preview...",
+        "msg_invalid_link": "❌ Invalid link.\n\nSend a link starting with:\nhttp:// or https://",
+        "msg_wait_current": "⏳ You have an ongoing download.\n\nWait until it finishes, then send a new link.",
+        "msg_link_error": "❌ Could not read the link.\n\nMake sure the media is public and not deleted, then try again.",
+        "msg_select_res": "Please select resolution",
+        "msg_prep_audio": "Preparing audio...",
+        "msg_prep_video": "Preparing...",
+        "msg_session_expired": "Session for this request expired, please send the link again.",
+        "msg_dl_started": "🚀 Download started... Please wait ⏬",
+        "msg_converting": "🎵 Converting audio and embedding cover...",
+        "msg_too_large": "❌ File size exceeds the limit.\n\nSize: {size}\nLimit: {limit}",
+        "msg_uploading": "📤 File is ready, uploading...",
+        "msg_dl_failed": "❌ Failed to download the media.\n\nLink might be unavailable or exceeds limits.",
+        "msg_network_error": "❌ Could not send file due to connection issues.\n\nTry again in a bit.",
+        "msg_cancel_done": "Download request canceled",
+        "msg_back": "Back",
+        "msg_lang_changed": "✅ Bot language changed to English.",
+        "txt_unknown": "Unknown",
+        "txt_media_file": "Media file",
+        "msg_dl_progress": "📥 <b>Downloading file...</b>\n\n{bar}  {percent}%\n📦 Size: {downloaded} / {total}\n🚀 Speed: {speed}/s",
+        "msg_dl_progress_no_total": "📥 Downloading...\n📦 Downloaded: {downloaded}",
+        "msg_dl_finished": "⚙️ Download complete, preparing and compressing...",
+        "share_text": "📥 Download any video or MP3 in seconds!\n⚡ Fast, free, and highest quality.\n👇 Try it now:",
+        "btn_share": "🌟 Like the bot? Share it",
+        
+        # Admin text
+        "btn_adm_stats": "📊 Statistics",
+        "btn_adm_users": "👥 Users",
+        "btn_adm_bc": "📢 Broadcast",
+        "btn_adm_clean": "🧹 Clean Cache",
+        "btn_adm_srv": "📁 Server Status",
+        "btn_adm_close": "✖️ Close",
+        "btn_adm_cancel_bc": "❌ Cancel Operation",
+        "msg_adm_panel": "🛠 <b>Advanced Admin Panel</b>\n\nAdditional Admin Commands:\n/update_dlp - Update Download Engine\n/setcookie - Update Cookies File\n/backup - Backup Database",
+        "msg_adm_only": "Admin privilege only.",
+        "msg_adm_close": "Closed",
+        "msg_adm_clean": "Cleaning temporary files...",
+        "msg_adm_cleaned": "🧹 Temporary files cleaned.\n\nItems removed: {removed}",
+        "msg_adm_bc_ask": "📢 Send the message text you want to broadcast to all users:",
+        "msg_adm_bc_cancel": "Broadcast canceled",
+        "msg_adm_bc_cancelled": "Operation canceled.",
+        "msg_adm_no_users": "No registered users.",
+        "msg_adm_bc_start": "📢 Sending message to users...",
+        "msg_adm_bc_done": "✅ Broadcast sent.\n\n• Sent: {sent}\n• Failed: {fail}"
+    }
+}
+
+def _t(key: str, lang: str = "ar", **kwargs) -> str:
+    text = LANG_DICT.get(lang, {}).get(key, LANG_DICT["ar"].get(key, key))
+    if kwargs:
+        try: return text.format(**kwargs)
+        except Exception: return text
+    return text
+
+# ==========================================================
+# إدارة قاعدة البيانات (بدون أي مساس بالهيكل الأصلي)
 # ==========================================================
 
 def init_db():
@@ -164,25 +296,25 @@ def is_admin(user_id: int) -> bool:
 def esc(text) -> str:
     return html.escape(str(text or ""), quote=False)
 
-def clean_title(text: str, limit=60) -> str:
-    if not text: return "ملف ميديا"
+def clean_title(text: str, limit=60, lang: str = "ar") -> str:
+    if not text: return _t("txt_media_file", lang)
     text = re.sub(r"[\\/:*?\"<>|]+", "", str(text))
     text = re.sub(r"\s+", " ", text).strip()
     return text[:limit] + "..." if len(text) > limit else text
 
-def format_size(size_bytes) -> str:
+def format_size(size_bytes, lang: str = "ar") -> str:
     try: size_bytes = float(size_bytes)
-    except Exception: return "غير معروف"
-    if size_bytes <= 0: return "غير معروف"
+    except Exception: return _t("txt_unknown", lang)
+    if size_bytes <= 0: return _t("txt_unknown", lang)
     for unit in ["Bytes", "KB", "MB", "GB"]:
         if size_bytes < 1024.0:
             return f"{int(size_bytes)} {unit}" if size_bytes == int(size_bytes) else f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024.0
     return f"{size_bytes:.1f} GB"
 
-def format_duration(seconds) -> str:
+def format_duration(seconds, lang: str = "ar") -> str:
     try: seconds = int(seconds)
-    except Exception: return "غير معروف"
+    except Exception: return _t("txt_unknown", lang)
     if seconds <= 0: return "00:00"
     h = seconds // 3600
     m = (seconds % 3600) // 60
@@ -216,11 +348,11 @@ def get_thumbnail(info: dict) -> str:
         return info.get("thumbnail") or ""
     except Exception: return ""
 
-def get_artist(info: dict) -> str:
+def get_artist(info: dict, lang: str = "ar") -> str:
     for key in ["artist", "uploader", "channel", "creator"]:
         val = info.get(key)
-        if val: return clean_title(val, 35)
-    return "غير معروف"
+        if val: return clean_title(val, 35, lang)
+    return _t("txt_unknown", lang)
 
 def make_progress_bar(percent: float) -> str:
     filled = int(max(0, min(100, float(percent))) // 10)
@@ -292,24 +424,23 @@ def _force_cleanup_all_sync() -> int:
 # الواجهات والأزرار
 # ==========================================================
 
-def user_main_keyboard() -> ReplyKeyboardMarkup:
-    # تم ترتيب الأزرار وإضافة الزر الجديد
+def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
-            [KeyboardButton("📘 دليل الاستخدام"), KeyboardButton("🔗 روابط PlayZone")],
-            [KeyboardButton("➕ إضافة البوت للمجموعة")]
+            [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
+            [KeyboardButton(_t("btn_add_group", lang))]
         ],
-        resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط هنا..."
+        resize_keyboard=True, is_persistent=True, input_field_placeholder="..."
     )
 
-def build_preview_keyboard(request_id: str) -> InlineKeyboardMarkup:
+def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎵 تحميل صوت", callback_data=f"aud:{request_id}")],
-        [InlineKeyboardButton("🎬 تحميل فيديو", callback_data=f"vid:{request_id}")],
-        [InlineKeyboardButton("❌ إلغاء", callback_data=f"cancel:{request_id}")],
+        [InlineKeyboardButton(_t("btn_audio", lang), callback_data=f"aud:{request_id}")],
+        [InlineKeyboardButton(_t("btn_video", lang), callback_data=f"vid:{request_id}")],
+        [InlineKeyboardButton(_t("btn_cancel", lang), callback_data=f"cancel:{request_id}")],
     ])
 
-def build_resolution_keyboard(request_id: str) -> InlineKeyboardMarkup:
+def build_resolution_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("360p", callback_data=f"res:360:{request_id}"),
@@ -319,50 +450,37 @@ def build_resolution_keyboard(request_id: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton("720p", callback_data=f"res:720:{request_id}"),
             InlineKeyboardButton("1080p", callback_data=f"res:1080:{request_id}")
         ],
-        [InlineKeyboardButton("أفضل جودة", callback_data=f"res:best:{request_id}")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data=f"back:{request_id}")]
+        [InlineKeyboardButton(_t("btn_best_quality", lang), callback_data=f"res:best:{request_id}")],
+        [InlineKeyboardButton(_t("btn_back", lang), callback_data=f"back:{request_id}")]
     ])
 
-def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
+def build_playzone_links_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Website PlayZone", url=WEBSITE_PLAYZONE)],
         [InlineKeyboardButton("📘 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=TELEGRAM_BOT_PLAYZONE)],
     ])
 
-def build_playzone_links_text() -> str:
-    return "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل."
+def build_playzone_links_text(lang: str = "ar") -> str:
+    return _t("msg_links", lang)
 
-def admin_main_keyboard() -> InlineKeyboardMarkup:
+def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 الإحصائيات", callback_data="adm_stats"), InlineKeyboardButton("👥 المستخدمون", callback_data="adm_users")],
-        [InlineKeyboardButton("📢 إذاعة", callback_data="adm_bc"), InlineKeyboardButton("🧹 تنظيف الكاش", callback_data="adm_clean")],
-        [InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server"), InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")],
+        [InlineKeyboardButton(_t("btn_adm_stats", lang), callback_data="adm_stats"), InlineKeyboardButton(_t("btn_adm_users", lang), callback_data="adm_users")],
+        [InlineKeyboardButton(_t("btn_adm_bc", lang), callback_data="adm_bc"), InlineKeyboardButton(_t("btn_adm_clean", lang), callback_data="adm_clean")],
+        [InlineKeyboardButton(_t("btn_adm_srv", lang), callback_data="adm_server"), InlineKeyboardButton(_t("btn_adm_close", lang), callback_data="adm_close")],
     ])
 
-def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
+def admin_broadcast_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ إلغاء العملية", callback_data="adm_cancel_bc")]
+        [InlineKeyboardButton(_t("btn_adm_cancel_bc", lang), callback_data="adm_cancel_bc")]
     ])
 
-def build_start_text(first_name: str) -> str:
-    return (
-        f"أهلاً {esc(first_name)} 👋\n\n"
-        "أرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n"
-        "💚 دعمك يصنع الفرق\n\n"
-        "تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
-        "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
-        "ابدأ بإرسال الرابط مباشرة."
-    )
+def build_start_text(first_name: str, lang: str = "ar") -> str:
+    return _t("msg_start", lang, first_name=esc(first_name))
 
-def build_guide_text() -> str:
-    return (
-        "📘 طريقة الاستخدام\n\n"
-        "1) انسخ رابط المقطع.\n"
-        "2) أرسله هنا في البوت.\n"
-        "3) انتظر ظهور المعاينة.\n"
-        "4) اختر التحميل صوت أو فيديو."
-    )
+def build_guide_text(lang: str = "ar") -> str:
+    return _t("msg_guide", lang)
 
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
     return f"🎬 <b>{esc(title)}</b>\n<b>{esc(artist)}</b>\n⏱ {esc(duration)} - 💾 {esc(est_size)}"
@@ -472,6 +590,7 @@ def extract_metadata(url: str):
 
 def download_hook(progress_data: dict):
     def hook(d):
+        lang = progress_data.get("lang", "ar")
         with progress_lock:
             if d.get("status") == "downloading":
                 downloaded = d.get("downloaded_bytes") or 0
@@ -479,16 +598,11 @@ def download_hook(progress_data: dict):
                 speed = d.get("speed") or 0
                 if total:
                     percent = downloaded / total * 100
-                    progress_data["text"] = (
-                        "📥 <b>جاري تحميل الملف...</b>\n\n"
-                        f"{make_progress_bar(percent)}  {percent:.1f}%\n"
-                        f"📦 الحجم: {format_size(downloaded)} / {format_size(total)}\n"
-                        f"🚀 السرعة: {format_size(speed)}/ث"
-                    )
+                    progress_data["text"] = _t("msg_dl_progress", lang, bar=make_progress_bar(percent), percent=f"{percent:.1f}", downloaded=format_size(downloaded, lang), total=format_size(total, lang), speed=format_size(speed, lang))
                 else:
-                    progress_data["text"] = f"📥 جاري التحميل...\n📦 تم تحميل: {format_size(downloaded)}"
+                    progress_data["text"] = _t("msg_dl_progress_no_total", lang, downloaded=format_size(downloaded, lang))
             elif d.get("status") == "finished":
-                progress_data["text"] = "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي..."
+                progress_data["text"] = _t("msg_dl_finished", lang)
     return hook
 
 async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event):
@@ -533,8 +647,21 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         return False
 
 # ==========================================================
-# أوامر الإدارة الديناميكية
+# أوامر الإدارة الديناميكية وتغيير اللغة
 # ==========================================================
+
+async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # الطريقة المباشرة (Toggle Switch)
+    current_lang = context.user_data.get("lang", "ar")
+    new_lang = "en" if current_lang == "ar" else "ar"
+    
+    # حفظ اللغة الجديدة
+    context.user_data["lang"] = new_lang
+    
+    msg = _t("msg_lang_changed", new_lang)
+    
+    # تحديث الكيبورد السفلي ليظهر باللغة الجديدة فوراً
+    await update.message.reply_text(msg, reply_markup=user_main_keyboard(new_lang))
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
@@ -569,33 +696,36 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
+    lang = context.user_data.get("lang", "ar")
     await update.message.reply_text(
-        build_start_text(update.effective_user.first_name or ""),
-        reply_markup=user_main_keyboard(), parse_mode="HTML", disable_web_page_preview=True
+        build_start_text(update.effective_user.first_name or "", lang),
+        reply_markup=user_main_keyboard(lang), parse_mode="HTML", disable_web_page_preview=True
     )
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     context.user_data.pop("bc_active", None)
+    lang = context.user_data.get("lang", "ar")
     await update.message.reply_text(
-        "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
-        reply_markup=admin_main_keyboard(), parse_mode="HTML"
+        _t("msg_adm_panel", lang),
+        reply_markup=admin_main_keyboard(lang), parse_mode="HTML"
     )
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    register_user_sync(update.effective_user)
+    lang = context.user_data.get("lang", "ar")
     await update.message.reply_text(
-        build_playzone_links_text(),
-        reply_markup=build_playzone_links_keyboard(),
+        build_playzone_links_text(lang),
+        reply_markup=build_playzone_links_keyboard(lang),
         disable_web_page_preview=True
     )
 
 async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     context.user_data["bc_active"] = False
+    lang = context.user_data.get("lang", "ar")
     users = all_user_ids()
-    if not users: return await update.message.reply_text("لا يوجد مستخدمون مسجلون.")
+    if not users: return await update.message.reply_text(_t("msg_adm_no_users", lang))
     
-    status = await update.message.reply_text("📢 جاري إرسال الرسالة للمستخدمين...")
+    status = await update.message.reply_text(_t("msg_adm_bc_start", lang))
     sent, fail = 0, 0
     for user_id in users:
         try:
@@ -611,48 +741,45 @@ async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception: fail += 1
     
     stat_inc_sync("broadcasts")
-    await status.edit_text(f"✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}")
+    await status.edit_text(_t("msg_adm_bc_done", lang, sent=sent, fail=fail))
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
     register_user_sync(update.effective_user)
     uid = update.effective_user.id
     text = update.message.text.strip()
+    lang = context.user_data.get("lang", "ar")
 
-    if text in ["🔗 روابط PlayZone", "/links", "\\links"]:
+    if text in [_t("btn_links", "ar"), _t("btn_links", "en"), "/links", "\\links"]:
         return await show_playzone_links(update, context)
     
-    if text == "📘 دليل الاستخدام":
-        return await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
+    if text in [_t("btn_guide", "ar"), _t("btn_guide", "en")]:
+        return await update.message.reply_text(build_guide_text(lang), disable_web_page_preview=True)
     
-    # المعالجة الخاصة بزر الإضافة للمجموعة
-    if text == "➕ إضافة البوت للمجموعة":
+    if text in [_t("btn_add_group", "ar"), _t("btn_add_group", "en")]:
         bot_username = context.bot.username
         add_keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ اضغط هنا لإضافة البوت", url=f"https://t.me/{bot_username}?startgroup=true")]
+            [InlineKeyboardButton(_t("btn_add_group_url", lang), url=f"https://t.me/{bot_username}?startgroup=true")]
         ])
-        return await update.message.reply_text(
-            "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل المباشر، اضغط على الزر أدناه:", 
-            reply_markup=add_keyboard
-        )
+        return await update.message.reply_text(_t("msg_add_group", lang), reply_markup=add_keyboard)
     
     if is_admin(uid) and context.user_data.get("bc_active"):
         return await handle_broadcast_text(update, context, text)
     
     if uid in ACTIVE_USERS:
-        return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
+        return await update.message.reply_text(_t("msg_wait_current", lang))
     if not is_valid_url(text):
-        return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
+        return await update.message.reply_text(_t("msg_invalid_link", lang))
 
-    status = await update.message.reply_text("🔍 جاري فحص الرابط وتجهيز المعاينة...")
+    status = await update.message.reply_text(_t("msg_check_link", lang))
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(EXECUTOR, lambda: extract_metadata(text))
 
-        title = clean_title(info.get("title"))
-        artist = get_artist(info)
+        title = clean_title(info.get("title"), lang=lang)
+        artist = get_artist(info, lang=lang)
         duration_raw = info.get("duration") or 0
-        est_size = format_size(get_largest_estimated_size(info))
+        est_size = format_size(get_largest_estimated_size(info), lang=lang)
         thumb = get_thumbnail(info)
         request_id = uuid.uuid4().hex[:10]
 
@@ -662,13 +789,13 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         }
         trim_old_pending_requests(context)
 
-        caption = build_preview_caption(title, artist, format_duration(duration_raw), est_size)
+        caption = build_preview_caption(title, artist, format_duration(duration_raw, lang), est_size)
         await safe_delete(status)
-        await send_preview(update, thumb, caption, build_preview_keyboard(request_id))
+        await send_preview(update, thumb, caption, build_preview_keyboard(request_id, lang))
         stat_inc_sync("requests")
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
-        await status.edit_text("❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة وغير محذوف، ثم حاول مرة أخرى.")
+        await status.edit_text(_t("msg_link_error", lang))
 
 # ==========================================================
 # الأزرار ونظام الطابور الذكي (Semaphore Queue)
@@ -676,78 +803,80 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
+    lang = context.user_data.get("lang", "ar")
     if data == "adm_close":
-        await query.answer("تم الإغلاق")
+        await query.answer(_t("msg_adm_close", lang))
         return await safe_delete(query.message)
     elif data == "adm_stats":
         await query.answer()
-        return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
     elif data == "adm_users":
         await query.answer()
-        return await query.message.edit_text(build_admin_users_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text(build_admin_users_text(), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
     elif data == "adm_server":
         await query.answer()
-        return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
     elif data == "adm_clean":
-        await query.answer("جاري تنظيف الملفات المؤقتة...")
+        await query.answer(_t("msg_adm_clean", lang))
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
-        return await query.message.edit_text(f"🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}", reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text(_t("msg_adm_cleaned", lang, removed=removed), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
     elif data == "adm_bc":
         context.user_data["bc_active"] = True
         await query.answer()
-        return await query.message.edit_text("📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:", reply_markup=admin_broadcast_keyboard(), parse_mode="HTML")
+        return await query.message.edit_text(_t("msg_adm_bc_ask", lang), reply_markup=admin_broadcast_keyboard(lang), parse_mode="HTML")
     elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
-        await query.answer("تم إلغاء الإذاعة")
-        return await query.message.edit_text("تم إلغاء العملية.", reply_markup=admin_main_keyboard(), parse_mode="HTML")
+        await query.answer(_t("msg_adm_bc_cancel", lang))
+        return await query.message.edit_text(_t("msg_adm_bc_cancelled", lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query: return
     data = query.data or ""
     uid = query.from_user.id
+    lang = context.user_data.get("lang", "ar")
 
     if data.startswith("adm_"):
-        if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
+        if not is_admin(uid): return await query.answer(_t("msg_adm_only", lang), show_alert=True)
         return await handle_admin_callbacks(query, context)
 
     if data.startswith("cancel:"):
         ensure_pending_requests(context).pop(data.split(":")[1], None)
-        await query.answer("تم إلغاء طلب التحميل")
+        await query.answer(_t("msg_cancel_done", lang))
         return await safe_delete(query.message)
 
     if data.startswith("back:"):
         request_id = data.split(":")[1]
-        await query.answer("رجوع")
-        return await query.message.edit_reply_markup(reply_markup=build_preview_keyboard(request_id))
+        await query.answer(_t("msg_back", lang))
+        return await query.message.edit_reply_markup(reply_markup=build_preview_keyboard(request_id, lang))
 
     if data.startswith("vid:"):
         request_id = data.split(":")[1]
-        await query.answer("يرجى اختيار الدقة")
-        return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id))
+        await query.answer(_t("msg_select_res", lang))
+        return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id, lang))
 
     if data.startswith("aud:") or data.startswith("res:"):
         if data.startswith("aud:"):
             mode = "audio"
             resolution = "720"
             request_id = data.split(":")[1]
-            await query.answer("جاري تجهيز الصوت...")
+            await query.answer(_t("msg_prep_audio", lang))
         else:
             mode = "video"
             parts = data.split(":")
             resolution = parts[1]
             request_id = parts[2]
-            await query.answer("جاري التجهيز...")
+            await query.answer(_t("msg_prep_video", lang))
 
         request = ensure_pending_requests(context).pop(request_id, None)
         trim_old_pending_requests(context)
         
-        if not request: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
-        if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
+        if not request: return await query.answer(_t("msg_session_expired", lang), show_alert=True)
+        if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
         
-        await start_download_from_callback(query, context, request, mode, resolution)
+        await start_download_from_callback(query, context, request, mode, resolution, lang)
 
-async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str = "720"):
+async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str, lang: str):
     uid = query.from_user.id
     url = request.get("url")
     ACTIVE_USERS.add(uid)
@@ -756,7 +885,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
     
-    progress_data = {"text": "⏳ يرجى الانتظار..."}
+    progress_data = {"text": "⏳", "lang": lang}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
     try:
@@ -764,7 +893,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception: pass
 
         async with DOWNLOAD_SEMAPHORE:
-            with progress_lock: progress_data["text"] = "🚀 بدأ التحميل... يرجى الانتظار ⏬"
+            with progress_lock: progress_data["text"] = _t("msg_dl_started", lang)
             
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
@@ -776,7 +905,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
             if mode == "audio":
-                with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
+                with progress_lock: progress_data["text"] = _t("msg_converting", lang)
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
                 target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
@@ -786,27 +915,20 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             file_size = target_file.stat().st_size
             if file_size > MAX_TELEGRAM_SIZE:
                 stop_event.set()
-                return await edit_message_smart(query.message, f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}", reply_markup=None)
+                return await edit_message_smart(query.message, _t("msg_too_large", lang, size=format_size(file_size, lang), limit=format_size(MAX_TELEGRAM_SIZE, lang)), reply_markup=None)
 
             stop_event.set()
-            await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
+            await edit_message_smart(query.message, _t("msg_uploading", lang), reply_markup=None)
 
-            title = clean_title(request.get("title", "ملف ميديا"), 80)
+            title = clean_title(request.get("title", _t("txt_media_file", lang)), 80, lang)
             duration = int(request.get("duration") or 0)
-            caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"            
-            share_text = (
-                "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n"
-                "⚡ بوت سريع، مجاني وبأعلى جودة.\n"
-                "👇 جرّبه الآن:"
-            )
-
-            # سيقوم تيليجرام بدمج الرابط مع النص تلقائياً
-            share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
+            caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration, lang))}"            
+            
+            share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(_t('share_text', lang))}"
             
             media_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌟 أعجبك البوت؟ شاركه", url=share_link)]
+                [InlineKeyboardButton(_t("btn_share", lang), url=share_link)]
             ])
-
 
             with open(target_file, "rb") as f:
                 if mode == "audio":
@@ -814,7 +936,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                     try:
                         await context.bot.send_audio(
                             chat_id=query.message.chat_id, audio=f, title=title,
-                            performer=request.get("artist", "غير معروف"), duration=duration,
+                            performer=request.get("artist", _t("txt_unknown", lang)), duration=duration,
                             caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
                             read_timeout=120, write_timeout=120
                         )
@@ -835,12 +957,12 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     except (TimedOut, NetworkError) as e:
         stat_inc_sync("failed")
         logger.error(f"فشل اتصال تيليجرام: {e}")
-        try: await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.")
+        try: await edit_message_smart(query.message, _t("msg_network_error", lang))
         except Exception: pass
     except Exception as e:
         stat_inc_sync("failed")
         logger.error(f"فشل المعالجة: {e}")
-        try: await edit_message_smart(query.message, "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.")
+        try: await edit_message_smart(query.message, _t("msg_dl_failed", lang))
         except Exception: pass
     finally:
         stop_event.set()
@@ -855,7 +977,11 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 async def post_init(app: Application):
-    commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
+    commands = [
+        BotCommand("start", "بدء / Start"), 
+        BotCommand("lang", "تغيير اللغة / Toggle Language"), 
+        BotCommand("links", "الروابط / Links")
+    ]
     try:
         await app.bot.set_my_commands(commands)
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
@@ -880,6 +1006,7 @@ def main():
     )
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("lang", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
@@ -889,8 +1016,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
-    # تفعيل drop_pending_updates بشكل إجباري لتجنب مشاكل الـ Conflict عند تكرار تشغيل الحاوية
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Direct Language Toggle).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
