@@ -298,12 +298,7 @@ def user_main_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط هنا..."
     )
 
-# ==========================================================
-# الواجهات والأزرار
-# ==========================================================
-
 def build_preview_keyboard(request_id: str) -> InlineKeyboardMarkup:
-    # تم الإبقاء على نفس الأسماء بالضبط (aud و vid) مع ترتيبها لتكون أسهل للمس
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🎵 تحميل صوت", callback_data=f"aud:{request_id}")],
         [InlineKeyboardButton("🎬 تحميل فيديو", callback_data=f"vid:{request_id}")],
@@ -465,10 +460,11 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
 
-def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
-    opts = get_ydl_options(job_dir, progress_data, mode, resolution)
+def extract_metadata(url: str):
+    opts = get_ydl_options(mode="video")
+    opts["skip_download"] = True
     with yt_dlp.YoutubeDL(opts) as ydl:
-        return ydl.extract_info(url, download=True)
+        return ydl.extract_info(url, download=False)
 
 def download_hook(progress_data: dict):
     def hook(d):
@@ -502,8 +498,8 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
             except Exception: pass
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
-def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict):
-    opts = get_ydl_options(job_dir, progress_data, mode)
+def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
+    opts = get_ydl_options(job_dir, progress_data, mode, resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
@@ -704,19 +700,16 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("تم إلغاء طلب التحميل")
         return await safe_delete(query.message)
 
-    # زر الرجوع للقائمة الرئيسية
     if data.startswith("back:"):
         request_id = data.split(":")[1]
         await query.answer("رجوع")
         return await query.message.edit_reply_markup(reply_markup=build_preview_keyboard(request_id))
 
-    # زر الفيديو الأصلي يفتح الآن قائمة الدقة
     if data.startswith("vid:"):
         request_id = data.split(":")[1]
         await query.answer("يرجى اختيار الدقة")
         return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id))
 
-    # تشغيل التحميل للصوت (aud) أو لدقة معينة (res)
     if data.startswith("aud:") or data.startswith("res:"):
         if data.startswith("aud:"):
             mode = "audio"
@@ -738,7 +731,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await start_download_from_callback(query, context, request, mode, resolution)
 
-# تم إضافة معامل resolution فقط
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str = "720"):
     uid = query.from_user.id
     url = request.get("url")
@@ -761,32 +753,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
             
-            # تم تمرير resolution هنا
             await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data, resolution))
-            
-            # ... الباقي كما هو في الكود الأصلي دون تغيير حرف ...
-    uid = query.from_user.id
-    url = request.get("url")
-    ACTIVE_USERS.add(uid)
-
-    job_dir = BASE_DOWNLOAD_DIR / f"{uid}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
-    job_dir.mkdir(parents=True, exist_ok=True)
-    stop_event = asyncio.Event()
-    
-    progress_data = {"text": "⏳ يرجى الانتظار..."}
-    updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
-
-    try:
-        try: await query.message.edit_reply_markup(reply_markup=None)
-        except Exception: pass
-
-        async with DOWNLOAD_SEMAPHORE:
-            with progress_lock: progress_data["text"] = "🚀 بدأ التحميل... يرجى الانتظار ⏬"
-            
-            loop = asyncio.get_running_loop()
-            local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
-            
-            await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data))
             files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
             if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
 
