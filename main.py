@@ -86,100 +86,6 @@ for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# نظام اللغات (Dictionary)
-# ==========================================================
-
-LANG_DICT = {
-    "ar": {
-        "btn_guide": "📘 دليل الاستخدام",
-        "btn_links": "🔗 روابط PlayZone",
-        "btn_add_group": "➕ إضافة البوت للمجموعة",
-        "btn_audio": "🎵 تحميل صوت",
-        "btn_video": "🎬 تحميل فيديو",
-        "btn_cancel": "❌ إلغاء",
-        "btn_best_quality": "أفضل جودة",
-        "btn_back": "🔙 رجوع",
-        "msg_start": "أهلاً {first_name} 👋\n\nأرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\nابدأ بإرسال الرابط مباشرة.",
-        "msg_guide": "📘 طريقة الاستخدام\n\n1) انسخ رابط المقطع.\n2) أرسله هنا في البوت.\n3) انتظر ظهور المعاينة.\n4) اختر التحميل صوت أو فيديو.",
-        "msg_add_group": "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل المباشر، اضغط على الزر أدناه:",
-        "btn_add_group_url": "➕ اضغط هنا لإضافة البوت",
-        "msg_links": "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.",
-        "msg_check_link": "🔍 جاري فحص الرابط وتجهيز المعاينة...",
-        "msg_invalid_link": "❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://",
-        "msg_wait_current": "⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.",
-        "msg_link_error": "❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة وغير محذوف، ثم حاول مرة أخرى.",
-        "msg_select_res": "يرجى اختيار الدقة",
-        "msg_prep_audio": "جاري تجهيز الصوت...",
-        "msg_prep_video": "جاري التجهيز...",
-        "msg_session_expired": "انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.",
-        "msg_dl_started": "🚀 بدأ التحميل... يرجى الانتظار ⏬",
-        "msg_converting": "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي...",
-        "msg_too_large": "❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {size}\nالحد: {limit}",
-        "msg_uploading": "📤 تم تجهيز الملف، جاري الإرسال...",
-        "msg_dl_failed": "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.",
-        "msg_network_error": "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.",
-        "msg_cancel_done": "تم إلغاء طلب التحميل",
-        "msg_back": "رجوع",
-        "msg_lang_changed": "✅ تم تغيير اللغة إلى العربية.",
-        "txt_unknown": "غير معروف",
-        "txt_media_file": "ملف ميديا",
-        "msg_dl_progress": "📥 <b>جاري تحميل الملف...</b>\n\n{bar}  {percent}%\n📦 الحجم: {downloaded} / {total}\n🚀 السرعة: {speed}/ث",
-        "msg_dl_progress_no_total": "📥 جاري التحميل...\n📦 تم تحميل: {downloaded}",
-        "msg_dl_finished": "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي...",
-        "share_text": "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:",
-        "btn_share": "🌟 أعجبك البوت؟ شاركه",
-        "msg_choose_lang": "اختر لغة البوت / Choose Bot Language:"
-    },
-    "en": {
-        "btn_guide": "📘 User Guide",
-        "btn_links": "🔗 PlayZone Links",
-        "btn_add_group": "➕ Add Bot to Group",
-        "btn_audio": "🎵 Download Audio",
-        "btn_video": "🎬 Download Video",
-        "btn_cancel": "❌ Cancel",
-        "btn_best_quality": "Best Quality",
-        "btn_back": "🔙 Back",
-        "msg_start": "Hello {first_name} 👋\n\nSend a video or audio link, and I'll show you a preview before downloading.\n\n💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.\n\nStart by sending a link directly.",
-        "msg_guide": "📘 How to use\n\n1) Copy the media link.\n2) Send it here in the bot.\n3) Wait for the preview.\n4) Choose to download audio or video.",
-        "msg_add_group": "🤖 To add the bot to your group and enjoy direct downloading, click the button below:",
-        "btn_add_group_url": "➕ Click here to add the bot",
-        "msg_links": "💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.",
-        "msg_check_link": "🔍 Checking link and preparing preview...",
-        "msg_invalid_link": "❌ Invalid link.\n\nSend a link starting with:\nhttp:// or https://",
-        "msg_wait_current": "⏳ You have an ongoing download.\n\nWait until it finishes, then send a new link.",
-        "msg_link_error": "❌ Could not read the link.\n\nMake sure the media is public and not deleted, then try again.",
-        "msg_select_res": "Please select resolution",
-        "msg_prep_audio": "Preparing audio...",
-        "msg_prep_video": "Preparing...",
-        "msg_session_expired": "Session for this request expired, please send the link again.",
-        "msg_dl_started": "🚀 Download started... Please wait ⏬",
-        "msg_converting": "🎵 Converting audio and embedding cover...",
-        "msg_too_large": "❌ File size exceeds the limit.\n\nSize: {size}\nLimit: {limit}",
-        "msg_uploading": "📤 File is ready, uploading...",
-        "msg_dl_failed": "❌ Failed to download the media.\n\nLink might be unavailable or exceeds limits.",
-        "msg_network_error": "❌ Could not send file due to connection issues.\n\nTry again in a bit.",
-        "msg_cancel_done": "Download request canceled",
-        "msg_back": "Back",
-        "msg_lang_changed": "✅ Language changed to English.",
-        "txt_unknown": "Unknown",
-        "txt_media_file": "Media file",
-        "msg_dl_progress": "📥 <b>Downloading file...</b>\n\n{bar}  {percent}%\n📦 Size: {downloaded} / {total}\n🚀 Speed: {speed}/s",
-        "msg_dl_progress_no_total": "📥 Downloading...\n📦 Downloaded: {downloaded}",
-        "msg_dl_finished": "⚙️ Download complete, preparing and compressing...",
-        "share_text": "📥 Download any video or MP3 in seconds!\n⚡ Fast, free, and highest quality.\n👇 Try it now:",
-        "btn_share": "🌟 Like the bot? Share it",
-        "msg_choose_lang": "Choose Bot Language / اختر لغة البوت:"
-    }
-}
-
-def _t(key: str, lang: str = "ar", **kwargs) -> str:
-    text = LANG_DICT.get(lang, {}).get(key, LANG_DICT["ar"].get(key, key))
-    if kwargs:
-        try: return text.format(**kwargs)
-        except Exception: return text
-    return text
-
-# ==========================================================
 # إدارة قاعدة البيانات (SQLite3 WAL Mode)
 # ==========================================================
 
@@ -197,12 +103,6 @@ def init_db():
                     last_seen INTEGER
                 )
             """)
-            # تحديث الجدول لإضافة عمود اللغة إذا لم يكن موجوداً
-            try:
-                conn.execute("ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'ar'")
-            except sqlite3.OperationalError:
-                pass
-                
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS stats (
                     key TEXT PRIMARY KEY,
@@ -218,25 +118,13 @@ def register_user_sync(user):
     with DB_LOCK:
         with sqlite3.connect(DB_FILE) as conn:
             cur = conn.cursor()
-            cur.execute("SELECT first_seen, language FROM users WHERE id = ?", (user.id,))
+            cur.execute("SELECT first_seen FROM users WHERE id = ?", (user.id,))
             row = cur.fetchone()
             first_seen = row[0] if row else now
-            lang = row[1] if row and len(row) > 1 else "ar"
             conn.execute("""
-                INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen, language)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now, lang))
-
-def get_user_lang_sync(user_id: int) -> str:
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            row = conn.execute("SELECT language FROM users WHERE id = ?", (user_id,)).fetchone()
-            return row[0] if row and row[0] else "ar"
-
-def set_user_lang_sync(user_id: int, lang: str):
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("UPDATE users SET language = ? WHERE id = ?", (lang, user_id))
+                INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now))
 
 def stat_inc_sync(key: str, value: int = 1):
     with DB_LOCK:
@@ -276,25 +164,25 @@ def is_admin(user_id: int) -> bool:
 def esc(text) -> str:
     return html.escape(str(text or ""), quote=False)
 
-def clean_title(text: str, limit=60, lang: str = "ar") -> str:
-    if not text: return _t("txt_media_file", lang)
+def clean_title(text: str, limit=60) -> str:
+    if not text: return "ملف ميديا"
     text = re.sub(r"[\\/:*?\"<>|]+", "", str(text))
     text = re.sub(r"\s+", " ", text).strip()
     return text[:limit] + "..." if len(text) > limit else text
 
-def format_size(size_bytes, lang: str = "ar") -> str:
+def format_size(size_bytes) -> str:
     try: size_bytes = float(size_bytes)
-    except Exception: return _t("txt_unknown", lang)
-    if size_bytes <= 0: return _t("txt_unknown", lang)
+    except Exception: return "غير معروف"
+    if size_bytes <= 0: return "غير معروف"
     for unit in ["Bytes", "KB", "MB", "GB"]:
         if size_bytes < 1024.0:
             return f"{int(size_bytes)} {unit}" if size_bytes == int(size_bytes) else f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024.0
     return f"{size_bytes:.1f} GB"
 
-def format_duration(seconds, lang: str = "ar") -> str:
+def format_duration(seconds) -> str:
     try: seconds = int(seconds)
-    except Exception: return _t("txt_unknown", lang)
+    except Exception: return "غير معروف"
     if seconds <= 0: return "00:00"
     h = seconds // 3600
     m = (seconds % 3600) // 60
@@ -328,11 +216,11 @@ def get_thumbnail(info: dict) -> str:
         return info.get("thumbnail") or ""
     except Exception: return ""
 
-def get_artist(info: dict, lang: str = "ar") -> str:
+def get_artist(info: dict) -> str:
     for key in ["artist", "uploader", "channel", "creator"]:
         val = info.get(key)
-        if val: return clean_title(val, 35, lang)
-    return _t("txt_unknown", lang)
+        if val: return clean_title(val, 35)
+    return "غير معروف"
 
 def make_progress_bar(percent: float) -> str:
     filled = int(max(0, min(100, float(percent))) // 10)
@@ -404,23 +292,24 @@ def _force_cleanup_all_sync() -> int:
 # الواجهات والأزرار
 # ==========================================================
 
-def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
+def user_main_keyboard() -> ReplyKeyboardMarkup:
+    # تم ترتيب الأزرار وإضافة الزر الجديد
     return ReplyKeyboardMarkup(
         [
-            [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
-            [KeyboardButton(_t("btn_add_group", lang))]
+            [KeyboardButton("📘 دليل الاستخدام"), KeyboardButton("🔗 روابط PlayZone")],
+            [KeyboardButton("➕ إضافة البوت للمجموعة")]
         ],
-        resize_keyboard=True, is_persistent=True, input_field_placeholder="..."
+        resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط هنا..."
     )
 
-def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
+def build_preview_keyboard(request_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(_t("btn_audio", lang), callback_data=f"aud:{request_id}")],
-        [InlineKeyboardButton(_t("btn_video", lang), callback_data=f"vid:{request_id}")],
-        [InlineKeyboardButton(_t("btn_cancel", lang), callback_data=f"cancel:{request_id}")],
+        [InlineKeyboardButton("🎵 تحميل صوت", callback_data=f"aud:{request_id}")],
+        [InlineKeyboardButton("🎬 تحميل فيديو", callback_data=f"vid:{request_id}")],
+        [InlineKeyboardButton("❌ إلغاء", callback_data=f"cancel:{request_id}")],
     ])
 
-def build_resolution_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
+def build_resolution_keyboard(request_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("360p", callback_data=f"res:360:{request_id}"),
@@ -430,19 +319,19 @@ def build_resolution_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboa
             InlineKeyboardButton("720p", callback_data=f"res:720:{request_id}"),
             InlineKeyboardButton("1080p", callback_data=f"res:1080:{request_id}")
         ],
-        [InlineKeyboardButton(_t("btn_best_quality", lang), callback_data=f"res:best:{request_id}")],
-        [InlineKeyboardButton(_t("btn_back", lang), callback_data=f"back:{request_id}")]
+        [InlineKeyboardButton("أفضل جودة", callback_data=f"res:best:{request_id}")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data=f"back:{request_id}")]
     ])
 
-def build_playzone_links_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
+def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Website PlayZone", url=WEBSITE_PLAYZONE)],
         [InlineKeyboardButton("📘 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=TELEGRAM_BOT_PLAYZONE)],
     ])
 
-def build_playzone_links_text(lang: str = "ar") -> str:
-    return _t("msg_links", lang)
+def build_playzone_links_text() -> str:
+    return "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل."
 
 def admin_main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
@@ -456,11 +345,24 @@ def admin_broadcast_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("❌ إلغاء العملية", callback_data="adm_cancel_bc")]
     ])
 
-def build_start_text(first_name: str, lang: str = "ar") -> str:
-    return _t("msg_start", lang, first_name=esc(first_name))
+def build_start_text(first_name: str) -> str:
+    return (
+        f"أهلاً {esc(first_name)} 👋\n\n"
+        "أرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n"
+        "💚 دعمك يصنع الفرق\n\n"
+        "تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
+        "كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
+        "ابدأ بإرسال الرابط مباشرة."
+    )
 
-def build_guide_text(lang: str = "ar") -> str:
-    return _t("msg_guide", lang)
+def build_guide_text() -> str:
+    return (
+        "📘 طريقة الاستخدام\n\n"
+        "1) انسخ رابط المقطع.\n"
+        "2) أرسله هنا في البوت.\n"
+        "3) انتظر ظهور المعاينة.\n"
+        "4) اختر التحميل صوت أو فيديو."
+    )
 
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
     return f"🎬 <b>{esc(title)}</b>\n<b>{esc(artist)}</b>\n⏱ {esc(duration)} - 💾 {esc(est_size)}"
@@ -570,7 +472,6 @@ def extract_metadata(url: str):
 
 def download_hook(progress_data: dict):
     def hook(d):
-        lang = progress_data.get("lang", "ar")
         with progress_lock:
             if d.get("status") == "downloading":
                 downloaded = d.get("downloaded_bytes") or 0
@@ -578,11 +479,16 @@ def download_hook(progress_data: dict):
                 speed = d.get("speed") or 0
                 if total:
                     percent = downloaded / total * 100
-                    progress_data["text"] = _t("msg_dl_progress", lang, bar=make_progress_bar(percent), percent=f"{percent:.1f}", downloaded=format_size(downloaded, lang), total=format_size(total, lang), speed=format_size(speed, lang))
+                    progress_data["text"] = (
+                        "📥 <b>جاري تحميل الملف...</b>\n\n"
+                        f"{make_progress_bar(percent)}  {percent:.1f}%\n"
+                        f"📦 الحجم: {format_size(downloaded)} / {format_size(total)}\n"
+                        f"🚀 السرعة: {format_size(speed)}/ث"
+                    )
                 else:
-                    progress_data["text"] = _t("msg_dl_progress_no_total", lang, downloaded=format_size(downloaded, lang))
+                    progress_data["text"] = f"📥 جاري التحميل...\n📦 تم تحميل: {format_size(downloaded)}"
             elif d.get("status") == "finished":
-                progress_data["text"] = _t("msg_dl_finished", lang)
+                progress_data["text"] = "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي..."
     return hook
 
 async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event):
@@ -627,17 +533,8 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         return False
 
 # ==========================================================
-# أوامر الإدارة الديناميكية وتغيير اللغة
+# أوامر الإدارة الديناميكية
 # ==========================================================
-
-async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    lang = get_user_lang_sync(uid)
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("العربية 🇮🇶", callback_data="setlang:ar")],
-        [InlineKeyboardButton("English 🇺🇸", callback_data="setlang:en")]
-    ])
-    await update.message.reply_text(_t("msg_choose_lang", lang), reply_markup=keyboard)
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
@@ -672,10 +569,9 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
-    lang = get_user_lang_sync(update.effective_user.id)
     await update.message.reply_text(
-        build_start_text(update.effective_user.first_name or "", lang),
-        reply_markup=user_main_keyboard(lang), parse_mode="HTML", disable_web_page_preview=True
+        build_start_text(update.effective_user.first_name or ""),
+        reply_markup=user_main_keyboard(), parse_mode="HTML", disable_web_page_preview=True
     )
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -686,10 +582,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=admin_main_keyboard(), parse_mode="HTML"
     )
 
-async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE, lang: str = "ar"):
+async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    register_user_sync(update.effective_user)
     await update.message.reply_text(
-        build_playzone_links_text(lang),
-        reply_markup=build_playzone_links_keyboard(lang),
+        build_playzone_links_text(),
+        reply_markup=build_playzone_links_keyboard(),
         disable_web_page_preview=True
     )
 
@@ -721,38 +618,41 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     register_user_sync(update.effective_user)
     uid = update.effective_user.id
     text = update.message.text.strip()
-    lang = get_user_lang_sync(uid)
 
-    if text in [_t("btn_links", "ar"), _t("btn_links", "en"), "/links", "\\links"]:
-        return await show_playzone_links(update, context, lang)
+    if text in ["🔗 روابط PlayZone", "/links", "\\links"]:
+        return await show_playzone_links(update, context)
     
-    if text in [_t("btn_guide", "ar"), _t("btn_guide", "en")]:
-        return await update.message.reply_text(build_guide_text(lang), disable_web_page_preview=True)
+    if text == "📘 دليل الاستخدام":
+        return await update.message.reply_text(build_guide_text(), disable_web_page_preview=True)
     
-    if text in [_t("btn_add_group", "ar"), _t("btn_add_group", "en")]:
+    # المعالجة الخاصة بزر الإضافة للمجموعة
+    if text == "➕ إضافة البوت للمجموعة":
         bot_username = context.bot.username
         add_keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(_t("btn_add_group_url", lang), url=f"https://t.me/{bot_username}?startgroup=true")]
+            [InlineKeyboardButton("➕ اضغط هنا لإضافة البوت", url=f"https://t.me/{bot_username}?startgroup=true")]
         ])
-        return await update.message.reply_text(_t("msg_add_group", lang), reply_markup=add_keyboard)
+        return await update.message.reply_text(
+            "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل المباشر، اضغط على الزر أدناه:", 
+            reply_markup=add_keyboard
+        )
     
     if is_admin(uid) and context.user_data.get("bc_active"):
         return await handle_broadcast_text(update, context, text)
     
     if uid in ACTIVE_USERS:
-        return await update.message.reply_text(_t("msg_wait_current", lang))
+        return await update.message.reply_text("⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.")
     if not is_valid_url(text):
-        return await update.message.reply_text(_t("msg_invalid_link", lang))
+        return await update.message.reply_text("❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://")
 
-    status = await update.message.reply_text(_t("msg_check_link", lang))
+    status = await update.message.reply_text("🔍 جاري فحص الرابط وتجهيز المعاينة...")
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(EXECUTOR, lambda: extract_metadata(text))
 
-        title = clean_title(info.get("title"), lang=lang)
-        artist = get_artist(info, lang=lang)
+        title = clean_title(info.get("title"))
+        artist = get_artist(info)
         duration_raw = info.get("duration") or 0
-        est_size = format_size(get_largest_estimated_size(info), lang=lang)
+        est_size = format_size(get_largest_estimated_size(info))
         thumb = get_thumbnail(info)
         request_id = uuid.uuid4().hex[:10]
 
@@ -762,13 +662,13 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         }
         trim_old_pending_requests(context)
 
-        caption = build_preview_caption(title, artist, format_duration(duration_raw, lang), est_size)
+        caption = build_preview_caption(title, artist, format_duration(duration_raw), est_size)
         await safe_delete(status)
-        await send_preview(update, thumb, caption, build_preview_keyboard(request_id, lang))
+        await send_preview(update, thumb, caption, build_preview_keyboard(request_id))
         stat_inc_sync("requests")
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
-        await status.edit_text(_t("msg_link_error", lang))
+        await status.edit_text("❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة وغير محذوف، ثم حاول مرة أخرى.")
 
 # ==========================================================
 # الأزرار ونظام الطابور الذكي (Semaphore Queue)
@@ -806,18 +706,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not query: return
     data = query.data or ""
     uid = query.from_user.id
-    lang = get_user_lang_sync(uid)
-
-    if data.startswith("setlang:"):
-        new_lang = data.split(":")[1]
-        set_user_lang_sync(uid, new_lang)
-        msg = _t("msg_lang_changed", new_lang)
-        await query.answer(msg)
-        await query.message.edit_text(msg)
-        try:
-            await context.bot.send_message(chat_id=uid, text="🔄", reply_markup=user_main_keyboard(new_lang))
-        except Exception: pass
-        return
 
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer("صلاحية إدارة فقط.", show_alert=True)
@@ -825,41 +713,41 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("cancel:"):
         ensure_pending_requests(context).pop(data.split(":")[1], None)
-        await query.answer(_t("msg_cancel_done", lang))
+        await query.answer("تم إلغاء طلب التحميل")
         return await safe_delete(query.message)
 
     if data.startswith("back:"):
         request_id = data.split(":")[1]
-        await query.answer(_t("msg_back", lang))
-        return await query.message.edit_reply_markup(reply_markup=build_preview_keyboard(request_id, lang))
+        await query.answer("رجوع")
+        return await query.message.edit_reply_markup(reply_markup=build_preview_keyboard(request_id))
 
     if data.startswith("vid:"):
         request_id = data.split(":")[1]
-        await query.answer(_t("msg_select_res", lang))
-        return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id, lang))
+        await query.answer("يرجى اختيار الدقة")
+        return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id))
 
     if data.startswith("aud:") or data.startswith("res:"):
         if data.startswith("aud:"):
             mode = "audio"
             resolution = "720"
             request_id = data.split(":")[1]
-            await query.answer(_t("msg_prep_audio", lang))
+            await query.answer("جاري تجهيز الصوت...")
         else:
             mode = "video"
             parts = data.split(":")
             resolution = parts[1]
             request_id = parts[2]
-            await query.answer(_t("msg_prep_video", lang))
+            await query.answer("جاري التجهيز...")
 
         request = ensure_pending_requests(context).pop(request_id, None)
         trim_old_pending_requests(context)
         
-        if not request: return await query.answer(_t("msg_session_expired", lang), show_alert=True)
-        if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
+        if not request: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
+        if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
         
-        await start_download_from_callback(query, context, request, mode, resolution, lang)
+        await start_download_from_callback(query, context, request, mode, resolution)
 
-async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str, lang: str):
+async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str = "720"):
     uid = query.from_user.id
     url = request.get("url")
     ACTIVE_USERS.add(uid)
@@ -868,7 +756,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
     
-    progress_data = {"text": "⏳", "lang": lang}
+    progress_data = {"text": "⏳ يرجى الانتظار..."}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
     try:
@@ -876,7 +764,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception: pass
 
         async with DOWNLOAD_SEMAPHORE:
-            with progress_lock: progress_data["text"] = _t("msg_dl_started", lang)
+            with progress_lock: progress_data["text"] = "🚀 بدأ التحميل... يرجى الانتظار ⏬"
             
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
@@ -888,7 +776,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
             if mode == "audio":
-                with progress_lock: progress_data["text"] = _t("msg_converting", lang)
+                with progress_lock: progress_data["text"] = "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي..."
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
                 target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
@@ -898,20 +786,27 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             file_size = target_file.stat().st_size
             if file_size > MAX_TELEGRAM_SIZE:
                 stop_event.set()
-                return await edit_message_smart(query.message, _t("msg_too_large", lang, size=format_size(file_size, lang), limit=format_size(MAX_TELEGRAM_SIZE, lang)), reply_markup=None)
+                return await edit_message_smart(query.message, f"❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {format_size(file_size)}\nالحد: {format_size(MAX_TELEGRAM_SIZE)}", reply_markup=None)
 
             stop_event.set()
-            await edit_message_smart(query.message, _t("msg_uploading", lang), reply_markup=None)
+            await edit_message_smart(query.message, "📤 تم تجهيز الملف، جاري الإرسال...", reply_markup=None)
 
-            title = clean_title(request.get("title", _t("txt_media_file", lang)), 80, lang)
+            title = clean_title(request.get("title", "ملف ميديا"), 80)
             duration = int(request.get("duration") or 0)
-            caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration, lang))}"            
-            
-            share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(_t('share_text', lang))}"
+            caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration))}"            
+            share_text = (
+                "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n"
+                "⚡ بوت سريع، مجاني وبأعلى جودة.\n"
+                "👇 جرّبه الآن:"
+            )
+
+            # سيقوم تيليجرام بدمج الرابط مع النص تلقائياً
+            share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(share_text)}"
             
             media_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(_t("btn_share", lang), url=share_link)]
+                [InlineKeyboardButton("🌟 أعجبك البوت؟ شاركه", url=share_link)]
             ])
+
 
             with open(target_file, "rb") as f:
                 if mode == "audio":
@@ -919,7 +814,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                     try:
                         await context.bot.send_audio(
                             chat_id=query.message.chat_id, audio=f, title=title,
-                            performer=request.get("artist", _t("txt_unknown", lang)), duration=duration,
+                            performer=request.get("artist", "غير معروف"), duration=duration,
                             caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
                             read_timeout=120, write_timeout=120
                         )
@@ -940,12 +835,12 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     except (TimedOut, NetworkError) as e:
         stat_inc_sync("failed")
         logger.error(f"فشل اتصال تيليجرام: {e}")
-        try: await edit_message_smart(query.message, _t("msg_network_error", lang))
+        try: await edit_message_smart(query.message, "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.")
         except Exception: pass
     except Exception as e:
         stat_inc_sync("failed")
         logger.error(f"فشل المعالجة: {e}")
-        try: await edit_message_smart(query.message, _t("msg_dl_failed", lang))
+        try: await edit_message_smart(query.message, "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.")
         except Exception: pass
     finally:
         stop_event.set()
@@ -960,11 +855,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 # ==========================================================
 
 async def post_init(app: Application):
-    commands = [
-        BotCommand("start", "بدء / Start"), 
-        BotCommand("language", "تغيير اللغة / Change Language"), 
-        BotCommand("links", "الروابط / Links")
-    ]
+    commands = [BotCommand("start", "بدء استخدام البوت"), BotCommand("links", "دعم روابط PlayZone")]
     try:
         await app.bot.set_my_commands(commands)
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
@@ -989,7 +880,6 @@ def main():
     )
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("lang", lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
@@ -999,7 +889,8 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection & Multi-Lang).")
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Database Protection).")
+    # تفعيل drop_pending_updates بشكل إجباري لتجنب مشاكل الـ Conflict عند تكرار تشغيل الحاوية
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
