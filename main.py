@@ -298,11 +298,30 @@ def user_main_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True, is_persistent=True, input_field_placeholder="أرسل الرابط هنا..."
     )
 
+# ==========================================================
+# الواجهات والأزرار
+# ==========================================================
+
 def build_preview_keyboard(request_id: str) -> InlineKeyboardMarkup:
+    # تم الإبقاء على نفس الأسماء بالضبط (aud و vid) مع ترتيبها لتكون أسهل للمس
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🎵 تحميل صوت", callback_data=f"aud:{request_id}"),
-         InlineKeyboardButton("🎬 تحميل فيديو", callback_data=f"vid:{request_id}")],
+        [InlineKeyboardButton("🎵 تحميل صوت", callback_data=f"aud:{request_id}")],
+        [InlineKeyboardButton("🎬 تحميل فيديو", callback_data=f"vid:{request_id}")],
         [InlineKeyboardButton("❌ إلغاء", callback_data=f"cancel:{request_id}")],
+    ])
+
+def build_resolution_keyboard(request_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("360p", callback_data=f"res:360:{request_id}"),
+            InlineKeyboardButton("480p", callback_data=f"res:480:{request_id}")
+        ],
+        [
+            InlineKeyboardButton("720p", callback_data=f"res:720:{request_id}"),
+            InlineKeyboardButton("1080p", callback_data=f"res:1080:{request_id}")
+        ],
+        [InlineKeyboardButton("أفضل جودة", callback_data=f"res:best:{request_id}")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data=f"back:{request_id}")]
     ])
 
 def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
@@ -413,7 +432,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
 # yt-dlp و FFmpeg
 # ==========================================================
 
-def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video"):
+def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
@@ -431,7 +450,11 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         opts["format"] = "bestaudio/best"
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
-        opts["format"] = f"bestvideo[height<=720][filesize<{max_fs}]+bestaudio/best[height<=720][filesize<{max_fs}]/best"
+        if resolution == "best":
+            opts["format"] = f"bestvideo[filesize<{max_fs}]+bestaudio/best[filesize<{max_fs}]/best"
+        else:
+            opts["format"] = f"bestvideo[height<={resolution}][filesize<{max_fs}]+bestaudio/best[height<={resolution}][filesize<{max_fs}]/best"
+            
         opts["merge_output_format"] = "mp4"
         opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
 
@@ -442,11 +465,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
 
-def extract_metadata(url: str):
-    opts = get_ydl_options(mode="video")
-    opts["skip_download"] = True
+def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
+    opts = get_ydl_options(job_dir, progress_data, mode, resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
-        return ydl.extract_info(url, download=False)
+        return ydl.extract_info(url, download=True)
 
 def download_hook(progress_data: dict):
     def hook(d):
@@ -682,18 +704,67 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("تم إلغاء طلب التحميل")
         return await safe_delete(query.message)
 
-    if data.startswith("aud:") or data.startswith("vid:"):
-        mode = "audio" if data.startswith("aud:") else "video"
+    # زر الرجوع للقائمة الرئيسية
+    if data.startswith("back:"):
         request_id = data.split(":")[1]
+        await query.answer("رجوع")
+        return await query.message.edit_reply_markup(reply_markup=build_preview_keyboard(request_id))
+
+    # زر الفيديو الأصلي يفتح الآن قائمة الدقة
+    if data.startswith("vid:"):
+        request_id = data.split(":")[1]
+        await query.answer("يرجى اختيار الدقة")
+        return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id))
+
+    # تشغيل التحميل للصوت (aud) أو لدقة معينة (res)
+    if data.startswith("aud:") or data.startswith("res:"):
+        if data.startswith("aud:"):
+            mode = "audio"
+            resolution = "720"
+            request_id = data.split(":")[1]
+            await query.answer("جاري تجهيز الصوت...")
+        else:
+            mode = "video"
+            parts = data.split(":")
+            resolution = parts[1]
+            request_id = parts[2]
+            await query.answer("جاري التجهيز...")
+
         request = ensure_pending_requests(context).pop(request_id, None)
         trim_old_pending_requests(context)
         
         if not request: return await query.answer("انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.", show_alert=True)
         if uid in ACTIVE_USERS: return await query.answer("لديك تحميل قيد التنفيذ حالياً.", show_alert=True)
         
-        await start_download_from_callback(query, context, request, mode)
+        await start_download_from_callback(query, context, request, mode, resolution)
 
-async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str):
+# تم إضافة معامل resolution فقط
+async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str = "720"):
+    uid = query.from_user.id
+    url = request.get("url")
+    ACTIVE_USERS.add(uid)
+
+    job_dir = BASE_DOWNLOAD_DIR / f"{uid}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+    job_dir.mkdir(parents=True, exist_ok=True)
+    stop_event = asyncio.Event()
+    
+    progress_data = {"text": "⏳ يرجى الانتظار..."}
+    updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
+
+    try:
+        try: await query.message.edit_reply_markup(reply_markup=None)
+        except Exception: pass
+
+        async with DOWNLOAD_SEMAPHORE:
+            with progress_lock: progress_data["text"] = "🚀 بدأ التحميل... يرجى الانتظار ⏬"
+            
+            loop = asyncio.get_running_loop()
+            local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
+            
+            # تم تمرير resolution هنا
+            await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data, resolution))
+            
+            # ... الباقي كما هو في الكود الأصلي دون تغيير حرف ...
     uid = query.from_user.id
     url = request.get("url")
     ACTIVE_USERS.add(uid)
