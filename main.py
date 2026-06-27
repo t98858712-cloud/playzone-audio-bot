@@ -86,7 +86,7 @@ for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# نظام اللغات الشامل
+# نظام اللغات الشامل 100%
 # ==========================================================
 
 LANG_DICT = {
@@ -123,13 +123,16 @@ LANG_DICT = {
         "msg_lang_changed": "✅ تم تغيير لغة البوت إلى العربية.",
         "txt_unknown": "غير معروف",
         "txt_media_file": "ملف ميديا",
+        "txt_placeholder": "أرسل الرابط هنا...",
+        "msg_wait_progress": "⏳ يرجى الانتظار...",
+        "txt_no_name": "بدون اسم",
+        "txt_none": "لا يوجد",
         "msg_dl_progress": "📥 <b>جاري تحميل الملف...</b>\n\n{bar}  {percent}%\n📦 الحجم: {downloaded} / {total}\n🚀 السرعة: {speed}/ث",
         "msg_dl_progress_no_total": "📥 جاري التحميل...\n📦 تم تحميل: {downloaded}",
         "msg_dl_finished": "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي...",
         "share_text": "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:",
         "btn_share": "🌟 أعجبك البوت؟ شاركه",
-        
-        # نصوص الإدارة
+        # الإدارة
         "btn_adm_stats": "📊 الإحصائيات",
         "btn_adm_users": "👥 المستخدمون",
         "btn_adm_bc": "📢 إذاعة",
@@ -147,7 +150,17 @@ LANG_DICT = {
         "msg_adm_bc_cancelled": "تم إلغاء العملية.",
         "msg_adm_no_users": "لا يوجد مستخدمون مسجلون.",
         "msg_adm_bc_start": "📢 جاري إرسال الرسالة للمستخدمين...",
-        "msg_adm_bc_done": "✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}"
+        "msg_adm_bc_done": "✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}",
+        "msg_adm_stats_text": "📊 <b>إحصائيات البوت</b>\n\n• الطلبات الكلية: {requests}\n• التحميلات الناجحة: {success}\n• العمليات الفاشلة: {failed}\n• عدد المستخدمين: {users}\n• حجم الملفات المرسلة: {bytes}\n• عدد الإذاعات: {broadcasts}",
+        "msg_adm_users_title": "👥 <b>آخر المستخدمين النشطين:</b>",
+        "msg_adm_srv_text": "📁 <b>حالة السيرفر</b>\n\n• مجلد التحميل: <code>{dl_dir}</code>\n• الملفات المؤقتة: {files}\n• حجم الملفات المؤقتة: {size}\n• العمليات النشطة: {active}\n• الحد الأقصى المتزامن: {max_workers}",
+        "msg_adm_update_dlp": "🔄 جاري تحديث محرك التحميل...",
+        "msg_adm_update_dlp_ok": "✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار.",
+        "msg_adm_update_dlp_fail": "❌ فشل التحديث: {e}",
+        "msg_adm_setcookie": "📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود يوتيوب.",
+        "msg_adm_setcookie_ok": "✅ تم استلام وتركيب ملف الكوكيز بنجاح!",
+        "msg_adm_backup": "📦 نسخة احتياطية من قاعدة البيانات.",
+        "msg_adm_backup_fail": "❌ تعذر سحب النسخة: {e}"
     },
     "en": {
         "btn_guide": "📘 User Guide",
@@ -182,12 +195,15 @@ LANG_DICT = {
         "msg_lang_changed": "✅ Bot language changed to English.",
         "txt_unknown": "Unknown",
         "txt_media_file": "Media file",
+        "txt_placeholder": "Send the link here...",
+        "msg_wait_progress": "⏳ Please wait...",
+        "txt_no_name": "No Name",
+        "txt_none": "None",
         "msg_dl_progress": "📥 <b>Downloading file...</b>\n\n{bar}  {percent}%\n📦 Size: {downloaded} / {total}\n🚀 Speed: {speed}/s",
         "msg_dl_progress_no_total": "📥 Downloading...\n📦 Downloaded: {downloaded}",
         "msg_dl_finished": "⚙️ Download complete, preparing and compressing...",
         "share_text": "📥 Download any video or MP3 in seconds!\n⚡ Fast, free, and highest quality.\n👇 Try it now:",
         "btn_share": "🌟 Like the bot? Share it",
-        
         # Admin text
         "btn_adm_stats": "📊 Statistics",
         "btn_adm_users": "👥 Users",
@@ -206,7 +222,17 @@ LANG_DICT = {
         "msg_adm_bc_cancelled": "Operation canceled.",
         "msg_adm_no_users": "No registered users.",
         "msg_adm_bc_start": "📢 Sending message to users...",
-        "msg_adm_bc_done": "✅ Broadcast sent.\n\n• Sent: {sent}\n• Failed: {fail}"
+        "msg_adm_bc_done": "✅ Broadcast sent.\n\n• Sent: {sent}\n• Failed: {fail}",
+        "msg_adm_stats_text": "📊 <b>Bot Statistics</b>\n\n• Total Requests: {requests}\n• Successful Downloads: {success}\n• Failed Operations: {failed}\n• Total Users: {users}\n• Total Uploaded Size: {bytes}\n• Total Broadcasts: {broadcasts}",
+        "msg_adm_users_title": "👥 <b>Latest Active Users:</b>",
+        "msg_adm_srv_text": "📁 <b>Server Status</b>\n\n• Download Dir: <code>{dl_dir}</code>\n• Temp Files: {files}\n• Temp Size: {size}\n• Active Tasks: {active}\n• Max Concurrent: {max_workers}",
+        "msg_adm_update_dlp": "🔄 Updating download engine...",
+        "msg_adm_update_dlp_ok": "✅ `yt-dlp` engine updated successfully.",
+        "msg_adm_update_dlp_fail": "❌ Update failed: {e}",
+        "msg_adm_setcookie": "📥 Send the `cookies.txt` as a Document with this command to bypass restrictions.",
+        "msg_adm_setcookie_ok": "✅ Cookies file received and updated successfully!",
+        "msg_adm_backup": "📦 Database Backup.",
+        "msg_adm_backup_fail": "❌ Failed to fetch backup: {e}"
     }
 }
 
@@ -218,7 +244,7 @@ def _t(key: str, lang: str = "ar", **kwargs) -> str:
     return text
 
 # ==========================================================
-# إدارة قاعدة البيانات (بدون أي مساس بالهيكل الأصلي)
+# إدارة قاعدة البيانات (نظيفة 100% دون أي تعديل)
 # ==========================================================
 
 def init_db():
@@ -430,7 +456,7 @@ def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
             [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
             [KeyboardButton(_t("btn_add_group", lang))]
         ],
-        resize_keyboard=True, is_persistent=True, input_field_placeholder="..."
+        resize_keyboard=True, is_persistent=True, input_field_placeholder=_t("txt_placeholder", lang)
     )
 
 def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
@@ -454,7 +480,7 @@ def build_resolution_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboa
         [InlineKeyboardButton(_t("btn_back", lang), callback_data=f"back:{request_id}")]
     ])
 
-def build_playzone_links_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
+def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Website PlayZone", url=WEBSITE_PLAYZONE)],
         [InlineKeyboardButton("📘 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
@@ -485,39 +511,35 @@ def build_guide_text(lang: str = "ar") -> str:
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
     return f"🎬 <b>{esc(title)}</b>\n<b>{esc(artist)}</b>\n⏱ {esc(duration)} - 💾 {esc(est_size)}"
 
-def build_admin_stats_text() -> str:
+def build_admin_stats_text(lang: str = "ar") -> str:
     stats = load_stats_sync()
     users_count = len(all_user_ids())
-    return (
-        "📊 <b>إحصائيات البوت</b>\n\n"
-        f"• الطلبات الكلية: {stats.get('requests', 0)}\n"
-        f"• التحميلات الناجحة: {stats.get('success', 0)}\n"
-        f"• العمليات الفاشلة: {stats.get('failed', 0)}\n"
-        f"• عدد المستخدمين: {users_count}\n"
-        f"• حجم الملفات المرسلة: {format_size(stats.get('bytes', 0))}\n"
-        f"• عدد الإذاعات: {stats.get('broadcasts', 0)}"
-    )
+    return _t("msg_adm_stats_text", lang, 
+              requests=stats.get('requests', 0), 
+              success=stats.get('success', 0), 
+              failed=stats.get('failed', 0), 
+              users=users_count, 
+              bytes=format_size(stats.get('bytes', 0), lang), 
+              broadcasts=stats.get('broadcasts', 0))
 
-def build_admin_users_text(limit: int = 10) -> str:
+def build_admin_users_text(limit: int = 10, lang: str = "ar") -> str:
     users = get_latest_users(limit)
-    lines = [f"👥 <b>آخر المستخدمين النشطين:</b>"]
+    lines = [_t("msg_adm_users_title", lang)]
     for u in users:
-        name = u.get("first_name") or "بدون اسم"
-        username = f"@{u.get('username')}" if u.get("username") else "لا يوجد"
+        name = u.get("first_name") or _t("txt_no_name", lang)
+        username = f"@{u.get('username')}" if u.get("username") else _t("txt_none", lang)
         lines.append(f"• {esc(name)} — {esc(username)} — ID: <code>{u.get('id')}</code>")
     return "\n".join(lines)
 
-def build_server_status_text() -> str:
+def build_server_status_text(lang: str = "ar") -> str:
     total_size = sum(p.stat().st_size for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
     file_count = sum(1 for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
-    return (
-        "📁 <b>حالة السيرفر</b>\n\n"
-        f"• مجلد التحميل: <code>{BASE_DOWNLOAD_DIR}</code>\n"
-        f"• الملفات المؤقتة: {file_count}\n"
-        f"• حجم الملفات المؤقتة: {format_size(total_size)}\n"
-        f"• العمليات النشطة: {len(ACTIVE_USERS)}\n"
-        f"• الحد الأقصى المتزامن: {MAX_WORKERS}"
-    )
+    return _t("msg_adm_srv_text", lang, 
+              dl_dir=BASE_DOWNLOAD_DIR, 
+              files=file_count, 
+              size=format_size(total_size, lang), 
+              active=len(ACTIVE_USERS), 
+              max_workers=MAX_WORKERS)
 
 # ==========================================================
 # الرسائل الآمنة
@@ -651,44 +673,43 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
 # ==========================================================
 
 async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # الطريقة المباشرة (Toggle Switch)
     current_lang = context.user_data.get("lang", "ar")
     new_lang = "en" if current_lang == "ar" else "ar"
     
-    # حفظ اللغة الجديدة
     context.user_data["lang"] = new_lang
-    
     msg = _t("msg_lang_changed", new_lang)
     
-    # تحديث الكيبورد السفلي ليظهر باللغة الجديدة فوراً
     await update.message.reply_text(msg, reply_markup=user_main_keyboard(new_lang))
 
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
-    msg = await update.message.reply_text("🔄 جاري تحديث محرك التحميل...")
+    lang = context.user_data.get("lang", "ar")
+    msg = await update.message.reply_text(_t("msg_adm_update_dlp", lang))
     try:
         subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
-        await msg.edit_text("✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار.")
+        await msg.edit_text(_t("msg_adm_update_dlp_ok", lang))
     except Exception as e:
-        await msg.edit_text(f"❌ فشل التحديث: {e}")
+        await msg.edit_text(_t("msg_adm_update_dlp_fail", lang, e=e))
 
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
+    lang = context.user_data.get("lang", "ar")
     if not update.message.document:
-        return await update.message.reply_text("📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود يوتيوب.")
+        return await update.message.reply_text(_t("msg_adm_setcookie", lang))
     
     file_id = update.message.document.file_id
     new_file = await context.bot.get_file(file_id)
     await new_file.download_to_drive(COOKIES_FILE)
-    await update.message.reply_text("✅ تم استلام وتركيب ملف الكوكيز بنجاح!")
+    await update.message.reply_text(_t("msg_adm_setcookie_ok", lang))
 
 async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
+    lang = context.user_data.get("lang", "ar")
     try:
         with open(DB_FILE, "rb") as f:
-            await update.message.reply_document(document=f, filename="bot_database.db", caption="📦 نسخة احتياطية من قاعدة البيانات.")
+            await update.message.reply_document(document=f, filename="bot_database.db", caption=_t("msg_adm_backup", lang))
     except Exception as e:
-        await update.message.reply_text(f"❌ تعذر سحب النسخة: {e}")
+        await update.message.reply_text(_t("msg_adm_backup_fail", lang, e=e))
 
 # ==========================================================
 # أحداث المستخدم والروابط الموحدة
@@ -715,7 +736,7 @@ async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     lang = context.user_data.get("lang", "ar")
     await update.message.reply_text(
         build_playzone_links_text(lang),
-        reply_markup=build_playzone_links_keyboard(lang),
+        reply_markup=build_playzone_links_keyboard(),
         disable_web_page_preview=True
     )
 
@@ -809,13 +830,13 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         return await safe_delete(query.message)
     elif data == "adm_stats":
         await query.answer()
-        return await query.message.edit_text(build_admin_stats_text(), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        return await query.message.edit_text(build_admin_stats_text(lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
     elif data == "adm_users":
         await query.answer()
-        return await query.message.edit_text(build_admin_users_text(), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        return await query.message.edit_text(build_admin_users_text(10, lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
     elif data == "adm_server":
         await query.answer()
-        return await query.message.edit_text(build_server_status_text(), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        return await query.message.edit_text(build_server_status_text(lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
     elif data == "adm_clean":
         await query.answer(_t("msg_adm_clean", lang))
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
@@ -885,7 +906,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     job_dir.mkdir(parents=True, exist_ok=True)
     stop_event = asyncio.Event()
     
-    progress_data = {"text": "⏳", "lang": lang}
+    progress_data = {"text": _t("msg_wait_progress", lang), "lang": lang}
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
     try:
@@ -979,7 +1000,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 async def post_init(app: Application):
     commands = [
         BotCommand("start", "بدء / Start"), 
-        BotCommand("lang", "تغيير اللغة / Toggle Language"), 
+        BotCommand("language", "تغيير اللغة / Toggle Language"), 
         BotCommand("links", "الروابط / Links")
     ]
     try:
@@ -1006,7 +1027,7 @@ def main():
     )
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("lang", toggle_lang_command))
+    app.add_handler(CommandHandler("language", toggle_lang_command)) # اسم السلاش الجديد
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
@@ -1016,7 +1037,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية (Smart Queue & Direct Language Toggle).")
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية الشاملة (Toggle Language & Full Translation).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
