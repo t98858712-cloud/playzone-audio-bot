@@ -590,6 +590,18 @@ def build_guide_text(lang: str = "ar") -> str:
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
     return f"🎬 <b>{esc(title)}</b>\n<b>{esc(artist)}</b>\n⏱ {esc(duration)} - 💾 {esc(est_size)}"
 
+def build_playzone_links_text(lang: str = "ar") -> str:
+    return _t("msg_links", lang)
+
+def build_admin_stats_text(lang: str = "ar") -> str:
+    return "📊 إحصائيات السيرفر غير متوفرة حالياً."
+
+def build_admin_users_text(limit: int, lang: str = "ar") -> str:
+    return "📋 قائمة المستخدمين غير متوفرة حالياً."
+
+def build_server_status_text(lang: str = "ar") -> str:
+    return "📁 حالة السيرفر غير متوفرة حالياً."
+
 # ==========================================================
 # الرسائل الآمنة
 # ==========================================================
