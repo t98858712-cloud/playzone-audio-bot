@@ -142,6 +142,13 @@ LANG_DICT = {
         "msg_dl_finished": "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي...",
         "share_text": "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:",
         "btn_share": "🌟 أعجبك البوت؟ شاركه",
+        "msg_adm_setcookie": "📢 <b>يرجى إرسال ملف cookies.txt الآن:</b>\nقم برفع الملف كـ (Document) واكتب في الوصف /setcookie ليتم تحديثه تلقائياً في السيرفر.",
+        "msg_adm_setcookie_ok": "✅ <b>تم تحديث ملف الكوكيز بنجاح!</b>\nتم استبدال الملف القديم، وبإمكان البوت الآن تخطي حظر يوتيوب والتحميل مباشرة.",
+        "msg_adm_backup": "📦 نسخة احتياطية من قاعدة بيانات البوت الحالية.",
+        "msg_adm_backup_fail": "❌ فشل تصدير نسخة احتياطية من قاعدة البيانات.\nالخطأ: <code>{e}</code>",
+        "msg_adm_update_dlp": "⏳ جاري تحديث محرك التحميل yt-dlp إلى آخر إصدار...",
+        "msg_adm_update_dlp_ok": "✅ تم تحديث محرك التحميل yt-dlp بنجاح إلى أحدث نسخة رسمية.",
+        "msg_adm_update_dlp_fail": "❌ فشل تحديث محرك التحميل.\nالخطأ: <code>{e}</code>",
         # رسائل الإدارة المتقدمة
         "msg_adm_panel": "🛠 <b>مركز التحكم المؤسسي</b>\n\nالرجاء اختيار القسم المطلوب من الأزرار أدناه:",
         "btn_adm_bc_menu": "📢 الإذاعة الشاملة",
@@ -212,6 +219,13 @@ LANG_DICT = {
         "msg_dl_finished": "⚙️ Download complete, preparing and compressing...",
         "share_text": "📥 Download any video or MP3 in seconds!\n⚡ Fast, free, and highest quality.\n👇 Try it now:",
         "btn_share": "🌟 Like the bot? Share it",
+        "msg_adm_setcookie": "📢 <b>Please send cookies.txt file now:</b>\nUpload the file as a (Document) and write /setcookie in the caption to update it on the server.",
+        "msg_adm_setcookie_ok": "✅ <b>Cookies updated successfully!</b>\nThe old file has been replaced, and the bot can now bypass YouTube bot detection.",
+        "msg_adm_backup": "📦 Here is your current bot database backup.",
+        "msg_adm_backup_fail": "❌ Failed to export database backup.\nError: <code>{e}</code>",
+        "msg_adm_update_dlp": "⏳ Updating yt-dlp to the latest version...",
+        "msg_adm_update_dlp_ok": "✅ yt-dlp engine updated successfully to the latest version.",
+        "msg_adm_update_dlp_fail": "❌ Failed to update yt-dlp engine.\nError: <code>{e}</code>",
         # Admin text
         "msg_adm_panel": "🛠 <b>Enterprise Control Center</b>\n\nPlease select a category:",
         "btn_adm_bc_menu": "📢 Broadcast Menu",
@@ -850,12 +864,12 @@ async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not is_admin(update.effective_user.id): return
     lang = context.user_data.get("lang", "ar")
     if not update.message.document:
-        return await update.message.reply_text(_t("msg_adm_setcookie", lang))
+        return await update.message.reply_text(_t("msg_adm_setcookie", lang), parse_mode="HTML")
     
     file_id = update.message.document.file_id
     new_file = await context.bot.get_file(file_id)
     await new_file.download_to_drive(COOKIES_FILE)
-    await update.message.reply_text(_t("msg_adm_setcookie_ok", lang))
+    await update.message.reply_text(_t("msg_adm_setcookie_ok", lang), parse_mode="HTML")
 
 async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
@@ -864,7 +878,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with open(DB_FILE, "rb") as f:
             await update.message.reply_document(document=f, filename="bot_database.db", caption=_t("msg_adm_backup", lang))
     except Exception as e:
-        await update.message.reply_text(_t("msg_adm_backup_fail", lang, e=e))
+        await update.message.reply_text(_t("msg_adm_backup_fail", lang, e=e), parse_mode="HTML")
 
 # ==========================================================
 # معالج الرسائل والإذاعة
