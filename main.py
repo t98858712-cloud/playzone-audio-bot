@@ -24,6 +24,8 @@ from telegram import (
     KeyboardButton,
     BotCommand,
     MenuButtonCommands,
+    InlineQueryResultArticle,    
+    InputTextMessageContent,     
 )
 from telegram.constants import ChatAction
 from telegram.error import BadRequest, RetryAfter, TimedOut, NetworkError
@@ -32,6 +34,7 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
+    InlineQueryHandler,          
     ContextTypes,
     filters,
 )
@@ -99,6 +102,8 @@ LANG_DICT = {
         "btn_cancel": "❌ إلغاء",
         "btn_best_quality": "أفضل جودة",
         "btn_back": "🔙 رجوع",
+        "btn_next": "التالي ⬅️",
+        "btn_prev": "➡️ السابق",
         "msg_start": "أهلاً {first_name} 👋\n\nأرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\nابدأ بإرسال الرابط مباشرة.",
         "msg_guide": "📘 طريقة الاستخدام\n\n1) انسخ رابط المقطع.\n2) أرسله هنا في البوت.\n3) انتظر ظهور المعاينة.\n4) اختر التحميل صوت أو فيديو.",
         "msg_add_group": "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل المباشر، اضغط على الزر أدناه:",
@@ -107,7 +112,7 @@ LANG_DICT = {
         "msg_check_link": "🔍 جاري فحص الرابط وتجهيز المعاينة...",
         "msg_invalid_link": "❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://",
         "msg_searching": "🔍 جاري البحث عن: <b>{query}</b>...",
-        "msg_search_results": "🔎 نتائج البحث لـ: <b>{query}</b>\n\nاختر المقطع المناسب من القائمة أدناه:",
+        "msg_search_results": "🔎 نتائج البحث لـ: <b>{query}</b>\n\nاختر المقطع المناسب من الأزرار أدناه:",
         "msg_no_results": "❌ لم يتم العثور على نتائج لـ: <b>{query}</b>",
         "msg_wait_current": "⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.",
         "msg_link_error": "❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة وغير محذوف، ثم حاول مرة أخرى.",
@@ -121,7 +126,7 @@ LANG_DICT = {
         "msg_uploading": "📤 تم تجهيز الملف، جاري الإرسال...",
         "msg_dl_failed": "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.",
         "msg_network_error": "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.",
-        "msg_cancel_done": "تم إلغاء طلب التحميل",
+        "msg_cancel_done": "تم إلغاء العملية",
         "msg_back": "رجوع",
         "msg_lang_changed": "✅ تم تغيير لغة البوت إلى العربية.",
         "txt_unknown": "غير معروف",
@@ -174,6 +179,8 @@ LANG_DICT = {
         "btn_cancel": "❌ Cancel",
         "btn_best_quality": "Best Quality",
         "btn_back": "🔙 Back",
+        "btn_next": "Next ➡️",
+        "btn_prev": "⬅️ Prev",
         "msg_start": "Hello {first_name} 👋\n\nSend a video or audio link, and I'll show you a preview before downloading.\n\n💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.\n\nStart by sending a link directly.",
         "msg_guide": "📘 How to use\n\n1) Copy the media link.\n2) Send it here in the bot.\n3) Wait for the preview.\n4) Choose to download audio or video.",
         "msg_add_group": "🤖 To add the bot to your group and enjoy direct downloading, click the button below:",
@@ -196,7 +203,7 @@ LANG_DICT = {
         "msg_uploading": "📤 File is ready, uploading...",
         "msg_dl_failed": "❌ Failed to download the media.\n\nLink might be unavailable or exceeds limits.",
         "msg_network_error": "❌ Could not send file due to connection issues.\n\nTry again in a bit.",
-        "msg_cancel_done": "Download request canceled",
+        "msg_cancel_done": "Operation canceled",
         "msg_back": "Back",
         "msg_lang_changed": "✅ Bot language changed to English.",
         "txt_unknown": "Unknown",
@@ -616,7 +623,7 @@ def extract_metadata(url: str):
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
-def search_youtube(query: str, limit: int = 5):
+def search_youtube(query: str, limit: int = 10):
     opts = {
         "quiet": True,
         "extract_flat": True,
@@ -625,11 +632,28 @@ def search_youtube(query: str, limit: int = 5):
     }
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
+        
+    combined_entries = []
+    seen_ids = set()
+    
     with yt_dlp.YoutubeDL(opts) as ydl:
-        result = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
-        if result and 'entries' in result:
-            result['entries'] = list(result['entries'])
-        return result
+        # 1. البحث في يوتيوب ميوزك (للحصول على الأغاني الرسمية والصافية أولاً)
+        res_music = ydl.extract_info(f"ytmsearch{limit}:{query}", download=False)
+        if res_music and 'entries' in res_music:
+            for entry in res_music['entries']:
+                if entry and entry.get('id') and entry['id'] not in seen_ids:
+                    combined_entries.append(entry)
+                    seen_ids.add(entry['id'])
+                    
+        # 2. البحث في يوتيوب الشامل (للحصول على المقاطع العامة أو الريمكسات)
+        res_general = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+        if res_general and 'entries' in res_general:
+            for entry in res_general['entries']:
+                if entry and entry.get('id') and entry['id'] not in seen_ids:
+                    combined_entries.append(entry)
+                    seen_ids.add(entry['id'])
+                    
+    return {"entries": combined_entries}
 
 def download_hook(progress_data: dict):
     def hook(d):
@@ -733,8 +757,55 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(_t("msg_adm_backup_fail", lang, e=e))
 
 # ==========================================================
-# أحداث المستخدم والروابط الموحدة
+# أحداث المستخدم والبحث الذكي المتطور (كلا المحركين معاً)
 # ==========================================================
+
+async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search_id: str, lang: str):
+    data = context.user_data.get("search_cache", {}).get(search_id)
+    if not data: return
+    
+    entries = data["entries"]
+    page = data["page"]
+    query = data["query"]
+    
+    start_idx = page * 5
+    end_idx = start_idx + 5
+    current_entries = entries[start_idx:end_idx]
+    
+    results_text = _t("msg_search_results", lang, query=esc(query)) + "\n\n"
+    keyboard_row = []
+    number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+    
+    for i, entry in enumerate(current_entries):
+        if not entry: continue
+        title = clean_title(entry.get("title", _t("txt_unknown", lang)), 55, lang)
+        video_id = entry.get("id")
+        duration = format_duration(entry.get("duration") or 0, lang)
+        uploader = entry.get("uploader", _t("txt_unknown", lang))
+        
+        num_emoji = number_emojis[i] if i < len(number_emojis) else f"{i+1}."
+        
+        results_text += f"{num_emoji} <b>{esc(title)}</b>\n"
+        results_text += f"   👤 {esc(uploader)} • ⏱ {esc(duration)}\n\n"
+        
+        if video_id:
+            keyboard_row.append(InlineKeyboardButton(num_emoji, callback_data=f"selsrc:{video_id}"))
+    
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(_t("btn_prev", lang), callback_data=f"page:{search_id}:{page-1}"))
+    if end_idx < len(entries):
+        nav_row.append(InlineKeyboardButton(_t("btn_next", lang), callback_data=f"page:{search_id}:{page+1}"))
+        
+    final_keyboard = []
+    if keyboard_row:
+        final_keyboard.append(keyboard_row)
+    if nav_row: 
+        final_keyboard.append(nav_row)
+        
+    final_keyboard.append([InlineKeyboardButton(_t("btn_cancel", lang), callback_data="cancel_search")])
+    
+    await edit_message_smart(message, results_text, InlineKeyboardMarkup(final_keyboard))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
@@ -815,28 +886,22 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         status = await update.message.reply_text(_t("msg_searching", lang, query=esc(text)), parse_mode="HTML")
         try:
             loop = asyncio.get_running_loop()
-            search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text))
+            # سيتم البحث في الموسيقى واليوتيوب الشامل معاً ودمج النتائج
+            search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=10))
             entries = search_info.get("entries", []) if search_info else []
             
             if not entries:
                 return await status.edit_text(_t("msg_no_results", lang, query=esc(text)), parse_mode="HTML")
             
-            keyboard = []
-            for entry in entries:
-                if not entry: continue
-                title = clean_title(entry.get("title", _t("txt_unknown", lang)), 45, lang)
-                video_id = entry.get("id")
-                if video_id:
-                    keyboard.append([InlineKeyboardButton(title, callback_data=f"selsrc:{video_id}")])
+            search_id = uuid.uuid4().hex[:8]
+            context.user_data.setdefault("search_cache", {})[search_id] = {
+                "query": text,
+                "entries": entries,
+                "page": 0
+            }
             
-            if not keyboard:
-                return await status.edit_text(_t("msg_no_results", lang, query=esc(text)), parse_mode="HTML")
-            
-            return await status.edit_text(
-                _t("msg_search_results", lang, query=esc(text)),
-                reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode="HTML"
-            )
+            await render_search_page(status, context, search_id, lang)
+            return
         except Exception as e:
             logger.warning(f"فشل البحث: {e}")
             return await status.edit_text(_t("msg_link_error", lang))
@@ -866,6 +931,54 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
         await status.edit_text(_t("msg_link_error", lang))
+
+# ==========================================================
+# البحث المضمن (Inline Mode)
+# ==========================================================
+
+async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.inline_query.query.strip()
+    if not query: return
+    
+    lang = context.user_data.get("lang", "ar")
+    
+    try:
+        loop = asyncio.get_running_loop()
+        # سيبحث أيضاً في كلا المحركين المدمجين
+        search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(query, limit=10))
+        entries = search_info.get("entries", []) if search_info else []
+        
+        results = []
+        for entry in entries:
+            if not entry: continue
+            video_id = entry.get("id")
+            title = clean_title(entry.get("title", "Unknown"), 60, lang)
+            uploader = entry.get("uploader", "Unknown")
+            duration = format_duration(entry.get("duration") or 0, lang)
+            
+            thumb = ""
+            thumbs = entry.get("thumbnails") or []
+            if thumbs:
+                best = sorted(thumbs, key=lambda x: (x.get("width") or 0) * (x.get("height") or 0), reverse=True)[0]
+                thumb = best.get("url") or entry.get("thumbnail") or ""
+            else:
+                thumb = entry.get("thumbnail") or ""
+
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            results.append(
+                InlineQueryResultArticle(
+                    id=video_id,
+                    title=title,
+                    description=f"👤 {uploader} • ⏱ {duration}",
+                    thumbnail_url=thumb if thumb else None,
+                    input_message_content=InputTextMessageContent(url)
+                )
+            )
+            
+        await update.inline_query.answer(results, cache_time=300)
+    except Exception as e:
+        logger.warning(f"فشل البحث المضمن: {e}")
 
 # ==========================================================
 # الأزرار ونظام الطابور الذكي (Semaphore Queue)
@@ -909,6 +1022,19 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer(_t("msg_adm_only", lang), show_alert=True)
         return await handle_admin_callbacks(query, context)
+
+    if data == "cancel_search":
+        await query.answer(_t("msg_cancel_done", lang))
+        return await safe_delete(query.message)
+        
+    if data.startswith("page:"):
+        parts = data.split(":")
+        search_id = parts[1]
+        page_num = int(parts[2])
+        context.user_data.setdefault("search_cache", {})[search_id]["page"] = page_num
+        await query.answer()
+        await render_search_page(query.message, context, search_id, lang)
+        return
 
     if data.startswith("selsrc:"):
         video_id = data.split(":")[1]
@@ -1127,8 +1253,9 @@ def main():
     app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
+    app.add_handler(InlineQueryHandler(inline_query_handler))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية الشاملة (مع ميزة البحث المستقرة).")
+    logger.info("🚀 تم تشغيل البوت بالنسخة الاحترافية الشاملة (البحث المدمج الصامت والتلقائي).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
