@@ -106,6 +106,9 @@ LANG_DICT = {
         "msg_links": "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.",
         "msg_check_link": "🔍 جاري فحص الرابط وتجهيز المعاينة...",
         "msg_invalid_link": "❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://",
+        "msg_searching": "🔍 جاري البحث عن: <b>{query}</b>...",
+        "msg_search_results": "🔎 نتائج البحث لـ: <b>{query}</b>\n\nاختر المقطع المناسب من القائمة أدناه:",
+        "msg_no_results": "❌ لم يتم العثور على نتائج لـ: <b>{query}</b>",
         "msg_wait_current": "⏳ لديك تحميل قيد التنفيذ.\n\nانتظر حتى يكتمل، ثم أرسل رابطاً جديداً.",
         "msg_link_error": "❌ تعذر قراءة الرابط.\n\nتأكد أن المقطع متاح للعامة وغير محذوف، ثم حاول مرة أخرى.",
         "msg_select_res": "يرجى اختيار الدقة",
@@ -123,7 +126,7 @@ LANG_DICT = {
         "msg_lang_changed": "✅ تم تغيير لغة البوت إلى العربية.",
         "txt_unknown": "غير معروف",
         "txt_media_file": "ملف ميديا",
-        "txt_placeholder": "أرسل الرابط هنا...",
+        "txt_placeholder": "أرسل الرابط هنا أو اكتب للبحث...",
         "msg_wait_progress": "⏳ يرجى الانتظار...",
         "txt_no_name": "بدون اسم",
         "txt_none": "لا يوجد",
@@ -178,6 +181,9 @@ LANG_DICT = {
         "msg_links": "💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.",
         "msg_check_link": "🔍 Checking link and preparing preview...",
         "msg_invalid_link": "❌ Invalid link.\n\nSend a link starting with:\nhttp:// or https://",
+        "msg_searching": "🔍 Searching for: <b>{query}</b>...",
+        "msg_search_results": "🔎 Search results for: <b>{query}</b>\n\nChoose the appropriate media below:",
+        "msg_no_results": "❌ No results found for: <b>{query}</b>",
         "msg_wait_current": "⏳ You have an ongoing download.\n\nWait until it finishes, then send a new link.",
         "msg_link_error": "❌ Could not read the link.\n\nMake sure the media is public and not deleted, then try again.",
         "msg_select_res": "Please select resolution",
@@ -195,7 +201,7 @@ LANG_DICT = {
         "msg_lang_changed": "✅ Bot language changed to English.",
         "txt_unknown": "Unknown",
         "txt_media_file": "Media file",
-        "txt_placeholder": "Send the link here...",
+        "txt_placeholder": "Send link or type to search...",
         "msg_wait_progress": "⏳ Please wait...",
         "txt_no_name": "No Name",
         "txt_none": "None",
@@ -610,6 +616,18 @@ def extract_metadata(url: str):
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
+def search_youtube(query: str, limit: int = 5):
+    opts = {
+        "quiet": True,
+        "extract_flat": True,
+        "default_search": f"ytsearch{limit}",
+        "no_warnings": True,
+    }
+    if cookie_file_is_usable(COOKIES_FILE):
+        opts["cookiefile"] = str(COOKIES_FILE)
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        return ydl.extract_info(query, download=False)
+
 def download_hook(progress_data: dict):
     def hook(d):
         lang = progress_data.get("lang", "ar")
@@ -789,8 +807,36 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if uid in ACTIVE_USERS:
         return await update.message.reply_text(_t("msg_wait_current", lang))
+        
     if not is_valid_url(text):
-        return await update.message.reply_text(_t("msg_invalid_link", lang))
+        status = await update.message.reply_text(_t("msg_searching", lang, query=esc(text)), parse_mode="HTML")
+        try:
+            loop = asyncio.get_running_loop()
+            search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text))
+            entries = search_info.get("entries", []) if search_info else []
+            
+            if not entries:
+                return await status.edit_text(_t("msg_no_results", lang, query=esc(text)), parse_mode="HTML")
+            
+            keyboard = []
+            for entry in entries:
+                if not entry: continue
+                title = clean_title(entry.get("title", _t("txt_unknown", lang)), 45, lang)
+                video_id = entry.get("id")
+                if video_id:
+                    keyboard.append([InlineKeyboardButton(title, callback_data=f"selsrc:{video_id}")])
+            
+            if not keyboard:
+                return await status.edit_text(_t("msg_no_results", lang, query=esc(text)), parse_mode="HTML")
+            
+            return await status.edit_text(
+                _t("msg_search_results", lang, query=esc(text)),
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.warning(f"فشل البحث: {e}")
+            return await status.edit_text(_t("msg_link_error", lang))
 
     status = await update.message.reply_text(_t("msg_check_link", lang))
     try:
@@ -860,6 +906,53 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer(_t("msg_adm_only", lang), show_alert=True)
         return await handle_admin_callbacks(query, context)
+
+    if data.startswith("selsrc:"):
+        video_id = data.split(":")[1]
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        await query.answer()
+        await query.message.edit_text(_t("msg_check_link", lang), reply_markup=None)
+        
+        try:
+            loop = asyncio.get_running_loop()
+            info = await loop.run_in_executor(EXECUTOR, lambda: extract_metadata(url))
+
+            title = clean_title(info.get("title"), lang=lang)
+            artist = get_artist(info, lang=lang)
+            duration_raw = info.get("duration") or 0
+            est_size = format_size(get_largest_estimated_size(info), lang=lang)
+            thumb = get_thumbnail(info)
+            request_id = uuid.uuid4().hex[:10]
+
+            ensure_pending_requests(context)[request_id] = {
+                "url": url, "title": title, "artist": artist,
+                "duration": duration_raw, "thumb_url": thumb, "created_at": int(time.time())
+            }
+            trim_old_pending_requests(context)
+
+            caption = build_preview_caption(title, artist, format_duration(duration_raw, lang), est_size)
+            await safe_delete(query.message)
+            
+            class MockMessage:
+                def __init__(self, bot, chat_id):
+                    self.bot = bot
+                    self.chat_id = chat_id
+                async def reply_photo(self, photo, caption, reply_markup, parse_mode):
+                    return await self.bot.send_photo(chat_id=self.chat_id, photo=photo, caption=caption, reply_markup=reply_markup, parse_mode=parse_mode)
+                async def reply_text(self, text, reply_markup, parse_mode, disable_web_page_preview):
+                    return await self.bot.send_message(chat_id=self.chat_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode, disable_web_page_preview=disable_web_page_preview)
+            
+            class MockUpdate:
+                def __init__(self, message):
+                    self.message = message
+            
+            mock_update = MockUpdate(MockMessage(context.bot, uid))
+            await send_preview(mock_update, thumb, caption, build_preview_keyboard(request_id, lang))
+            stat_inc_sync("requests")
+        except Exception as e:
+            logger.warning(f"فشل جلب المعاينة من البحث: {e}")
+            await context.bot.send_message(chat_id=uid, text=_t("msg_link_error", lang))
+        return
 
     if data.startswith("cancel:"):
         ensure_pending_requests(context).pop(data.split(":")[1], None)
@@ -1027,7 +1120,7 @@ def main():
     )
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("language", toggle_lang_command)) # اسم السلاش الجديد
+    app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
@@ -1037,7 +1130,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية الشاملة (Toggle Language & Full Translation).")
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية الشاملة (مع ميزة البحث).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
