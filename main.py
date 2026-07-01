@@ -620,13 +620,16 @@ def search_youtube(query: str, limit: int = 5):
     opts = {
         "quiet": True,
         "extract_flat": True,
-        "default_search": f"ytsearch{limit}",
         "no_warnings": True,
+        "ignoreerrors": True,
     }
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
     with yt_dlp.YoutubeDL(opts) as ydl:
-        return ydl.extract_info(query, download=False)
+        result = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+        if result and 'entries' in result:
+            result['entries'] = list(result['entries'])
+        return result
 
 def download_hook(progress_data: dict):
     def hook(d):
@@ -933,21 +936,16 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption = build_preview_caption(title, artist, format_duration(duration_raw, lang), est_size)
             await safe_delete(query.message)
             
-            class MockMessage:
-                def __init__(self, bot, chat_id):
-                    self.bot = bot
-                    self.chat_id = chat_id
-                async def reply_photo(self, photo, caption, reply_markup, parse_mode):
-                    return await self.bot.send_photo(chat_id=self.chat_id, photo=photo, caption=caption, reply_markup=reply_markup, parse_mode=parse_mode)
-                async def reply_text(self, text, reply_markup, parse_mode, disable_web_page_preview):
-                    return await self.bot.send_message(chat_id=self.chat_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode, disable_web_page_preview=disable_web_page_preview)
+            keyboard = build_preview_keyboard(request_id, lang)
             
-            class MockUpdate:
-                def __init__(self, message):
-                    self.message = message
-            
-            mock_update = MockUpdate(MockMessage(context.bot, uid))
-            await send_preview(mock_update, thumb, caption, build_preview_keyboard(request_id, lang))
+            if thumb and (thumb.startswith("http://") or thumb.startswith("https://")):
+                try:
+                    await context.bot.send_photo(chat_id=uid, photo=thumb, caption=caption, reply_markup=keyboard, parse_mode="HTML")
+                except Exception:
+                    await context.bot.send_message(chat_id=uid, text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+            else:
+                await context.bot.send_message(chat_id=uid, text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
+                
             stat_inc_sync("requests")
         except Exception as e:
             logger.warning(f"فشل جلب المعاينة من البحث: {e}")
@@ -1130,7 +1128,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية الشاملة (مع ميزة البحث).")
+    logger.info("🚀 تم تشغيل البوت بالنسخة النهائية الشاملة (مع ميزة البحث المستقرة).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
