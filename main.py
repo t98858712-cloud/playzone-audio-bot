@@ -68,7 +68,7 @@ MAX_THUMBNAIL_BYTES = int(os.getenv("MAX_THUMBNAIL_BYTES", str(2 * 1024 * 1024))
 
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(os.cpu_count() or 2)))
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
-EXECUTOR = ThreadPoolExecutor(max_workers=max(4, MAX_WORKERS * 2)) # زيادة الـ Threads لتسريع البحث المزدوج
+EXECUTOR = ThreadPoolExecutor(max_workers=max(4, MAX_WORKERS * 2))
 
 # كاش الحماية من السبام والحظر
 ACTIVE_USERS = set()
@@ -109,8 +109,8 @@ LANG_DICT = {
         "btn_back": "🔙 رجوع",
         "btn_next": "التالي ⬅️",
         "btn_prev": "➡️ السابق",
-        "msg_start": "أهلاً {first_name} 👋\n\nأرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\nابدأ بإرسال الرابط مباشرة.",
-        "msg_guide": "📘 **دليل الاستخدام - Play Zone** 🎧\n\nأهلاً بك! يمكنك الحصول على أي مقطع موسيقي أو فيديو بأعلى جودة عبر الطرق التالية:\n\n1️⃣ **التحميل بالروابط:**\nقم بنسخ رابط المقطع وأرسله هنا مباشرة، وسأجهز المعاينة فوراً.\n\n2️⃣ **البحث الذكي (داخل البوت):**\nاكتب اسم الأغنية أو الفنان في المحادثة، وسأجلب أفضل النتائج لتختار منها.\n\n3️⃣ **البحث السريع (من أي مكان):**\nاكتب `@P1ay_Z0ne_Bot` متبوعاً باسم الأغنية في أي قروب أو محادثة للبحث الفوري.\n\n💡 **كيف تختار؟**\nبعد اختيار المقطع، اضغط (🎵 تحميل صوت) أو (🎬 تحميل فيديو).\n\n💚 **دعمك يصنع الفرق!** تابعنا وشارك البوت مع أصدقائك.",
+        "msg_start": "أهلاً بك {first_name} 🎧\n\nأرسل رابط المقطع أو اكتب اسمه للبحث مباشرة، وسأقوم بتحميله لك بأعلى جودة.\n\n💚 **دعمك يصنع الفرق:**\nتابع قنوات PlayZone الرسمية وشارك البوت مع أصدقائك لنستمر في تقديم الأفضل.",
+        "msg_guide": "📘 **طريقة الاستخدام:**\n\n1️⃣ **بالروابط:** أرسل أي رابط فيديو أو صوت هنا.\n2️⃣ **بالبحث:** اكتب اسم الأغنية وسأعطيك خيارات للتحميل.\n3️⃣ **البحث السريع:** في أي محادثة، اكتب معرف البوت مسافة ثم اسم المقطع.\n\n💡 **لتحميل الصوت:** اختر 🎵\n💡 **لتحميل الفيديو:** اختر 🎬",
         "msg_add_group": "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل المباشر، اضغط على الزر أدناه:",
         "btn_add_group_url": "➕ اضغط هنا لإضافة البوت",
         "msg_links": "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.",
@@ -126,7 +126,7 @@ LANG_DICT = {
         "msg_prep_video": "جاري التجهيز...",
         "msg_session_expired": "انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.",
         "msg_dl_started": "🚀 بدأ التحميل... يرجى الانتظار ⏬",
-        "msg_converting": "🎵 جاري تحويل الصوت ودمج الغلاف الخارجي...",
+        "msg_converting": "🎵 جاري تجهيز الملف الصوتي المدمج...",
         "msg_too_large": "❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {size}\nالحد: {limit}",
         "msg_uploading": "📤 تم تجهيز الملف، جاري الإرسال...",
         "msg_dl_failed": "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.",
@@ -179,8 +179,8 @@ LANG_DICT = {
         "btn_back": "🔙 Back",
         "btn_next": "Next ➡️",
         "btn_prev": "⬅️ Prev",
-        "msg_start": "Hello {first_name} 👋\n\nSend a video or audio link, and I'll show you a preview before downloading.\n\n💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.\n\nStart by sending a link directly.",
-        "msg_guide": "📘 **User Guide - Play Zone** 🎧\n\nWelcome! You can get any music track or video using:\n\n1️⃣ **Download via Links:**\nCopy any media link and send it directly here.\n\n2️⃣ **Smart Search (Inside bot):**\nType the song or artist name here in the chat to get results.\n\n3️⃣ **Quick Inline Search:**\nSearch from any chat by typing: `@P1ay_Z0ne_Bot` [Song Name].\n\n💡 **How to proceed?**\nOnce selected, tap (🎵 Audio) or (🎬 Video).\n\n💚 **Your support matters!** Share the bot with friends.",
+        "msg_start": "Welcome {first_name} 🎧\n\nSend a media link or type its name to search directly, and I'll download it in the highest quality.\n\n💚 **Your support matters:**\nFollow PlayZone links and share the bot with friends to keep us going.",
+        "msg_guide": "📘 **How to use:**\n\n1️⃣ **By Links:** Send any video or audio link here.\n2️⃣ **By Search:** Type the song name and choose from the results.\n3️⃣ **Quick Search:** In any chat, type the bot's username, a space, and the media name.\n\n💡 **For Audio:** Choose 🎵\n💡 **For Video:** Choose 🎬",
         "msg_add_group": "🤖 To add the bot to your group and enjoy direct downloading, click the button below:",
         "btn_add_group_url": "➕ Click here to add the bot",
         "msg_links": "💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.",
@@ -196,7 +196,7 @@ LANG_DICT = {
         "msg_prep_video": "Preparing...",
         "msg_session_expired": "Session for this request expired, please send the link again.",
         "msg_dl_started": "🚀 Download started... Please wait ⏬",
-        "msg_converting": "🎵 Converting audio and embedding cover...",
+        "msg_converting": "🎵 Preparing audio file...",
         "msg_too_large": "❌ File size exceeds the limit.\n\nSize: {size}\nLimit: {limit}",
         "msg_uploading": "📤 File is ready, uploading...",
         "msg_dl_failed": "❌ Failed to download the media.\n\nLink might be unavailable or exceeds limits.",
@@ -549,9 +549,6 @@ def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=TELEGRAM_BOT_PLAYZONE)],
     ])
 
-def build_playzone_links_text(lang: str = "ar") -> str:
-    return _t("msg_links", lang)
-
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(_t("btn_adm_bc_menu", lang), callback_data="adm_bc_menu"), InlineKeyboardButton(_t("btn_adm_users_menu", lang), callback_data="adm_users_menu")],
@@ -623,7 +620,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و البحث السريع المزدوج (Parallel Search)
+# yt-dlp و البحث السريع المزدوج مع أنظمة الطوارئ
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
@@ -640,8 +637,9 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
     }
 
+    # حل مشكلة الصوت: طلب صيغة مدعومة تلقائياً من يوتيوب
     if mode == "audio":
-        opts["format"] = "bestaudio/best"
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         if resolution == "best":
@@ -650,7 +648,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             opts["format"] = f"bestvideo[height<={resolution}][filesize<{max_fs}]+bestaudio/best[height<={resolution}][filesize<{max_fs}]/best"
             
         opts["merge_output_format"] = "mp4"
-        opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
+        
+        # إضافة معالج الفيديو فقط إذا كانت الأداة متوفرة في السيرفر
+        if shutil.which("ffmpeg"):
+            opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
 
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
@@ -666,9 +667,21 @@ def extract_metadata(url: str):
         return ydl.extract_info(url, download=False)
 
 def _execute_single_search(engine: str, query: str, limit: int, opts: dict):
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        res = ydl.extract_info(f"{engine}{limit}:{query}", download=False)
-        return res.get('entries', []) if res else []
+    # نظام الطوارئ (Fallback): إذا فشل البحث، استخدم المحرك الأساسي
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            res = ydl.extract_info(f"{engine}{limit}:{query}", download=False)
+            return res.get('entries', []) if res else []
+    except Exception as e:
+        logger.warning(f"Engine {engine} failed: {e}. Using fallback...")
+        if engine == "ytmsearch":
+            try:
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    res = ydl.extract_info(f"ytsearch{limit}:{query} official audio", download=False)
+                    return res.get('entries', []) if res else []
+            except Exception:
+                return []
+        return []
 
 def search_youtube(query: str, limit: int = 10):
     opts = {
@@ -683,7 +696,7 @@ def search_youtube(query: str, limit: int = 10):
     combined_entries = []
     seen_ids = set()
     
-    # البحث في يوتيوب الشامل والموسيقى معاً في نفس اللحظة (يضاعف السرعة)
+    # المعالجة المتوازية لتسريع البحث وتجنب التعليق
     with ThreadPoolExecutor(max_workers=2) as pool:
         future_music = pool.submit(_execute_single_search, "ytmsearch", query, limit, opts)
         future_general = pool.submit(_execute_single_search, "ytsearch", query, limit, opts)
@@ -743,6 +756,11 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     except Exception: return None
 
 def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path = None) -> bool:
+    # حماية من الانهيار إذا لم تكن الأداة مثبتة في السيرفر
+    if not shutil.which("ffmpeg"):
+        logger.warning("أداة FFmpeg غير مثبتة في السيرفر. سيتم استخدام الملف الصوتي الخام.")
+        return False
+        
     try:
         cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(input_file)]
         if local_thumb and local_thumb.exists():
@@ -937,7 +955,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if maintenance == "1" and not is_admin(uid):
         return await update.message.reply_text(_t("msg_maintenance", lang), parse_mode="HTML")
 
-    # 3. نظام الإذاعة المتقدمة الشامل (للملفات والصور والنصوص)
+    # 3. نظام الإذاعة المتقدمة الشامل
     if getattr(update, "message", None):
         if is_admin(uid) and context.user_data.get("bc_active"):
             return await handle_broadcast_media(update, context)
@@ -992,7 +1010,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
                 "page": 0
             }
             
-            # تنظيف الكاش من عمليات البحث القديمة لعدم استهلاك الذاكرة
             if len(context.user_data["search_cache"]) > 5:
                 oldest_key = next(iter(context.user_data["search_cache"]))
                 del context.user_data["search_cache"][oldest_key]
@@ -1031,7 +1048,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         await status.edit_text(_t("msg_link_error", lang))
 
 # ==========================================================
-# البحث المضمن (Inline Mode)
+# البحث المضمن (Inline Mode) مع فلاتر حماية الأخطاء
 # ==========================================================
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1065,7 +1082,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             else:
                 thumb = entry.get("thumbnail") or ""
                 
-            # تجاوز أخطاء الصور لضمان عدم توقف البحث السريع
+            # حماية من انهيار الانلاين بسبب الصور الوهمية
             if not thumb or not thumb.startswith("http"):
                 thumb = "https://i.ibb.co/3120Q3m/placeholder.jpg"
 
