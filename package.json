@@ -1,0 +1,14 @@
+{
+  "name": "telegram-enterprise-bot",
+  "version": "1.0.0",
+  "description": "Enterprise Telegram Bot",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.15.0",
+    "dotenv": "^16.4.5",
+    "mongoose": "^8.2.0"
+  }
+}
