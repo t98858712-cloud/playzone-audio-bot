@@ -25,6 +25,7 @@ from telegram import (
     ReplyKeyboardMarkup,
     KeyboardButton,
     BotCommand,
+    BotCommandScopeChat,
     MenuButtonCommands,
 )
 from telegram.constants import ChatAction
@@ -707,14 +708,7 @@ def _execute_single_search(engine: str, query: str, limit: int, opts: dict):
             res = ydl.extract_info(f"{engine}{limit}:{query}", download=False)
             return res.get('entries', []) if res else []
     except Exception as e:
-        logger.warning(f"Engine {engine} failed: {e}. Using fallback...")
-        if engine == "ytmsearch":
-            try:
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    res = ydl.extract_info(f"ytsearch{limit}:{query} official audio", download=False)
-                    return res.get('entries', []) if res else []
-            except Exception:
-                return []
+        logger.warning(f"Engine {engine} failed: {e}")
         return []
 
 def search_youtube(query: str, limit: int = 10):
@@ -731,7 +725,7 @@ def search_youtube(query: str, limit: int = 10):
     seen_ids = set()
     
     with ThreadPoolExecutor(max_workers=2) as pool:
-        future_music = pool.submit(_execute_single_search, "ytmsearch", query, limit, opts)
+        future_music = pool.submit(_execute_single_search, "ytsearch", f"{query} official audio", limit, opts)
         future_general = pool.submit(_execute_single_search, "ytsearch", query, limit, opts)
         
         music_entries = future_music.result()
@@ -1379,14 +1373,33 @@ async def youtube_health_monitor(app: Application):
 # ==========================================================
 
 async def post_init(app: Application):
-    # إخفاء أمر /admin من القائمة للمستخدمين العاديين
-    commands = [
+    # أوامر المستخدمين العاديين
+    user_commands = [
         BotCommand("start", "بدء / Start"), 
         BotCommand("language", "تغيير اللغة / Toggle Language"), 
         BotCommand("links", "الروابط / Links")
     ]
+    
+    # أوامر الإدارة (المستخدمين العاديين + أوامر التحكم)
+    admin_commands = user_commands + [
+        BotCommand("admin", "لوحة التحكم / Admin Panel"),
+        BotCommand("user", "معلومات مستخدم / User Info"),
+        BotCommand("update_dlp", "تحديث مكتبات / Update"),
+        BotCommand("setcookie", "تحديث الكوكيز / Set Cookie"),
+        BotCommand("backup", "نسخة احتياطية / Backup DB")
+    ]
+
     try:
-        await app.bot.set_my_commands(commands)
+        # تعيين القائمة الافتراضية للجميع
+        await app.bot.set_my_commands(user_commands)
+        
+        # تعيين قائمة الإدارة للمدراء فقط بناءً على الآي دي
+        for admin_id in parse_admin_ids():
+            try:
+                await app.bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(admin_id))
+            except Exception as e:
+                logger.warning(f"فشل تعيين أوامر الإدارة للمدير {admin_id}: {e}")
+
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
         asyncio.create_task(youtube_health_monitor(app))
     except Exception as e:
