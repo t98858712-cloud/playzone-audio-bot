@@ -1335,7 +1335,7 @@ async def youtube_health_monitor(app: Application):
 # ==========================================================
 
 async def post_init(app: Application):
-    # إزالة أوامر الآدمن من القائمة المنسدلة لعدم إظهارها للمستخدمين
+    # إخفاء أمر /admin من القائمة للمستخدمين العاديين
     commands = [
         BotCommand("start", "بدء / Start"), 
         BotCommand("language", "تغيير اللغة / Toggle Language"), 
@@ -1372,7 +1372,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
-    # أمر لوحة التحكم موجود، ولكن لن يظهر في زر أوامر البوت (Menu) للمستخدم العادي
+    # أمر الإدارة مخفي عن القائمة ولكنه يعمل إذا كتبته يدوياً
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("user", user_info_command))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
