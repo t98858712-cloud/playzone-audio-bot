@@ -1,5 +1,7 @@
 import os
 import re
+import csv
+import io
 import time
 import html
 import uuid
@@ -68,7 +70,10 @@ MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(os.cpu_count() or 2)))
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(2, MAX_WORKERS))
 
+# كاش الحماية من السبام والحظر
 ACTIVE_USERS = set()
+BANNED_USERS_CACHE = set()
+ANTI_SPAM_CACHE = {}
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "@P1ay_Z0ne_Bot")
 WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
@@ -140,35 +145,28 @@ LANG_DICT = {
         "msg_dl_finished": "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي...",
         "share_text": "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:",
         "btn_share": "🌟 أعجبك البوت؟ شاركه",
-        # الإدارة
-        "btn_adm_stats": "📊 الإحصائيات",
-        "btn_adm_users": "👥 المستخدمون",
-        "btn_adm_bc": "📢 إذاعة",
-        "btn_adm_clean": "🧹 تنظيف الكاش",
+        # رسائل الإدارة المتقدمة
+        "msg_adm_panel": "🛠 <b>مركز التحكم المؤسسي</b>\n\nالرجاء اختيار القسم المطلوب من الأزرار أدناه:",
+        "btn_adm_bc_menu": "📢 الإذاعة الشاملة",
+        "btn_adm_users_menu": "👥 إدارة المستخدمين",
+        "btn_adm_sec_menu": "🛡️ الحماية والصيانة",
         "btn_adm_srv": "📁 حالة السيرفر",
         "btn_adm_close": "✖️ إغلاق",
-        "btn_adm_cancel_bc": "❌ إلغاء العملية",
-        "msg_adm_panel": "🛠 <b>لوحة الإدارة المتقدمة</b>\n\nأوامر إضافية للمدير:\n/update_dlp - لتحديث محرك التحميل\n/setcookie - لتجديد ملف الكوكيز\n/backup - لسحب قاعدة البيانات وحمايتها من الضياع",
-        "msg_adm_only": "صلاحية إدارة فقط.",
-        "msg_adm_close": "تم الإغلاق",
-        "msg_adm_clean": "جاري تنظيف الملفات المؤقتة...",
-        "msg_adm_cleaned": "🧹 تم تنظيف الملفات المؤقتة.\n\nالعناصر المحذوفة: {removed}",
-        "msg_adm_bc_ask": "📢 أرسل نص الرسالة التي تريد إرسالها لجميع المستخدمين:",
-        "msg_adm_bc_cancel": "تم إلغاء الإذاعة",
-        "msg_adm_bc_cancelled": "تم إلغاء العملية.",
-        "msg_adm_no_users": "لا يوجد مستخدمون مسجلون.",
-        "msg_adm_bc_start": "📢 جاري إرسال الرسالة للمستخدمين...",
-        "msg_adm_bc_done": "✅ تم إرسال الإذاعة.\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}",
-        "msg_adm_stats_text": "📊 <b>إحصائيات البوت</b>\n\n• الطلبات الكلية: {requests}\n• التحميلات الناجحة: {success}\n• العمليات الفاشلة: {failed}\n• عدد المستخدمين: {users}\n• حجم الملفات المرسلة: {bytes}\n• عدد الإذاعات: {broadcasts}",
-        "msg_adm_users_title": "👥 <b>آخر المستخدمين النشطين:</b>",
-        "msg_adm_srv_text": "📁 <b>حالة السيرفر</b>\n\n• مجلد التحميل: <code>{dl_dir}</code>\n• الملفات المؤقتة: {files}\n• حجم الملفات المؤقتة: {size}\n• العمليات النشطة: {active}\n• الحد الأقصى المتزامن: {max_workers}",
-        "msg_adm_update_dlp": "🔄 جاري تحديث محرك التحميل...",
-        "msg_adm_update_dlp_ok": "✅ تم تحديث محرك `yt-dlp` بنجاح إلى أحدث إصدار.",
-        "msg_adm_update_dlp_fail": "❌ فشل التحديث: {e}",
-        "msg_adm_setcookie": "📥 أرسل ملف `cookies.txt` كـ Document مع هذا الأمر لتخطي قيود يوتيوب.",
-        "msg_adm_setcookie_ok": "✅ تم استلام وتركيب ملف الكوكيز بنجاح!",
-        "msg_adm_backup": "📦 نسخة احتياطية من قاعدة البيانات.",
-        "msg_adm_backup_fail": "❌ تعذر سحب النسخة: {e}"
+        "btn_adm_stats": "📊 الإحصائيات",
+        "btn_adm_users_list": "📋 آخر المستخدمين",
+        "btn_adm_export": "📥 تصدير البيانات (CSV)",
+        "btn_adm_bc_all": "رسالة للجميع 🌍",
+        "btn_adm_bc_active": "للنشطين (48h) ⚡",
+        "btn_adm_clean": "🧹 تنظيف الكاش",
+        "btn_adm_vacuum": "🗜️ تحسين الـ Database",
+        "btn_adm_maint_on": "تشغيل الصيانة 🔴",
+        "btn_adm_maint_off": "إيقاف الصيانة 🟢",
+        "btn_adm_cancel_bc": "❌ إلغاء الإذاعة",
+        "msg_adm_bc_ask": "📢 <b>أرسل الآن محتوى الإذاعة:</b>\n(يمكنك إرسال نص، صورة، فيديو، أو ملف وسيقوم البوت بتوزيعه بدقة).",
+        "msg_adm_bc_start": "🚀 جاري بدء الإذاعة... يرجى متابعة التحديث:",
+        "msg_adm_bc_done": "✅ <b>اكتملت الإذاعة بنجاح!</b>\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}",
+        "msg_maintenance": "🚧 <b>عذراً!</b>\nالبوت حالياً في وضع الصيانة والتحديث لإضافة ميزات جديدة. سنعود للعمل قريباً جداً ⚙️",
+        "msg_spam_blocked": "❌ <b>تم حظرك مؤقتاً</b> بسبب إرسال طلبات كثيرة جداً في وقت قصير. يرجى التواصل مع الإدارة."
     },
     "en": {
         "btn_guide": "📘 User Guide",
@@ -218,34 +216,27 @@ LANG_DICT = {
         "share_text": "📥 Download any video or MP3 in seconds!\n⚡ Fast, free, and highest quality.\n👇 Try it now:",
         "btn_share": "🌟 Like the bot? Share it",
         # Admin text
-        "btn_adm_stats": "📊 Statistics",
-        "btn_adm_users": "👥 Users",
-        "btn_adm_bc": "📢 Broadcast",
-        "btn_adm_clean": "🧹 Clean Cache",
+        "msg_adm_panel": "🛠 <b>Enterprise Control Center</b>\n\nPlease select a category:",
+        "btn_adm_bc_menu": "📢 Broadcast Menu",
+        "btn_adm_users_menu": "👥 Users Management",
+        "btn_adm_sec_menu": "🛡️ Security & Maint",
         "btn_adm_srv": "📁 Server Status",
         "btn_adm_close": "✖️ Close",
-        "btn_adm_cancel_bc": "❌ Cancel Operation",
-        "msg_adm_panel": "🛠 <b>Advanced Admin Panel</b>\n\nAdditional Admin Commands:\n/update_dlp - Update Download Engine\n/setcookie - Update Cookies File\n/backup - Backup Database",
-        "msg_adm_only": "Admin privilege only.",
-        "msg_adm_close": "Closed",
-        "msg_adm_clean": "Cleaning temporary files...",
-        "msg_adm_cleaned": "🧹 Temporary files cleaned.\n\nItems removed: {removed}",
-        "msg_adm_bc_ask": "📢 Send the message text you want to broadcast to all users:",
-        "msg_adm_bc_cancel": "Broadcast canceled",
-        "msg_adm_bc_cancelled": "Operation canceled.",
-        "msg_adm_no_users": "No registered users.",
-        "msg_adm_bc_start": "📢 Sending message to users...",
-        "msg_adm_bc_done": "✅ Broadcast sent.\n\n• Sent: {sent}\n• Failed: {fail}",
-        "msg_adm_stats_text": "📊 <b>Bot Statistics</b>\n\n• Total Requests: {requests}\n• Successful Downloads: {success}\n• Failed Operations: {failed}\n• Total Users: {users}\n• Total Uploaded Size: {bytes}\n• Total Broadcasts: {broadcasts}",
-        "msg_adm_users_title": "👥 <b>Latest Active Users:</b>",
-        "msg_adm_srv_text": "📁 <b>Server Status</b>\n\n• Download Dir: <code>{dl_dir}</code>\n• Temp Files: {files}\n• Temp Size: {size}\n• Active Tasks: {active}\n• Max Concurrent: {max_workers}",
-        "msg_adm_update_dlp": "🔄 Updating download engine...",
-        "msg_adm_update_dlp_ok": "✅ `yt-dlp` engine updated successfully.",
-        "msg_adm_update_dlp_fail": "❌ Update failed: {e}",
-        "msg_adm_setcookie": "📥 Send the `cookies.txt` as a Document with this command to bypass restrictions.",
-        "msg_adm_setcookie_ok": "✅ Cookies file received and updated successfully!",
-        "msg_adm_backup": "📦 Database Backup.",
-        "msg_adm_backup_fail": "❌ Failed to fetch backup: {e}"
+        "btn_adm_stats": "📊 Statistics",
+        "btn_adm_users_list": "📋 Latest Users",
+        "btn_adm_export": "📥 Export DB (CSV)",
+        "btn_adm_bc_all": "Send to All 🌍",
+        "btn_adm_bc_active": "Active (48h) ⚡",
+        "btn_adm_clean": "🧹 Clean Cache",
+        "btn_adm_vacuum": "🗜️ Vacuum Database",
+        "btn_adm_maint_on": "Enable Maintenance 🔴",
+        "btn_adm_maint_off": "Disable Maintenance 🟢",
+        "btn_adm_cancel_bc": "❌ Cancel Broadcast",
+        "msg_adm_bc_ask": "📢 <b>Send broadcast content now:</b>\n(Text, photo, video, or document supported).",
+        "msg_adm_bc_start": "🚀 Broadcast starting... Monitor progress:",
+        "msg_adm_bc_done": "✅ <b>Broadcast Complete!</b>\n\n• Sent: {sent}\n• Failed: {fail}",
+        "msg_maintenance": "🚧 <b>Sorry!</b>\nThe bot is currently under maintenance for upgrades. We will be back shortly ⚙️",
+        "msg_spam_blocked": "❌ <b>Temporarily blocked</b> due to too many requests. Contact admin."
     }
 }
 
@@ -257,7 +248,7 @@ def _t(key: str, lang: str = "ar", **kwargs) -> str:
     return text
 
 # ==========================================================
-# إدارة قاعدة البيانات (نظيفة 100% دون أي تعديل)
+# إدارة قاعدة البيانات الشاملة (مع إضافات الحماية)
 # ==========================================================
 
 def init_db():
@@ -280,8 +271,46 @@ def init_db():
                     value INTEGER
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS banned_users (
+                    id INTEGER PRIMARY KEY
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            """)
             for k in ["requests", "success", "failed", "bytes", "broadcasts"]:
                 conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (k,))
+            conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('maintenance', '0')")
+
+def load_banned_users():
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            return {row[0] for row in conn.execute("SELECT id FROM banned_users").fetchall()}
+
+def ban_user_db(uid):
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("INSERT OR IGNORE INTO banned_users (id) VALUES (?)", (uid,))
+
+def set_setting(key, value):
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+
+def get_setting(key, default="0"):
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+            return row[0] if row else default
+
+def optimize_db():
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("VACUUM")
 
 def register_user_sync(user):
     if not user: return
@@ -314,6 +343,20 @@ def all_user_ids() -> list:
             rows = conn.execute("SELECT id FROM users").fetchall()
             return [row[0] for row in rows]
 
+def get_all_users_data() -> list:
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM users").fetchall()
+            return [dict(r) for r in rows]
+
+def get_active_users_48h() -> list:
+    threshold = int(time.time()) - (48 * 3600)
+    with DB_LOCK:
+        with sqlite3.connect(DB_FILE) as conn:
+            rows = conn.execute("SELECT id FROM users WHERE last_seen >= ?", (threshold,)).fetchall()
+            return [row[0] for row in rows]
+
 def get_latest_users(limit: int = 10) -> list:
     with DB_LOCK:
         with sqlite3.connect(DB_FILE) as conn:
@@ -322,7 +365,7 @@ def get_latest_users(limit: int = 10) -> list:
             return [dict(r) for r in rows]
 
 # ==========================================================
-# أدوات الفحص والتنسيق
+# أدوات الفحص، التنسيق، وتنبيهات الإدارة الحية
 # ==========================================================
 
 def parse_admin_ids():
@@ -331,6 +374,12 @@ def parse_admin_ids():
 
 def is_admin(user_id: int) -> bool:
     return user_id in parse_admin_ids()
+
+async def alert_admins_live(bot, text: str):
+    for adm in parse_admin_ids():
+        try:
+            await bot.send_message(chat_id=adm, text=text, parse_mode="HTML", disable_web_page_preview=True)
+        except Exception: pass
 
 def esc(text) -> str:
     return html.escape(str(text or ""), quote=False)
@@ -460,7 +509,7 @@ def _force_cleanup_all_sync() -> int:
     return removed
 
 # ==========================================================
-# الواجهات والأزرار
+# الواجهات والأزرار المؤسسية
 # ==========================================================
 
 def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
@@ -500,17 +549,37 @@ def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=TELEGRAM_BOT_PLAYZONE)],
     ])
 
-def build_playzone_links_text(lang: str = "ar") -> str:
-    return _t("msg_links", lang)
-
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(_t("btn_adm_stats", lang), callback_data="adm_stats"), InlineKeyboardButton(_t("btn_adm_users", lang), callback_data="adm_users")],
-        [InlineKeyboardButton(_t("btn_adm_bc", lang), callback_data="adm_bc"), InlineKeyboardButton(_t("btn_adm_clean", lang), callback_data="adm_clean")],
-        [InlineKeyboardButton(_t("btn_adm_srv", lang), callback_data="adm_server"), InlineKeyboardButton(_t("btn_adm_close", lang), callback_data="adm_close")],
+        [InlineKeyboardButton(_t("btn_adm_bc_menu", lang), callback_data="adm_bc_menu"), InlineKeyboardButton(_t("btn_adm_users_menu", lang), callback_data="adm_users_menu")],
+        [InlineKeyboardButton(_t("btn_adm_sec_menu", lang), callback_data="adm_sec_menu"), InlineKeyboardButton(_t("btn_adm_srv", lang), callback_data="adm_server")],
+        [InlineKeyboardButton(_t("btn_adm_close", lang), callback_data="adm_close")]
     ])
 
-def admin_broadcast_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
+def admin_broadcast_menu(lang: str = "ar") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(_t("btn_adm_bc_all", lang), callback_data="adm_bc_start:all")],
+        [InlineKeyboardButton(_t("btn_adm_bc_active", lang), callback_data="adm_bc_start:active")],
+        [InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]
+    ])
+
+def admin_users_menu(lang: str = "ar") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(_t("btn_adm_stats", lang), callback_data="adm_stats"), InlineKeyboardButton(_t("btn_adm_users_list", lang), callback_data="adm_users")],
+        [InlineKeyboardButton(_t("btn_adm_export", lang), callback_data="adm_export_db")],
+        [InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]
+    ])
+
+def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
+    maint = get_setting("maintenance", "0")
+    maint_btn = InlineKeyboardButton(_t("btn_adm_maint_off", lang), callback_data="adm_toggle_maint") if maint == "1" else InlineKeyboardButton(_t("btn_adm_maint_on", lang), callback_data="adm_toggle_maint")
+    return InlineKeyboardMarkup([
+        [maint_btn],
+        [InlineKeyboardButton(_t("btn_adm_vacuum", lang), callback_data="adm_vacuum_db"), InlineKeyboardButton(_t("btn_adm_clean", lang), callback_data="adm_clean")],
+        [InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]
+    ])
+
+def admin_broadcast_cancel_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(_t("btn_adm_cancel_bc", lang), callback_data="adm_cancel_bc")]
     ])
@@ -523,36 +592,6 @@ def build_guide_text(lang: str = "ar") -> str:
 
 def build_preview_caption(title: str, artist: str, duration: str, est_size: str) -> str:
     return f"🎬 <b>{esc(title)}</b>\n<b>{esc(artist)}</b>\n⏱ {esc(duration)} - 💾 {esc(est_size)}"
-
-def build_admin_stats_text(lang: str = "ar") -> str:
-    stats = load_stats_sync()
-    users_count = len(all_user_ids())
-    return _t("msg_adm_stats_text", lang, 
-              requests=stats.get('requests', 0), 
-              success=stats.get('success', 0), 
-              failed=stats.get('failed', 0), 
-              users=users_count, 
-              bytes=format_size(stats.get('bytes', 0), lang), 
-              broadcasts=stats.get('broadcasts', 0))
-
-def build_admin_users_text(limit: int = 10, lang: str = "ar") -> str:
-    users = get_latest_users(limit)
-    lines = [_t("msg_adm_users_title", lang)]
-    for u in users:
-        name = u.get("first_name") or _t("txt_no_name", lang)
-        username = f"@{u.get('username')}" if u.get("username") else _t("txt_none", lang)
-        lines.append(f"• {esc(name)} — {esc(username)} — ID: <code>{u.get('id')}</code>")
-    return "\n".join(lines)
-
-def build_server_status_text(lang: str = "ar") -> str:
-    total_size = sum(p.stat().st_size for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
-    file_count = sum(1 for p in BASE_DOWNLOAD_DIR.rglob("*") if p.is_file())
-    return _t("msg_adm_srv_text", lang, 
-              dl_dir=BASE_DOWNLOAD_DIR, 
-              files=file_count, 
-              size=format_size(total_size, lang), 
-              active=len(ACTIVE_USERS), 
-              max_workers=MAX_WORKERS)
 
 # ==========================================================
 # الرسائل الآمنة
@@ -637,7 +676,6 @@ def search_youtube(query: str, limit: int = 10):
     seen_ids = set()
     
     with yt_dlp.YoutubeDL(opts) as ydl:
-        # 1. البحث في يوتيوب ميوزك (للحصول على الأغاني الرسمية والصافية أولاً)
         res_music = ydl.extract_info(f"ytmsearch{limit}:{query}", download=False)
         if res_music and 'entries' in res_music:
             for entry in res_music['entries']:
@@ -645,7 +683,6 @@ def search_youtube(query: str, limit: int = 10):
                     combined_entries.append(entry)
                     seen_ids.add(entry['id'])
                     
-        # 2. البحث في يوتيوب الشامل (للحصول على المقاطع العامة أو الريمكسات)
         res_general = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
         if res_general and 'entries' in res_general:
             for entry in res_general['entries']:
@@ -714,8 +751,25 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         return False
 
 # ==========================================================
-# أوامر الإدارة الديناميكية وتغيير اللغة
+# أوامر الإدارة الشاملة (أوامر حصرية)
 # ==========================================================
+
+async def user_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    try:
+        uid = int(context.args[0])
+        with DB_LOCK:
+            with sqlite3.connect(DB_FILE) as conn:
+                conn.row_factory = sqlite3.Row
+                u = conn.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+        if u:
+            status = "🔴 Banned" if uid in BANNED_USERS_CACHE else "🟢 Active"
+            text = f"👤 <b>معلومات المستخدم:</b>\n\n• ID: <code>{u['id']}</code>\n• الاسم: {esc(u['first_name'])} {esc(u['last_name'])}\n• المعرف: @{u['username']}\n• الحالة: {status}"
+            await update.message.reply_text(text, parse_mode="HTML")
+        else:
+            await update.message.reply_text("❌ المستخدم غير موجود بقاعدة البيانات.")
+    except Exception:
+        await update.message.reply_text("طريقة الاستخدام: /user ID")
 
 async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_lang = context.user_data.get("lang", "ar")
@@ -757,8 +811,40 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(_t("msg_adm_backup_fail", lang, e=e))
 
 # ==========================================================
-# أحداث المستخدم والبحث الذكي المتطور (كلا المحركين معاً)
+# معالج الرسائل المتقدم والإذاعة المباشرة (Live Broadcast)
 # ==========================================================
+
+async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["bc_active"] = False
+    lang = context.user_data.get("lang", "ar")
+    target = context.user_data.get("bc_target", "all")
+    
+    users = all_user_ids() if target == "all" else get_active_users_48h()
+    if not users: return await update.message.reply_text(_t("msg_adm_no_users", lang))
+    
+    status = await update.message.reply_text(_t("msg_adm_bc_start", lang))
+    sent, fail = 0, 0
+    total = len(users)
+    
+    for i, user_id in enumerate(users):
+        try:
+            await update.message.copy(chat_id=user_id)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except RetryAfter as e: 
+            await asyncio.sleep(int(e.retry_after) + 1)
+            try:
+                await update.message.copy(chat_id=user_id)
+                sent += 1
+            except Exception: fail += 1
+        except Exception: fail += 1
+        
+        if i % 20 == 0 and i > 0:
+            try: await status.edit_text(f"⏳ <b>جاري تقدم الإذاعة:</b> {i} / {total}\n✅ نجاح: {sent} | ❌ فشل: {fail}", parse_mode="HTML")
+            except Exception: pass
+            
+    stat_inc_sync("broadcasts")
+    await status.edit_text(_t("msg_adm_bc_done", lang, sent=sent, fail=fail), parse_mode="HTML")
 
 async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search_id: str, lang: str):
     data = context.user_data.get("search_cache", {}).get(search_id)
@@ -832,36 +918,40 @@ async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE
         disable_web_page_preview=True
     )
 
-async def handle_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
-    context.user_data["bc_active"] = False
-    lang = context.user_data.get("lang", "ar")
-    users = all_user_ids()
-    if not users: return await update.message.reply_text(_t("msg_adm_no_users", lang))
-    
-    status = await update.message.reply_text(_t("msg_adm_bc_start", lang))
-    sent, fail = 0, 0
-    for user_id in users:
-        try:
-            await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
-            sent += 1
-            await asyncio.sleep(0.05)
-        except RetryAfter as e: 
-            await asyncio.sleep(int(e.retry_after) + 1)
-            try:
-                await context.bot.send_message(chat_id=user_id, text=text, disable_web_page_preview=True)
-                sent += 1
-            except Exception: fail += 1
-        except Exception: fail += 1
-    
-    stat_inc_sync("broadcasts")
-    await status.edit_text(_t("msg_adm_bc_done", lang, sent=sent, fail=fail))
-
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    
+    # 1. نظام الحظر 
+    if uid in BANNED_USERS_CACHE:
+        return
+        
+    # 2. نظام وضع الصيانة الذكي
+    maintenance = get_setting("maintenance", "0")
+    lang = context.user_data.get("lang", "ar")
+    if maintenance == "1" and not is_admin(uid):
+        return await update.message.reply_text(_t("msg_maintenance", lang), parse_mode="HTML")
+
+    # 3. نظام الإذاعة المتقدمة الشامل (للملفات والصور والنصوص)
+    if getattr(update, "message", None):
+        if is_admin(uid) and context.user_data.get("bc_active"):
+            return await handle_broadcast_media(update, context)
+
     if not update.message or not update.message.text: return
     register_user_sync(update.effective_user)
-    uid = update.effective_user.id
     text = update.message.text.strip()
-    lang = context.user_data.get("lang", "ar")
+
+    # 4. الحماية التلقائية من السبام (Anti-Spam)
+    if not is_admin(uid):
+        now = time.time()
+        reqs = ANTI_SPAM_CACHE.setdefault(uid, [])
+        reqs = [t for t in reqs if now - t < 60]
+        reqs.append(now)
+        ANTI_SPAM_CACHE[uid] = reqs
+        if len(reqs) > 12:
+            ban_user_db(uid)
+            BANNED_USERS_CACHE.add(uid)
+            await alert_admins_live(context.bot, f"🚨 <b>نظام الحماية:</b> تم حظر المستخدم <code>{uid}</code> مؤقتاً بسبب السبام.")
+            return await update.message.reply_text(_t("msg_spam_blocked", lang), parse_mode="HTML")
 
     if text in [_t("btn_links", "ar"), _t("btn_links", "en"), "/links", "\\links"]:
         return await show_playzone_links(update, context)
@@ -876,9 +966,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         ])
         return await update.message.reply_text(_t("msg_add_group", lang), reply_markup=add_keyboard)
     
-    if is_admin(uid) and context.user_data.get("bc_active"):
-        return await handle_broadcast_text(update, context, text)
-    
     if uid in ACTIVE_USERS:
         return await update.message.reply_text(_t("msg_wait_current", lang))
         
@@ -886,7 +973,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         status = await update.message.reply_text(_t("msg_searching", lang, query=esc(text)), parse_mode="HTML")
         try:
             loop = asyncio.get_running_loop()
-            # سيتم البحث في الموسيقى واليوتيوب الشامل معاً ودمج النتائج
             search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=10))
             entries = search_info.get("entries", []) if search_info else []
             
@@ -904,6 +990,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             return
         except Exception as e:
             logger.warning(f"فشل البحث: {e}")
+            await alert_admins_live(context.bot, f"🚨 <b>خطأ في محرك البحث:</b>\n\n<code>{e}</code>")
             return await status.edit_text(_t("msg_link_error", lang))
 
     status = await update.message.reply_text(_t("msg_check_link", lang))
@@ -937,6 +1024,10 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
 # ==========================================================
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if uid in BANNED_USERS_CACHE: return
+    if get_setting("maintenance", "0") == "1" and not is_admin(uid): return
+
     query = update.inline_query.query.strip()
     if not query: return
     
@@ -944,7 +1035,6 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     
     try:
         loop = asyncio.get_running_loop()
-        # سيبحث أيضاً في كلا المحركين المدمجين
         search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(query, limit=10))
         entries = search_info.get("entries", []) if search_info else []
         
@@ -981,36 +1071,83 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.warning(f"فشل البحث المضمن: {e}")
 
 # ==========================================================
-# الأزرار ونظام الطابور الذكي (Semaphore Queue)
+# الأزرار ونظام الطابور الذكي والتنقل
 # ==========================================================
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     lang = context.user_data.get("lang", "ar")
-    if data == "adm_close":
+    
+    if data == "adm_main_back":
+        await query.answer()
+        return await query.message.edit_text(_t("msg_adm_panel", lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        
+    elif data == "adm_bc_menu":
+        await query.answer()
+        return await query.message.edit_text("📢 <b>خيارات الإذاعة الشاملة:</b>\nاختر الشريحة المستهدفة:", reply_markup=admin_broadcast_menu(lang), parse_mode="HTML")
+        
+    elif data.startswith("adm_bc_start:"):
+        target = data.split(":")[1]
+        context.user_data["bc_active"] = True
+        context.user_data["bc_target"] = target
+        await query.answer()
+        return await query.message.edit_text(_t("msg_adm_bc_ask", lang), reply_markup=admin_broadcast_cancel_keyboard(lang), parse_mode="HTML")
+        
+    elif data == "adm_cancel_bc":
+        context.user_data["bc_active"] = False
+        await query.answer(_t("msg_adm_bc_cancel", lang))
+        return await query.message.edit_text(_t("msg_adm_bc_cancelled", lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        
+    elif data == "adm_users_menu":
+        await query.answer()
+        return await query.message.edit_text("👥 <b>إدارة المستخدمين:</b>", reply_markup=admin_users_menu(lang), parse_mode="HTML")
+        
+    elif data == "adm_export_db":
+        await query.answer("جاري سحب البيانات...")
+        users = get_all_users_data()
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID", "Username", "First Name", "Last Name", "First Seen", "Last Seen"])
+        for u in users:
+            writer.writerow([u['id'], u.get('username',''), u.get('first_name',''), u.get('last_name',''), u.get('first_seen',''), u.get('last_seen','')])
+        output.seek(0)
+        file_bytes = io.BytesIO(output.getvalue().encode('utf-8'))
+        file_bytes.name = f"PlayZone_Users_{int(time.time())}.csv"
+        await context.bot.send_document(chat_id=query.message.chat_id, document=file_bytes, caption="📊 نسخة كاملة من بيانات المستخدمين.")
+        return
+        
+    elif data == "adm_sec_menu":
+        await query.answer()
+        return await query.message.edit_text("🛡️ <b>خيارات الصيانة والحماية:</b>", reply_markup=admin_security_menu(lang), parse_mode="HTML")
+        
+    elif data == "adm_toggle_maint":
+        current = get_setting("maintenance", "0")
+        new_val = "0" if current == "1" else "1"
+        set_setting("maintenance", new_val)
+        await query.answer("✅ تم تحديث حالة الصيانة")
+        return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+        
+    elif data == "adm_vacuum_db":
+        await query.answer("جاري تحسين القاعدة...")
+        optimize_db()
+        return await query.message.edit_text("✅ <b>تم ضغط وتحسين قاعدة البيانات بنجاح!</b>", reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+
+    elif data == "adm_close":
         await query.answer(_t("msg_adm_close", lang))
         return await safe_delete(query.message)
     elif data == "adm_stats":
         await query.answer()
-        return await query.message.edit_text(build_admin_stats_text(lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        return await query.message.edit_text(build_admin_stats_text(lang), reply_markup=admin_users_menu(lang), parse_mode="HTML")
     elif data == "adm_users":
         await query.answer()
-        return await query.message.edit_text(build_admin_users_text(10, lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        return await query.message.edit_text(build_admin_users_text(10, lang), reply_markup=admin_users_menu(lang), parse_mode="HTML")
     elif data == "adm_server":
         await query.answer()
         return await query.message.edit_text(build_server_status_text(lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
     elif data == "adm_clean":
         await query.answer(_t("msg_adm_clean", lang))
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
-        return await query.message.edit_text(_t("msg_adm_cleaned", lang, removed=removed), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
-    elif data == "adm_bc":
-        context.user_data["bc_active"] = True
-        await query.answer()
-        return await query.message.edit_text(_t("msg_adm_bc_ask", lang), reply_markup=admin_broadcast_keyboard(lang), parse_mode="HTML")
-    elif data == "adm_cancel_bc":
-        context.user_data["bc_active"] = False
-        await query.answer(_t("msg_adm_bc_cancel", lang))
-        return await query.message.edit_text(_t("msg_adm_bc_cancelled", lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        return await query.message.edit_text(_t("msg_adm_cleaned", lang, removed=removed), reply_markup=admin_security_menu(lang), parse_mode="HTML")
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1200,6 +1337,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         stat_inc_sync("failed")
         logger.error(f"فشل المعالجة: {e}")
+        await alert_admins_live(context.bot, f"🚨 <b>فشل تحميل مقطع:</b>\nالرابط: {url}\nالخطأ:\n<code>{str(e)[:300]}</code>")
         try: await edit_message_smart(query.message, _t("msg_dl_failed", lang))
         except Exception: pass
     finally:
@@ -1211,6 +1349,24 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
+# مراقب صحة اليوتيوب (Health Monitor Task)
+# ==========================================================
+
+async def youtube_health_monitor(app: Application):
+    while True:
+        await asyncio.sleep(6 * 3600)  # فحص كل 6 ساعات
+        try:
+            if not cookie_file_is_usable(COOKIES_FILE):
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
+                continue
+            opts = {"quiet": True, "extract_flat": True, "cookiefile": str(COOKIES_FILE)}
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
+        except Exception as e:
+            if "Sign in" in str(e) or "cookie" in str(e).lower():
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور.")
+
+# ==========================================================
 # التشغيل
 # ==========================================================
 
@@ -1218,11 +1374,13 @@ async def post_init(app: Application):
     commands = [
         BotCommand("start", "بدء / Start"), 
         BotCommand("language", "تغيير اللغة / Toggle Language"), 
-        BotCommand("links", "الروابط / Links")
+        BotCommand("links", "الروابط / Links"),
+        BotCommand("admin", "لوحة الإدارة / Admin")
     ]
     try:
         await app.bot.set_my_commands(commands)
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        asyncio.create_task(youtube_health_monitor(app))  # تشغيل مراقب الصحة
     except Exception as e:
         logger.warning(f"فشل تهيئة الأوامر: {e}")
 
@@ -1230,6 +1388,11 @@ def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     init_db()
+    
+    # تحميل الكاش للحظر عند بدء التشغيل
+    global BANNED_USERS_CACHE
+    BANNED_USERS_CACHE = load_banned_users()
+    
     _cleanup_old_downloads_sync()
 
     builder = Application.builder().token(TOKEN)
@@ -1247,15 +1410,17 @@ def main():
     app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
+    app.add_handler(CommandHandler("user", user_info_command))  # أمر بيانات المستخدم
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
     app.add_handler(CommandHandler("backup", backup_db_command))
-    app.add_handler(MessageHandler(filters.Document.ALL, set_cookie_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_incoming_text))
+    
+    # تعديل استقبال الرسائل لتدعم (النص، الصورة، الفيديوهات) في الإذاعة
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
     app.add_handler(InlineQueryHandler(inline_query_handler))
 
-    logger.info("🚀 تم تشغيل البوت بالنسخة الاحترافية الشاملة (البحث المدمج الصامت والتلقائي).")
+    logger.info("🚀 تم تشغيل البوت بنظام الإدارة المؤسسية (Enterprise Control Center).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
