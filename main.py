@@ -68,7 +68,7 @@ MAX_THUMBNAIL_BYTES = int(os.getenv("MAX_THUMBNAIL_BYTES", str(2 * 1024 * 1024))
 
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(os.cpu_count() or 2)))
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
-EXECUTOR = ThreadPoolExecutor(max_workers=max(2, MAX_WORKERS))
+EXECUTOR = ThreadPoolExecutor(max_workers=max(4, MAX_WORKERS * 2)) # زيادة الـ Threads لتسريع البحث المزدوج
 
 # كاش الحماية من السبام والحظر
 ACTIVE_USERS = set()
@@ -94,7 +94,7 @@ for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 progress_lock = threading.Lock()
 
 # ==========================================================
-# نظام اللغات الشامل 100% (مع تعديلات دليل الاستخدام والبدء)
+# نظام اللغات الشامل 100%
 # ==========================================================
 
 LANG_DICT = {
@@ -109,11 +109,11 @@ LANG_DICT = {
         "btn_back": "🔙 رجوع",
         "btn_next": "التالي ⬅️",
         "btn_prev": "➡️ السابق",
-        "msg_start": "أهلاً {first_name} 👋💚 <b>دعمك يصنع الفرق</b>\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك، كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n👇 <b>أرسل رابط المقطع، أو اكتب اسم الأغنية/الفيديو للبحث مباشرة!</b>",
-        "msg_guide": "📘 <b>دليل الاستخدام الشامل</b>\n\nيوفر البوت ثلاث طرق سهلة وواضحة للتحميل:\n\n<b>1️⃣ التحميل عبر الرابط المباشر:</b>\n• انسخ رابط المقطع من (يوتيوب، تيك توك، فيسبوك، انستجرام، وغيرها).\n• أرسله هنا في المحادثة.\n• اختر الدقة المطلوبة للفيديو أو اضغط لتحميله كصوت.\n\n<b>2️⃣ البحث المباشر بالنص:</b>\n• اكتب اسم الأغنية أو الفيديو مباشرة (مثال: <code>سورة الكهف العفاسي</code>).\n• سيقترح البوت لك عدة نتائج، اضغط على الرقم المناسب وسيبدأ التحميل.\n\n<b>3️⃣ البحث المضمن (Inline Search):</b>\n• في أي مجموعة أو محادثة مع أصدقائك، اكتب معرف البوت متبوعاً بكلمة البحث.\n• مثال: <code>@P1ay_Z0ne_Bot قران</code>\n• اختر المقطع من القائمة المنسدلة وسيتم إرساله كرسالة مباشرة.\n\n💡 <i>ملاحظة:</i> يمكنك تغيير لغة البوت في أي وقت عبر إرسال الأمر /language",
+        "msg_start": "أهلاً {first_name} 👋\n\nأرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\nابدأ بإرسال الرابط مباشرة.",
+        "msg_guide": "📘 **دليل الاستخدام - Play Zone** 🎧\n\nأهلاً بك! يمكنك الحصول على أي مقطع موسيقي أو فيديو بأعلى جودة عبر الطرق التالية:\n\n1️⃣ **التحميل بالروابط:**\nقم بنسخ رابط المقطع وأرسله هنا مباشرة، وسأجهز المعاينة فوراً.\n\n2️⃣ **البحث الذكي (داخل البوت):**\nاكتب اسم الأغنية أو الفنان في المحادثة، وسأجلب أفضل النتائج لتختار منها.\n\n3️⃣ **البحث السريع (من أي مكان):**\nاكتب `@P1ay_Z0ne_Bot` متبوعاً باسم الأغنية في أي قروب أو محادثة للبحث الفوري.\n\n💡 **كيف تختار؟**\nبعد اختيار المقطع، اضغط (🎵 تحميل صوت) أو (🎬 تحميل فيديو).\n\n💚 **دعمك يصنع الفرق!** تابعنا وشارك البوت مع أصدقائك.",
         "msg_add_group": "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل المباشر، اضغط على الزر أدناه:",
         "btn_add_group_url": "➕ اضغط هنا لإضافة البوت",
-        "msg_links": "💚 <b>دعمك يصنع الفرق</b>\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.",
+        "msg_links": "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.",
         "msg_check_link": "🔍 جاري فحص الرابط وتجهيز المعاينة...",
         "msg_invalid_link": "❌ الرابط غير صحيح.\n\nأرسل رابط يبدأ بـ:\nhttp:// أو https://",
         "msg_searching": "🔍 جاري البحث عن: <b>{query}</b>...",
@@ -136,7 +136,7 @@ LANG_DICT = {
         "msg_lang_changed": "✅ تم تغيير لغة البوت إلى العربية.",
         "txt_unknown": "غير معروف",
         "txt_media_file": "ملف ميديا",
-        "txt_placeholder": "أرسل الرابط أو ابحث بالاسم...",
+        "txt_placeholder": "أرسل الرابط هنا أو اكتب للبحث...",
         "msg_wait_progress": "⏳ يرجى الانتظار...",
         "txt_no_name": "بدون اسم",
         "txt_none": "لا يوجد",
@@ -179,11 +179,11 @@ LANG_DICT = {
         "btn_back": "🔙 Back",
         "btn_next": "Next ➡️",
         "btn_prev": "⬅️ Prev",
-        "msg_start": "Hello {first_name} 👋\n\nI am the PlayZone bot, ready to download videos and audio in the highest quality and lightning fast!\n\n💚 <b>Your support makes a difference</b>\nFollow official PlayZone links and share them with friends. Every follow helps us grow and provide a better experience.\n\n👇 <b>Send a media link, or type a song/video name to search directly!</b>",
-        "msg_guide": "📘 <b>Comprehensive User Guide</b>\n\nThe bot offers three easy ways to download:\n\n<b>1️⃣ Direct Link Download:</b>\n• Copy a media link (from YouTube, TikTok, Facebook, Instagram, etc.).\n• Send it here in the chat.\n• Choose your preferred resolution or download it as audio.\n\n<b>2️⃣ Direct Text Search:</b>\n• Type the name of the song or video directly (e.g., <code>Shape of You</code>).\n• Choose the desired result from the bot's suggestions to start downloading.\n\n<b>3️⃣ Inline Search:</b>\n• In any group or chat, type the bot's username followed by your search query.\n• Example: <code>@P1ay_Z0ne_Bot nature video</code>\n• Select the result to share it directly into the chat.\n\n💡 <i>Note:</i> You can change the bot language at any time by sending /language",
+        "msg_start": "Hello {first_name} 👋\n\nSend a video or audio link, and I'll show you a preview before downloading.\n\n💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.\n\nStart by sending a link directly.",
+        "msg_guide": "📘 **User Guide - Play Zone** 🎧\n\nWelcome! You can get any music track or video using:\n\n1️⃣ **Download via Links:**\nCopy any media link and send it directly here.\n\n2️⃣ **Smart Search (Inside bot):**\nType the song or artist name here in the chat to get results.\n\n3️⃣ **Quick Inline Search:**\nSearch from any chat by typing: `@P1ay_Z0ne_Bot` [Song Name].\n\n💡 **How to proceed?**\nOnce selected, tap (🎵 Audio) or (🎬 Video).\n\n💚 **Your support matters!** Share the bot with friends.",
         "msg_add_group": "🤖 To add the bot to your group and enjoy direct downloading, click the button below:",
         "btn_add_group_url": "➕ Click here to add the bot",
-        "msg_links": "💚 <b>Your support makes a difference</b>\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.",
+        "msg_links": "💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.",
         "msg_check_link": "🔍 Checking link and preparing preview...",
         "msg_invalid_link": "❌ Invalid link.\n\nSend a link starting with:\nhttp:// or https://",
         "msg_searching": "🔍 Searching for: <b>{query}</b>...",
@@ -509,49 +509,6 @@ def _force_cleanup_all_sync() -> int:
     return removed
 
 # ==========================================================
-# إضافة الدوال المفقودة (النصوص والإحصائيات)
-# ==========================================================
-
-def build_playzone_links_text(lang: str) -> str:
-    return _t("msg_links", lang)
-
-def build_admin_stats_text(lang: str) -> str:
-    stats = load_stats_sync()
-    reqs = stats.get("requests", 0)
-    succ = stats.get("success", 0)
-    fail = stats.get("failed", 0)
-    bytes_down = stats.get("bytes", 0)
-    bc = stats.get("broadcasts", 0)
-    
-    return (
-        f"📊 <b>إحصائيات السيرفر:</b>\n\n"
-        f"• 📥 إجمالي الطلبات: <b>{reqs}</b>\n"
-        f"• ✅ عمليات ناجحة: <b>{succ}</b>\n"
-        f"• ❌ عمليات فاشلة: <b>{fail}</b>\n"
-        f"• 📦 حجم البيانات المستهلكة: <b>{format_size(bytes_down, lang)}</b>\n"
-        f"• 📢 الإذاعات المرسلة: <b>{bc}</b>"
-    )
-
-def build_admin_users_text(limit: int, lang: str) -> str:
-    users = get_latest_users(limit)
-    if not users:
-        return "لا يوجد مستخدمين بعد."
-    txt = "👥 <b>أحدث المستخدمين النشطين:</b>\n\n"
-    for u in users:
-        uid = u.get("id", "Unknown")
-        fname = esc(u.get("first_name", ""))
-        txt += f"• <code>{uid}</code> | {fname}\n"
-    return txt
-
-def build_server_status_text(lang: str) -> str:
-    return (
-        "📁 <b>حالة السيرفر (Server Status):</b>\n\n"
-        "🟢 البوت يعمل بكفاءة ومستقر.\n"
-        "🟢 قاعدة البيانات متصلة وتعمل.\n"
-        "🟢 محرك yt-dlp محدث وجاهز."
-    )
-
-# ==========================================================
 # الواجهات والأزرار المؤسسية
 # ==========================================================
 
@@ -591,6 +548,9 @@ def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📘 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=TELEGRAM_BOT_PLAYZONE)],
     ])
+
+def build_playzone_links_text(lang: str = "ar") -> str:
+    return _t("msg_links", lang)
 
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
@@ -663,7 +623,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و FFmpeg
+# yt-dlp و البحث السريع المزدوج (Parallel Search)
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
@@ -705,6 +665,11 @@ def extract_metadata(url: str):
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
+def _execute_single_search(engine: str, query: str, limit: int, opts: dict):
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        res = ydl.extract_info(f"{engine}{limit}:{query}", download=False)
+        return res.get('entries', []) if res else []
+
 def search_youtube(query: str, limit: int = 10):
     opts = {
         "quiet": True,
@@ -718,20 +683,18 @@ def search_youtube(query: str, limit: int = 10):
     combined_entries = []
     seen_ids = set()
     
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        res_music = ydl.extract_info(f"ytmsearch{limit}:{query}", download=False)
-        if res_music and 'entries' in res_music:
-            for entry in res_music['entries']:
-                if entry and entry.get('id') and entry['id'] not in seen_ids:
-                    combined_entries.append(entry)
-                    seen_ids.add(entry['id'])
-                    
-        res_general = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
-        if res_general and 'entries' in res_general:
-            for entry in res_general['entries']:
-                if entry and entry.get('id') and entry['id'] not in seen_ids:
-                    combined_entries.append(entry)
-                    seen_ids.add(entry['id'])
+    # البحث في يوتيوب الشامل والموسيقى معاً في نفس اللحظة (يضاعف السرعة)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        future_music = pool.submit(_execute_single_search, "ytmsearch", query, limit, opts)
+        future_general = pool.submit(_execute_single_search, "ytsearch", query, limit, opts)
+        
+        music_entries = future_music.result()
+        general_entries = future_general.result()
+        
+    for entry in music_entries + general_entries:
+        if entry and entry.get('id') and entry['id'] not in seen_ids:
+            combined_entries.append(entry)
+            seen_ids.add(entry['id'])
                     
     return {"entries": combined_entries}
 
@@ -958,8 +921,7 @@ async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(
         build_playzone_links_text(lang),
         reply_markup=build_playzone_links_keyboard(),
-        disable_web_page_preview=True,
-        parse_mode="HTML"
+        disable_web_page_preview=True
     )
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1001,7 +963,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         return await show_playzone_links(update, context)
     
     if text in [_t("btn_guide", "ar"), _t("btn_guide", "en")]:
-        return await update.message.reply_text(build_guide_text(lang), disable_web_page_preview=True, parse_mode="HTML")
+        return await update.message.reply_text(build_guide_text(lang), disable_web_page_preview=True)
     
     if text in [_t("btn_add_group", "ar"), _t("btn_add_group", "en")]:
         bot_username = context.bot.username
@@ -1030,6 +992,11 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
                 "page": 0
             }
             
+            # تنظيف الكاش من عمليات البحث القديمة لعدم استهلاك الذاكرة
+            if len(context.user_data["search_cache"]) > 5:
+                oldest_key = next(iter(context.user_data["search_cache"]))
+                del context.user_data["search_cache"][oldest_key]
+                
             await render_search_page(status, context, search_id, lang)
             return
         except Exception as e:
@@ -1097,6 +1064,10 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 thumb = best.get("url") or entry.get("thumbnail") or ""
             else:
                 thumb = entry.get("thumbnail") or ""
+                
+            # تجاوز أخطاء الصور لضمان عدم توقف البحث السريع
+            if not thumb or not thumb.startswith("http"):
+                thumb = "https://i.ibb.co/3120Q3m/placeholder.jpg"
 
             url = f"https://www.youtube.com/watch?v={video_id}"
             
@@ -1105,7 +1076,7 @@ async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                     id=video_id,
                     title=title,
                     description=f"👤 {uploader} • ⏱ {duration}",
-                    thumbnail_url=thumb if thumb else None,
+                    thumbnail_url=thumb,
                     input_message_content=InputTextMessageContent(url)
                 )
             )
@@ -1415,11 +1386,11 @@ async def youtube_health_monitor(app: Application):
 # ==========================================================
 
 async def post_init(app: Application):
-    # إزالة /admin من القائمة العامة لمنع المستخدمين من رؤيتها
     commands = [
         BotCommand("start", "بدء / Start"), 
         BotCommand("language", "تغيير اللغة / Toggle Language"), 
-        BotCommand("links", "الروابط / Links")
+        BotCommand("links", "الروابط / Links"),
+        BotCommand("admin", "لوحة الإدارة / Admin")
     ]
     try:
         await app.bot.set_my_commands(commands)
@@ -1453,9 +1424,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
-    # يبقى أمر الادمن محميًا ويعمل فقط عند كتابته يدوياً من قبل الإدارة
     app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("user", user_info_command)) 
+    app.add_handler(CommandHandler("user", user_info_command))  # أمر بيانات المستخدم
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
     app.add_handler(CommandHandler("backup", backup_db_command))
