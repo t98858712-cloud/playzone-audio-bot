@@ -594,13 +594,41 @@ def build_playzone_links_text(lang: str = "ar") -> str:
     return _t("msg_links", lang)
 
 def build_admin_stats_text(lang: str = "ar") -> str:
-    return "📊 إحصائيات السيرفر غير متوفرة حالياً."
+    stats = load_stats_sync()
+    total_users = len(all_user_ids())
+    active_users = len(get_active_users_48h())
+    downloaded = format_size(stats.get('bytes', 0), lang)
+    return (
+        "📊 <b>إحصائيات البوت الشاملة:</b>\n\n"
+        f"👥 إجمالي المستخدمين: <code>{total_users}</code>\n"
+        f"⚡ النشطين (آخر 48 ساعة): <code>{active_users}</code>\n\n"
+        f"📥 إجمالي الطلبات: <code>{stats.get('requests', 0)}</code>\n"
+        f"✅ الطلبات الناجحة: <code>{stats.get('success', 0)}</code>\n"
+        f"❌ الطلبات الفاشلة: <code>{stats.get('failed', 0)}</code>\n"
+        f"💾 حجم البيانات المحملة: <code>{downloaded}</code>\n"
+        f"📢 عدد الإذاعات: <code>{stats.get('broadcasts', 0)}</code>"
+    )
 
 def build_admin_users_text(limit: int, lang: str = "ar") -> str:
-    return "📋 قائمة المستخدمين غير متوفرة حالياً."
+    users = get_latest_users(limit)
+    if not users:
+        return "📋 لا يوجد مستخدمين بعد."
+    text = "📋 <b>أحدث المستخدمين:</b>\n\n"
+    for u in users:
+        name = esc(f"{u.get('first_name', '')} {u.get('last_name', '')}".strip())
+        if not name: name = "بدون اسم"
+        text += f"• <code>{u['id']}</code> | {name}\n"
+    return text
 
 def build_server_status_text(lang: str = "ar") -> str:
-    return "📁 حالة السيرفر غير متوفرة حالياً."
+    total, used, free = shutil.disk_usage(BASE_DOWNLOAD_DIR)
+    return (
+        "📁 <b>حالة السيرفر ومساحة التخزين:</b>\n\n"
+        f"💽 المساحة الكلية: <code>{format_size(total, lang)}</code>\n"
+        f"🟢 المساحة المستخدمة: <code>{format_size(used, lang)}</code>\n"
+        f"⚪ المساحة الحرة: <code>{format_size(free, lang)}</code>\n\n"
+        f"⚙️ مسار التحميل: <code>{BASE_DOWNLOAD_DIR}</code>"
+    )
 
 # ==========================================================
 # الرسائل الآمنة
@@ -1056,30 +1084,30 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     
     if data == "adm_main_back":
         await query.answer()
-        return await query.message.edit_text(_t("msg_adm_panel", lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        return await edit_message_smart(query.message, _t("msg_adm_panel", lang), reply_markup=admin_main_keyboard(lang))
         
     elif data == "adm_bc_menu":
         await query.answer()
-        return await query.message.edit_text("📢 <b>خيارات الإذاعة الشاملة:</b>\nاختر الشريحة المستهدفة:", reply_markup=admin_broadcast_menu(lang), parse_mode="HTML")
+        return await edit_message_smart(query.message, "📢 <b>خيارات الإذاعة الشاملة:</b>\nاختر الشريحة المستهدفة:", reply_markup=admin_broadcast_menu(lang))
         
     elif data.startswith("adm_bc_start:"):
         target = data.split(":")[1]
         context.user_data["bc_active"] = True
         context.user_data["bc_target"] = target
         await query.answer()
-        return await query.message.edit_text(_t("msg_adm_bc_ask", lang), reply_markup=admin_broadcast_cancel_keyboard(lang), parse_mode="HTML")
+        return await edit_message_smart(query.message, _t("msg_adm_bc_ask", lang), reply_markup=admin_broadcast_cancel_keyboard(lang))
         
     elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
-        await query.answer(_t("msg_adm_bc_cancel", lang))
-        return await query.message.edit_text(_t("msg_adm_bc_cancelled", lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        await query.answer("تم إلغاء الإذاعة ❌")
+        return await edit_message_smart(query.message, "✅ تم إلغاء وضع الإذاعة بنجاح.", reply_markup=admin_main_keyboard(lang))
         
     elif data == "adm_users_menu":
         await query.answer()
-        return await query.message.edit_text("👥 <b>إدارة المستخدمين:</b>", reply_markup=admin_users_menu(lang), parse_mode="HTML")
+        return await edit_message_smart(query.message, "👥 <b>إدارة المستخدمين:</b>", reply_markup=admin_users_menu(lang))
         
     elif data == "adm_export_db":
-        await query.answer("جاري سحب البيانات...")
+        await query.answer("جاري سحب البيانات... 📥")
         users = get_all_users_data()
         output = io.StringIO()
         writer = csv.writer(output)
@@ -1094,7 +1122,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         
     elif data == "adm_sec_menu":
         await query.answer()
-        return await query.message.edit_text("🛡️ <b>خيارات الصيانة والحماية:</b>", reply_markup=admin_security_menu(lang), parse_mode="HTML")
+        return await edit_message_smart(query.message, "🛡️ <b>خيارات الصيانة والحماية:</b>", reply_markup=admin_security_menu(lang))
         
     elif data == "adm_toggle_maint":
         current = get_setting("maintenance", "0")
@@ -1104,26 +1132,30 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
         
     elif data == "adm_vacuum_db":
-        await query.answer("جاري تحسين القاعدة...")
+        await query.answer("جاري تحسين القاعدة... 🗜️")
         optimize_db()
-        return await query.message.edit_text("✅ <b>تم ضغط وتحسين قاعدة البيانات بنجاح!</b>", reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        return await edit_message_smart(query.message, "✅ <b>تم ضغط وتحسين قاعدة البيانات بنجاح!</b>", reply_markup=admin_main_keyboard(lang))
 
     elif data == "adm_close":
-        await query.answer(_t("msg_adm_close", lang))
+        await query.answer("تم الإغلاق ✖️")
         return await safe_delete(query.message)
+        
     elif data == "adm_stats":
         await query.answer()
-        return await query.message.edit_text(build_admin_stats_text(lang), reply_markup=admin_users_menu(lang), parse_mode="HTML")
+        return await edit_message_smart(query.message, build_admin_stats_text(lang), reply_markup=admin_users_menu(lang))
+        
     elif data == "adm_users":
         await query.answer()
-        return await query.message.edit_text(build_admin_users_text(10, lang), reply_markup=admin_users_menu(lang), parse_mode="HTML")
+        return await edit_message_smart(query.message, build_admin_users_text(10, lang), reply_markup=admin_users_menu(lang))
+        
     elif data == "adm_server":
         await query.answer()
-        return await query.message.edit_text(build_server_status_text(lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
+        return await edit_message_smart(query.message, build_server_status_text(lang), reply_markup=admin_main_keyboard(lang))
+        
     elif data == "adm_clean":
-        await query.answer(_t("msg_adm_clean", lang))
+        await query.answer("جاري تنظيف الملفات المؤقتة... 🧹")
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
-        return await query.message.edit_text(_t("msg_adm_cleaned", lang, removed=removed), reply_markup=admin_security_menu(lang), parse_mode="HTML")
+        return await edit_message_smart(query.message, f"✅ <b>تم التنظيف!</b>\nتم إزالة {removed} ملف مؤقت.", reply_markup=admin_security_menu(lang))
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1133,7 +1165,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ar")
 
     if data.startswith("adm_"):
-        if not is_admin(uid): return await query.answer(_t("msg_adm_only", lang), show_alert=True)
+        if not is_admin(uid): return await query.answer("⛔ هذا الزر مخصص للمدراء فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
 
     if data == "cancel_search":
