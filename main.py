@@ -617,7 +617,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و البحث المزدوج
+# yt-dlp و البحث السريع المزدوج مع أنظمة الطوارئ
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
@@ -634,7 +634,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
     }
 
-    # حل مشكلة التحميل الصوتي إذا كان السيرفر يفتقد ffmpeg
     if mode == "audio":
         opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
     else:
@@ -663,7 +662,6 @@ def extract_metadata(url: str):
         return ydl.extract_info(url, download=False)
 
 def _execute_single_search(engine: str, query: str, limit: int, opts: dict):
-    # نظام طوارئ بديل في حال تعطل محرك البحث (ytmsearch)
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             res = ydl.extract_info(f"{engine}{limit}:{query}", download=False)
@@ -1340,8 +1338,7 @@ async def post_init(app: Application):
     commands = [
         BotCommand("start", "بدء / Start"), 
         BotCommand("language", "تغيير اللغة / Toggle Language"), 
-        BotCommand("links", "الروابط / Links"),
-        BotCommand("admin", "لوحة الإدارة / Admin")
+        BotCommand("links", "الروابط / Links")
     ]
     try:
         await app.bot.set_my_commands(commands)
