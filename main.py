@@ -26,8 +26,6 @@ from telegram import (
     KeyboardButton,
     BotCommand,
     MenuButtonCommands,
-    InlineQueryResultArticle,    
-    InputTextMessageContent,     
 )
 from telegram.constants import ChatAction
 from telegram.error import BadRequest, RetryAfter, TimedOut, NetworkError
@@ -36,7 +34,6 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
-    InlineQueryHandler,          
     ContextTypes,
     filters,
 )
@@ -109,8 +106,8 @@ LANG_DICT = {
         "btn_back": "🔙 رجوع",
         "btn_next": "التالي ⬅️",
         "btn_prev": "➡️ السابق",
-        "msg_start": "أهلاً بك {first_name} 🎧\n\nأرسل رابط المقطع أو اكتب اسمه للبحث مباشرة، وسأقوم بتحميله لك بأعلى جودة.\n\n💚 **دعمك يصنع الفرق:**\nتابع قنوات PlayZone الرسمية وشارك البوت مع أصدقائك لنستمر في تقديم الأفضل.",
-        "msg_guide": "📘 **طريقة الاستخدام:**\n\n1️⃣ **بالروابط:** أرسل أي رابط فيديو أو صوت هنا.\n2️⃣ **بالبحث:** اكتب اسم الأغنية وسأعطيك خيارات للتحميل.\n3️⃣ **البحث السريع:** في أي محادثة، اكتب معرف البوت مسافة ثم اسم المقطع.\n\n💡 **لتحميل الصوت:** اختر 🎵\n💡 **لتحميل الفيديو:** اختر 🎬",
+        "msg_start": "أهلاً {first_name} 👋\n\nأرسل رابط فيديو أو صوت، وسأعرض لك معاينة قبل التحميل.\n\n💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\nابدأ بإرسال الرابط مباشرة.",
+        "msg_guide": "📘 دليل الاستخدام\n\nيمكنك التحميل بإحدى الطرق التالية:\n\n🔗 1. عبر الرابط\nأرسل رابط الفيديو، ثم اختر تحميله كفيديو أو كصوت.\n\n🔎 2. عبر البحث\nاكتب اسم الأغنية، أو اسم المغني، أو جزءًا من كلمات الأغنية، ثم اختر النتيجة المطلوبة ونوع التحميل (فيديو أو صوت).",
         "msg_add_group": "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل المباشر، اضغط على الزر أدناه:",
         "btn_add_group_url": "➕ اضغط هنا لإضافة البوت",
         "msg_links": "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.",
@@ -179,8 +176,8 @@ LANG_DICT = {
         "btn_back": "🔙 Back",
         "btn_next": "Next ➡️",
         "btn_prev": "⬅️ Prev",
-        "msg_start": "Welcome {first_name} 🎧\n\nSend a media link or type its name to search directly, and I'll download it in the highest quality.\n\n💚 **Your support matters:**\nFollow PlayZone links and share the bot with friends to keep us going.",
-        "msg_guide": "📘 **How to use:**\n\n1️⃣ **By Links:** Send any video or audio link here.\n2️⃣ **By Search:** Type the song name and choose from the results.\n3️⃣ **Quick Search:** In any chat, type the bot's username, a space, and the media name.\n\n💡 **For Audio:** Choose 🎵\n💡 **For Video:** Choose 🎬",
+        "msg_start": "Hello {first_name} 👋\n\nSend a video or audio link, and I'll show you a preview before downloading.\n\n💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.\n\nStart by sending a link directly.",
+        "msg_guide": "📘 User Guide\n\nYou can download using one of the following methods:\n\n🔗 1. Via Link\nSend the media link, then choose to download it as video or audio.\n\n🔎 2. Via Search\nType the song name, artist name, or part of the lyrics, then choose the desired result and download type (video or audio).",
         "msg_add_group": "🤖 To add the bot to your group and enjoy direct downloading, click the button below:",
         "btn_add_group_url": "➕ Click here to add the bot",
         "msg_links": "💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.",
@@ -620,7 +617,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و البحث السريع المزدوج مع أنظمة الطوارئ
+# yt-dlp و البحث المزدوج
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
@@ -637,7 +634,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
     }
 
-    # حل مشكلة الصوت: طلب صيغة مدعومة تلقائياً من يوتيوب
+    # حل مشكلة التحميل الصوتي إذا كان السيرفر يفتقد ffmpeg
     if mode == "audio":
         opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
     else:
@@ -649,7 +646,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             
         opts["merge_output_format"] = "mp4"
         
-        # إضافة معالج الفيديو فقط إذا كانت الأداة متوفرة في السيرفر
         if shutil.which("ffmpeg"):
             opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
 
@@ -667,7 +663,7 @@ def extract_metadata(url: str):
         return ydl.extract_info(url, download=False)
 
 def _execute_single_search(engine: str, query: str, limit: int, opts: dict):
-    # نظام الطوارئ (Fallback): إذا فشل البحث، استخدم المحرك الأساسي
+    # نظام طوارئ بديل في حال تعطل محرك البحث (ytmsearch)
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             res = ydl.extract_info(f"{engine}{limit}:{query}", download=False)
@@ -696,7 +692,6 @@ def search_youtube(query: str, limit: int = 10):
     combined_entries = []
     seen_ids = set()
     
-    # المعالجة المتوازية لتسريع البحث وتجنب التعليق
     with ThreadPoolExecutor(max_workers=2) as pool:
         future_music = pool.submit(_execute_single_search, "ytmsearch", query, limit, opts)
         future_general = pool.submit(_execute_single_search, "ytsearch", query, limit, opts)
@@ -756,7 +751,6 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     except Exception: return None
 
 def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path = None) -> bool:
-    # حماية من الانهيار إذا لم تكن الأداة مثبتة في السيرفر
     if not shutil.which("ffmpeg"):
         logger.warning("أداة FFmpeg غير مثبتة في السيرفر. سيتم استخدام الملف الصوتي الخام.")
         return False
@@ -835,7 +829,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(_t("msg_adm_backup_fail", lang, e=e))
 
 # ==========================================================
-# معالج الرسائل المتقدم والإذاعة المباشرة (Live Broadcast)
+# معالج الرسائل المتقدم والإذاعة المباشرة
 # ==========================================================
 
 async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -945,17 +939,13 @@ async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     
-    # 1. نظام الحظر 
-    if uid in BANNED_USERS_CACHE:
-        return
+    if uid in BANNED_USERS_CACHE: return
         
-    # 2. نظام وضع الصيانة الذكي
     maintenance = get_setting("maintenance", "0")
     lang = context.user_data.get("lang", "ar")
     if maintenance == "1" and not is_admin(uid):
         return await update.message.reply_text(_t("msg_maintenance", lang), parse_mode="HTML")
 
-    # 3. نظام الإذاعة المتقدمة الشامل
     if getattr(update, "message", None):
         if is_admin(uid) and context.user_data.get("bc_active"):
             return await handle_broadcast_media(update, context)
@@ -964,7 +954,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
 
-    # 4. الحماية التلقائية من السبام (Anti-Spam)
     if not is_admin(uid):
         now = time.time()
         reqs = ANTI_SPAM_CACHE.setdefault(uid, [])
@@ -1046,61 +1035,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
         await status.edit_text(_t("msg_link_error", lang))
-
-# ==========================================================
-# البحث المضمن (Inline Mode) مع فلاتر حماية الأخطاء
-# ==========================================================
-
-async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if uid in BANNED_USERS_CACHE: return
-    if get_setting("maintenance", "0") == "1" and not is_admin(uid): return
-
-    query = update.inline_query.query.strip()
-    if not query: return
-    
-    lang = context.user_data.get("lang", "ar")
-    
-    try:
-        loop = asyncio.get_running_loop()
-        search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(query, limit=10))
-        entries = search_info.get("entries", []) if search_info else []
-        
-        results = []
-        for entry in entries:
-            if not entry: continue
-            video_id = entry.get("id")
-            title = clean_title(entry.get("title", "Unknown"), 60, lang)
-            uploader = entry.get("uploader", "Unknown")
-            duration = format_duration(entry.get("duration") or 0, lang)
-            
-            thumb = ""
-            thumbs = entry.get("thumbnails") or []
-            if thumbs:
-                best = sorted(thumbs, key=lambda x: (x.get("width") or 0) * (x.get("height") or 0), reverse=True)[0]
-                thumb = best.get("url") or entry.get("thumbnail") or ""
-            else:
-                thumb = entry.get("thumbnail") or ""
-                
-            # حماية من انهيار الانلاين بسبب الصور الوهمية
-            if not thumb or not thumb.startswith("http"):
-                thumb = "https://i.ibb.co/3120Q3m/placeholder.jpg"
-
-            url = f"https://www.youtube.com/watch?v={video_id}"
-            
-            results.append(
-                InlineQueryResultArticle(
-                    id=video_id,
-                    title=title,
-                    description=f"👤 {uploader} • ⏱ {duration}",
-                    thumbnail_url=thumb,
-                    input_message_content=InputTextMessageContent(url)
-                )
-            )
-            
-        await update.inline_query.answer(results, cache_time=300)
-    except Exception as e:
-        logger.warning(f"فشل البحث المضمن: {e}")
 
 # ==========================================================
 # الأزرار ونظام الطابور الذكي والتنقل
@@ -1386,7 +1320,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
 async def youtube_health_monitor(app: Application):
     while True:
-        await asyncio.sleep(6 * 3600)  # فحص كل 6 ساعات
+        await asyncio.sleep(6 * 3600)
         try:
             if not cookie_file_is_usable(COOKIES_FILE):
                 await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
@@ -1412,7 +1346,7 @@ async def post_init(app: Application):
     try:
         await app.bot.set_my_commands(commands)
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-        asyncio.create_task(youtube_health_monitor(app))  # تشغيل مراقب الصحة
+        asyncio.create_task(youtube_health_monitor(app))
     except Exception as e:
         logger.warning(f"فشل تهيئة الأوامر: {e}")
 
@@ -1421,7 +1355,6 @@ def main():
 
     init_db()
     
-    # تحميل الكاش للحظر عند بدء التشغيل
     global BANNED_USERS_CACHE
     BANNED_USERS_CACHE = load_banned_users()
     
@@ -1442,15 +1375,13 @@ def main():
     app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("user", user_info_command))  # أمر بيانات المستخدم
+    app.add_handler(CommandHandler("user", user_info_command))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
     app.add_handler(CommandHandler("setcookie", set_cookie_command))
     app.add_handler(CommandHandler("backup", backup_db_command))
     
-    # تعديل استقبال الرسائل لتدعم (النص، الصورة، الفيديوهات) في الإذاعة
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
-    app.add_handler(InlineQueryHandler(inline_query_handler))
 
     logger.info("🚀 تم تشغيل البوت بنظام الإدارة المؤسسية (Enterprise Control Center).")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
