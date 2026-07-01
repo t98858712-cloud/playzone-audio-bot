@@ -617,7 +617,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و البحث المزدوج
+# yt-dlp و البحث المتوازي الذكي
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
@@ -767,7 +767,7 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         return False
 
 # ==========================================================
-# أوامر الإدارة الشاملة (أوامر حصرية)
+# أوامر الإدارة الشاملة
 # ==========================================================
 
 async def user_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -827,7 +827,7 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(_t("msg_adm_backup_fail", lang, e=e))
 
 # ==========================================================
-# معالج الرسائل المتقدم والإذاعة المباشرة
+# معالج الرسائل والإذاعة
 # ==========================================================
 
 async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
