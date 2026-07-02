@@ -705,7 +705,7 @@ def extract_metadata(url: str):
 def _execute_single_search(engine: str, query: str, limit: int, opts: dict):
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
-            res = ydl.extract_info(f"{engine}{limit}:{query}", download=False)
+            res = ydl.extract_info(f"{engine}:{limit}:{query}", download=False)
             return res.get('entries', []) if res else []
     except Exception as e:
         logger.warning(f"Engine {engine} failed: {e}")
