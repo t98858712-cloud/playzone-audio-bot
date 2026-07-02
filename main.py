@@ -1419,9 +1419,10 @@ def main():
     
     _cleanup_old_downloads_sync()
 
-    builder = Application.builder().token(TOKEN)
+        builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
         builder.base_url(LOCAL_API_URL)
+        builder.local_mode(True)  # <--- هذا هو السطر السحري لرفع 2 جيجا بلمح البصر
 
     app = (
         builder.post_init(post_init)
