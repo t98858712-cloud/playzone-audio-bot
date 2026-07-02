@@ -468,7 +468,6 @@ def cookie_file_is_usable(path: Path) -> bool:
     try:
         if not path.exists() or path.stat().st_size <= 0: return False
         now = int(time.time())
-        has_youtube = False
         has_valid_cookie = False
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for line in f:
@@ -477,11 +476,15 @@ def cookie_file_is_usable(path: Path) -> bool:
                 parts = line.split("\t")
                 if len(parts) < 7: continue
                 domain, _, _, _, expires, name, value = parts[:7]
-                if "youtube.com" in domain: has_youtube = True
+                
                 try: exp = int(expires)
                 except Exception: exp = 0
-                if value.strip() and (exp == 0 or exp > now): has_valid_cookie = True
-        return has_youtube and has_valid_cookie
+                
+                # تم إزالة شرط وجود يوتيوب تحديداً، السماح بوجود أي كوكيز لأي منصة
+                if value.strip() and (exp == 0 or exp > now): 
+                    has_valid_cookie = True
+                    break
+        return has_valid_cookie
     except Exception: return False
 
 def _cleanup_old_downloads_sync():
@@ -666,12 +669,8 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Connection": "keep-alive"
-        },
+        # إزالة "http_headers" لكي تستخدم yt-dlp الترويسات الديناميكية المناسبة لكل منصة
+        # وتجنب حظر التحميل من تيك توك وانستغرام بسبب ترويسة المتصفح الخاصة بالهواتف.
         "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
     }
 
@@ -699,6 +698,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
 def extract_metadata(url: str):
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
+    opts["extract_flat"] = False # السماح باستخراج بيانات كاملة للمنصات الاخرى
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
