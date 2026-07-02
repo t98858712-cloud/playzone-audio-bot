@@ -699,11 +699,6 @@ def extract_metadata(url: str):
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
     opts["extract_flat"] = False # السماح باستخراج بيانات كاملة للمنصات الاخرى
-    
-    # إضافة هذا السطر لتجاوز فحص الجودة/الحجم أثناء جلب المعاينة فقط
-    opts["format"] = "best" 
-    opts["ignoreerrors"] = True # تجاهل أخطاء الصيغ المفقودة
-    
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
