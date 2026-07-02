@@ -107,8 +107,8 @@ LANG_DICT = {
         "btn_back": "🔙 رجوع",
         "btn_next": "التالي ⬅️",
         "btn_prev": "➡️ السابق",
-        "msg_start": "👋 أهلاً {first_name}\n\n💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n📥 أرسل رابط أي فيديو، أو اكتب اسم أغنية للبحث عنها.\n\nثم اختر:\n🎬 تحميل فيديو\n🎵 تحميل صوت",
-        "msg_guide": "📘 دليل الاستخدام\n\nيمكنك التحميل بإحدى الطرق التالية:\n\n🔗 1. عبر الرابط\nأرسل رابط الفيديو، ثم اختر تحميله كفيديو أو كصوت.\n\n🔎 2. عبر البحث\nاكتب اسم الأغنية، أو اسم المغني، أو جزءًا من كلمات الأغنية، ثم اختر النتيجة المطلوبة ونوع التحميل (فيديو أو صوت).",
+        "msg_start": "👋 أهلاً {first_name}\n\n💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n📥 أرسل رابط أي فيديو (تيك توك، انستغرام، يوتيوب، فيسبوك، X...)، أو اكتب اسم مقطع للبحث عنه.\n\nثم اختر:\n🎬 تحميل فيديو\n🎵 تحميل صوت",
+        "msg_guide": "📘 دليل الاستخدام\n\nيمكنك التحميل بإحدى الطرق التالية:\n\n🔗 1. عبر الرابط\nأرسل رابط الفيديو من أي منصة، ثم اختر تحميله كفيديو أو كصوت.\n\n🔎 2. عبر البحث\nاكتب اسم الأغنية أو المقطع، ثم اختر النتيجة المطلوبة ونوع التحميل.",
         "msg_add_group": "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل المباشر، اضغط على الزر أدناه:",
         "btn_add_group_url": "➕ اضغط هنا لإضافة البوت",
         "msg_links": "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.",
@@ -141,7 +141,7 @@ LANG_DICT = {
         "msg_dl_progress": "📥 <b>جاري تحميل الملف...</b>\n\n{bar}  {percent}%\n📦 الحجم: {downloaded} / {total}\n🚀 السرعة: {speed}/ث",
         "msg_dl_progress_no_total": "📥 جاري التحميل...\n📦 تم تحميل: {downloaded}",
         "msg_dl_finished": "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي...",
-        "share_text": "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:",
+        "share_text": "📥 حمّل أي فيديو أو أغنية MP3 من أي منصة في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:",
         "btn_share": "🌟 أعجبك البوت؟ شاركه",
         # رسائل الإدارة المتقدمة
         "msg_adm_panel": "🛠 <b>مركز التحكم المؤسسي</b>\n\nالرجاء اختيار القسم المطلوب من الأزرار أدناه:",
@@ -177,11 +177,11 @@ LANG_DICT = {
         "btn_back": "🔙 Back",
         "btn_next": "Next ➡️",
         "btn_prev": "⬅️ Prev",
-        "msg_start": "👋 Hello {first_name}\n\n💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.\n\n📥 Send any video link, or type a song name to search.\n\nThen choose:\n🎬 Download Video\n🎵 Download Audio",
-        "msg_guide": "📘 User Guide\n\nYou can download using one of the following methods:\n\n🔗 1. Via Link\nSend the media link, then choose to download it as video or audio.\n\n🔎 2. Via Search\nType the song name, artist name, or part of the lyrics, then choose the desired result and download type (video or audio).",
+        "msg_start": "👋 Hello {first_name}\n\n💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends.\n\n📥 Send any video link (TikTok, Instagram, YouTube, X...), or type a song name to search.\n\nThen choose:\n🎬 Download Video\n🎵 Download Audio",
+        "msg_guide": "📘 User Guide\n\nYou can download using one of the following methods:\n\n🔗 1. Via Link\nSend the media link from any platform, then choose to download it as video or audio.\n\n🔎 2. Via Search\nType the song name, artist name, or part of the lyrics, then choose the desired result.",
         "msg_add_group": "🤖 To add the bot to your group and enjoy direct downloading, click the button below:",
         "btn_add_group_url": "➕ Click here to add the bot",
-        "msg_links": "💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.",
+        "msg_links": "💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends.",
         "msg_check_link": "🔍 Checking link and preparing preview...",
         "msg_invalid_link": "❌ Invalid link.\n\nSend a link starting with:\nhttp:// or https://",
         "msg_searching": "🔍 Searching for: <b>{query}</b>...",
@@ -211,7 +211,7 @@ LANG_DICT = {
         "msg_dl_progress": "📥 <b>Downloading file...</b>\n\n{bar}  {percent}%\n📦 Size: {downloaded} / {total}\n🚀 Speed: {speed}/s",
         "msg_dl_progress_no_total": "📥 Downloading...\n📦 Downloaded: {downloaded}",
         "msg_dl_finished": "⚙️ Download complete, preparing and compressing...",
-        "share_text": "📥 Download any video or MP3 in seconds!\n⚡ Fast, free, and highest quality.\n👇 Try it now:",
+        "share_text": "📥 Download any video or MP3 from any platform in seconds!\n⚡ Fast, free, and highest quality.\n👇 Try it now:",
         "btn_share": "🌟 Like the bot? Share it",
         # Admin text
         "msg_adm_panel": "🛠 <b>Enterprise Control Center</b>\n\nPlease select a category:",
@@ -468,7 +468,6 @@ def cookie_file_is_usable(path: Path) -> bool:
     try:
         if not path.exists() or path.stat().st_size <= 0: return False
         now = int(time.time())
-        has_youtube = False
         has_valid_cookie = False
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             for line in f:
@@ -477,11 +476,15 @@ def cookie_file_is_usable(path: Path) -> bool:
                 parts = line.split("\t")
                 if len(parts) < 7: continue
                 domain, _, _, _, expires, name, value = parts[:7]
-                if "youtube.com" in domain: has_youtube = True
+                
                 try: exp = int(expires)
                 except Exception: exp = 0
-                if value.strip() and (exp == 0 or exp > now): has_valid_cookie = True
-        return has_youtube and has_valid_cookie
+                
+                # تم إزالة شرط وجود يوتيوب تحديداً، السماح بوجود أي كوكيز لأي منصة
+                if value.strip() and (exp == 0 or exp > now): 
+                    has_valid_cookie = True
+                    break
+        return has_valid_cookie
     except Exception: return False
 
 def _cleanup_old_downloads_sync():
@@ -666,12 +669,8 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Connection": "keep-alive"
-        },
+        # إزالة "http_headers" لكي تستخدم yt-dlp الترويسات الديناميكية المناسبة لكل منصة
+        # وتجنب حظر التحميل من تيك توك وانستغرام بسبب ترويسة المتصفح الخاصة بالهواتف.
         "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
     }
 
@@ -699,13 +698,14 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
 def extract_metadata(url: str):
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
+    opts["extract_flat"] = False # السماح باستخراج بيانات كاملة للمنصات الاخرى
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
 def _execute_single_search(engine: str, query: str, limit: int, opts: dict):
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
-            res = ydl.extract_info(f"{engine}{limit}:{query}", download=False)
+            res = ydl.extract_info(f"{engine}:{limit}:{query}", download=False)
             return res.get('entries', []) if res else []
     except Exception as e:
         logger.warning(f"Engine {engine} failed: {e}")
@@ -833,32 +833,32 @@ async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     lang = context.user_data.get("lang", "ar")
-    msg = await update.message.reply_text(_t("msg_adm_update_dlp", lang))
+    msg = await update.message.reply_text("جاري تحديث المكتبة...")
     try:
         subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
-        await msg.edit_text(_t("msg_adm_update_dlp_ok", lang))
+        await msg.edit_text("تم تحديث yt-dlp بنجاح.")
     except Exception as e:
-        await msg.edit_text(_t("msg_adm_update_dlp_fail", lang, e=e))
+        await msg.edit_text(f"فشل التحديث: {e}")
 
 async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     lang = context.user_data.get("lang", "ar")
     if not update.message.document:
-        return await update.message.reply_text(_t("msg_adm_setcookie", lang))
+        return await update.message.reply_text("أرسل ملف الكوكيز.")
     
     file_id = update.message.document.file_id
     new_file = await context.bot.get_file(file_id)
     await new_file.download_to_drive(COOKIES_FILE)
-    await update.message.reply_text(_t("msg_adm_setcookie_ok", lang))
+    await update.message.reply_text("تم تحديث الكوكيز بنجاح.")
 
 async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     lang = context.user_data.get("lang", "ar")
     try:
         with open(DB_FILE, "rb") as f:
-            await update.message.reply_document(document=f, filename="bot_database.db", caption=_t("msg_adm_backup", lang))
+            await update.message.reply_document(document=f, filename="bot_database.db", caption="نسخة احتياطية.")
     except Exception as e:
-        await update.message.reply_text(_t("msg_adm_backup_fail", lang, e=e))
+        await update.message.reply_text(f"فشل النسخ الاحتياطي: {e}")
 
 # ==========================================================
 # معالج الرسائل والإذاعة
@@ -870,7 +870,7 @@ async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_T
     target = context.user_data.get("bc_target", "all")
     
     users = all_user_ids() if target == "all" else get_active_users_48h()
-    if not users: return await update.message.reply_text(_t("msg_adm_no_users", lang))
+    if not users: return await update.message.reply_text("لا يوجد مستخدمين.")
     
     status = await update.message.reply_text(_t("msg_adm_bc_start", lang))
     sent, fail = 0, 0
@@ -1351,7 +1351,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         ACTIVE_USERS.discard(uid)
 
 # ==========================================================
-# مراقب صحة اليوتيوب (Health Monitor Task)
+# مراقب صحة المنصات
 # ==========================================================
 
 async def youtube_health_monitor(app: Application):
@@ -1359,28 +1359,26 @@ async def youtube_health_monitor(app: Application):
         await asyncio.sleep(6 * 3600)
         try:
             if not cookie_file_is_usable(COOKIES_FILE):
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو منتهي. لتفعيل تحميل انستغرام وفيسبوك بشكل كامل يجب رفعه بالأمر /setcookie.")
                 continue
             opts = {"quiet": True, "extract_flat": True, "cookiefile": str(COOKIES_FILE)}
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
         except Exception as e:
             if "Sign in" in str(e) or "cookie" in str(e).lower():
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب/المنصات تطلب تسجيل دخول. الكوكيز الحالي قد يكون محظوراً.")
 
 # ==========================================================
 # التشغيل
 # ==========================================================
 
 async def post_init(app: Application):
-    # أوامر المستخدمين العاديين
     user_commands = [
         BotCommand("start", "بدء / Start"), 
         BotCommand("language", "تغيير اللغة / Toggle Language"), 
         BotCommand("links", "الروابط / Links")
     ]
     
-    # أوامر الإدارة (المستخدمين العاديين + أوامر التحكم)
     admin_commands = user_commands + [
         BotCommand("admin", "لوحة التحكم / Admin Panel"),
         BotCommand("user", "معلومات مستخدم / User Info"),
@@ -1390,10 +1388,8 @@ async def post_init(app: Application):
     ]
 
     try:
-        # تعيين القائمة الافتراضية للجميع
         await app.bot.set_my_commands(user_commands)
         
-        # تعيين قائمة الإدارة للمدراء فقط بناءً على الآي دي
         for admin_id in parse_admin_ids():
             try:
                 await app.bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(admin_id))
@@ -1429,7 +1425,6 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
-    # أمر الإدارة مخفي عن القائمة ولكنه يعمل إذا كتبته يدوياً
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("user", user_info_command))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
