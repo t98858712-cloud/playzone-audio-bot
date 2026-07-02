@@ -669,13 +669,12 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
-        # إزالة "http_headers" لكي تستخدم yt-dlp الترويسات الديناميكية المناسبة لكل منصة
-        # وتجنب حظر التحميل من تيك توك وانستغرام بسبب ترويسة المتصفح الخاصة بالهواتف.
         "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
     }
 
     if mode == "audio":
-        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
+        # التعديل هنا: سحب أعلى جودة صوتية خام متوفرة في السيرفر أياً كانت صيغتها
+        opts["format"] = "bestaudio/best"
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         if resolution == "best":
@@ -793,7 +792,12 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
             cmd.extend(["-i", str(local_thumb), "-map", "0:a", "-map", "1:v", "-c:v", "mjpeg", "-id3v2_version", "3", "-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
         else:
             cmd.extend(["-vn"])
-        cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "48000", "-ac", "2", "-threads", "0", str(output_file)])
+            
+        # التعديل الاحترافي للصوت:
+        # -q:a 0 : أعلى جودة متغيرة بذكاء (VBR) تحافظ على كل الترددات الدقيقة
+        # -compression_level 0 : أبطأ وأدق خوارزمية ضغط لمنع أي تشوه في الصوت
+        cmd.extend(["-c:a", "libmp3lame", "-q:a", "0", "-compression_level", "0", "-threads", "0", str(output_file)])
+        
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
     except Exception as e:
