@@ -1054,16 +1054,13 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         title = clean_title(info.get("title"), lang=lang)
         artist = get_artist(info, lang=lang)
         duration_raw = info.get("duration") or 0
-        width = info.get("width") or 0
-        height = info.get("height") or 0
         est_size = format_size(get_largest_estimated_size(info), lang=lang)
         thumb = get_thumbnail(info)
         request_id = uuid.uuid4().hex[:10]
 
         ensure_pending_requests(context)[request_id] = {
             "url": text, "title": title, "artist": artist,
-            "duration": duration_raw, "width": width, "height": height,
-            "thumb_url": thumb, "created_at": int(time.time())
+            "duration": duration_raw, "thumb_url": thumb, "created_at": int(time.time())
         }
         trim_old_pending_requests(context)
 
@@ -1195,16 +1192,13 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             title = clean_title(info.get("title"), lang=lang)
             artist = get_artist(info, lang=lang)
             duration_raw = info.get("duration") or 0
-            width = info.get("width") or 0
-            height = info.get("height") or 0
             est_size = format_size(get_largest_estimated_size(info), lang=lang)
             thumb = get_thumbnail(info)
             request_id = uuid.uuid4().hex[:10]
 
             ensure_pending_requests(context)[request_id] = {
                 "url": url, "title": title, "artist": artist,
-                "duration": duration_raw, "width": width, "height": height,
-                "thumb_url": thumb, "created_at": int(time.time())
+                "duration": duration_raw, "thumb_url": thumb, "created_at": int(time.time())
             }
             trim_old_pending_requests(context)
 
@@ -1330,20 +1324,12 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                     finally:
                         if t_file: t_file.close()
                 else:
-                    t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
-                    try:
-                        await context.bot.send_video(
-                            chat_id=query.message.chat_id, video=f, caption=caption,
-                            supports_streaming=True,  
-                            duration=duration,
-                            width=request.get("width", 0),
-                            height=request.get("height", 0),
-                            thumbnail=t_file,
-                            reply_markup=media_keyboard, parse_mode="HTML",
-                            read_timeout=120, write_timeout=120
-                        )
-                    finally:
-                        if t_file: t_file.close()
+                    await context.bot.send_video(
+                        chat_id=query.message.chat_id, video=f, caption=caption,
+                        supports_streaming=True,  
+                        duration=duration, reply_markup=media_keyboard, parse_mode="HTML",
+                        read_timeout=120, write_timeout=120
+                    )
 
             stat_inc_sync("success")
             stat_inc_sync("bytes", file_size)
