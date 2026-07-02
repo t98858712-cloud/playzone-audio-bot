@@ -1319,7 +1319,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                             chat_id=query.message.chat_id, audio=f, title=title,
                             performer=request.get("artist", _t("txt_unknown", lang)), duration=duration,
                             caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
-                            read_timeout=120, write_timeout=120
+                            read_timeout=1000, write_timeout=1000
                         )
                     finally:
                         if t_file: t_file.close()
@@ -1328,7 +1328,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                         chat_id=query.message.chat_id, video=f, caption=caption,
                         supports_streaming=True,  
                         duration=duration, reply_markup=media_keyboard, parse_mode="HTML",
-                        read_timeout=120, write_timeout=120
+                        read_timeout=1000, write_timeout=1000
                     )
 
             stat_inc_sync("success")
@@ -1425,7 +1425,7 @@ def main():
 
     app = (
         builder.post_init(post_init)
-        .connect_timeout(30).read_timeout(120).write_timeout(120).pool_timeout(30)
+        .connect_timeout(30).read_timeout(1000).write_timeout(1000).pool_timeout(30)
         .concurrent_updates(True)
         .build()
     )
