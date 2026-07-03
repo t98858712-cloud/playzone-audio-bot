@@ -3,8 +3,8 @@ FROM aiogram/telegram-bot-api:latest
 
 USER root
 
-# تثبيت بايثون وأدوات الميديا والتنزيل
-RUN apk update && apk add --no-cache python3 py3-pip python3-dev ffmpeg aria2 bash
+# تثبيت بايثون وأدوات الميديا والتنزيل (مع أدوات البناء الأساسية)
+RUN apk update && apk add --no-cache python3 py3-pip python3-dev ffmpeg aria2 bash gcc musl-dev
 
 WORKDIR /app
 
@@ -22,12 +22,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # نسخ باقي ملفات البوت
 COPY . .
 
-# إنشاء سكربت تشغيل ذكي يحدد مسارات العمل للسيرفر لمنع الانهيار
+# إنشاء سكربت تشغيل السيرفر والبوت معاً
 RUN echo '#!/bin/bash' > start.sh && \
     echo 'telegram-bot-api --local --api-id=$TELEGRAM_API_ID --api-hash=$TELEGRAM_API_HASH --dir=/app/data --temp-dir=/app/data/temp &' >> start.sh && \
     echo 'sleep 5' >> start.sh && \
     echo 'python3 main.py' >> start.sh && \
     chmod +x start.sh
 
-# التشغيل المزدوج النظيف
-CMD ["./start.sh"]
+# إلغاء القفل الافتراضي للصورة وتشغيل السكربت الخاص بنا
+ENTRYPOINT ["/bin/bash", "./start.sh"]
