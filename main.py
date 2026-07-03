@@ -754,15 +754,6 @@ def extract_metadata(url: str):
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
-def _execute_single_search(engine: str, query: str, limit: int, opts: dict):
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            res = ydl.extract_info(f"{engine}:{limit}:{query}", download=False)
-            return res.get('entries', []) if res else []
-    except Exception as e:
-        logger.warning(f"Engine {engine} failed: {e}")
-        return []
-
 def search_youtube(query: str, limit: int = 50):
     opts = {
         "quiet": True,
@@ -776,21 +767,19 @@ def search_youtube(query: str, limit: int = 50):
     combined_entries = []
     seen_ids = set()
     
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        # تم استبدال ytmsearch بـ ytsearch مع تغيير الكلمات الدلالية لتفادي خطأ السيرفر Unsupported url scheme
-        future_music = pool.submit(_execute_single_search, "ytsearch", f"{query} official audio", limit, opts)
-        future_lyrics = pool.submit(_execute_single_search, "ytsearch", f"{query} lyrics", limit, opts)
-        future_general = pool.submit(_execute_single_search, "ytsearch", query, limit, opts)
-        
-        music_entries = future_music.result()
-        lyrics_entries = future_lyrics.result()
-        general_entries = future_general.result()
-        
-    for entry in music_entries + general_entries + lyrics_entries:
-        if entry and entry.get('id') and entry['id'] not in seen_ids:
-            combined_entries.append(entry)
-            seen_ids.add(entry['id'])
-                    
+    try:
+        # بحث يوتيوب العام فقط (Pure YouTube Search) لضمان التوافق وتفادي رسائل الأخطاء
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            res = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+            entries = res.get('entries', []) if res else []
+            
+        for entry in entries:
+            if entry and entry.get('id') and entry['id'] not in seen_ids:
+                combined_entries.append(entry)
+                seen_ids.add(entry['id'])
+    except Exception as e:
+        logger.warning(f"Engine ytsearch failed: {e}")
+                
     return {"entries": combined_entries}
 
 def download_hook(progress_data: dict):
@@ -1465,7 +1454,7 @@ async def post_init(app: Application):
         logger.warning(f"فشل تهيئة الأوامر: {e}")
 
 def main():
-    if not TOKEN: raise RuntimeError("الم المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
+    if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     init_db()
     
