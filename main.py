@@ -1319,7 +1319,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                             chat_id=query.message.chat_id, audio=f, title=title,
                             performer=request.get("artist", _t("txt_unknown", lang)), duration=duration,
                             caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
-                            read_timeout=1000, write_timeout=1000
+                            read_timeout=120, write_timeout=120
                         )
                     finally:
                         if t_file: t_file.close()
@@ -1328,7 +1328,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                         chat_id=query.message.chat_id, video=f, caption=caption,
                         supports_streaming=True,  
                         duration=duration, reply_markup=media_keyboard, parse_mode="HTML",
-                        read_timeout=1000, write_timeout=1000
+                        read_timeout=120, write_timeout=120
                     )
 
             stat_inc_sync("success")
@@ -1419,14 +1419,13 @@ def main():
     
     _cleanup_old_downloads_sync()
 
-        builder = Application.builder().token(TOKEN)
+    builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
         builder.base_url(LOCAL_API_URL)
-        builder.local_mode(True)  # <--- هذا هو السطر السحري لرفع 2 جيجا بلمح البصر
 
     app = (
         builder.post_init(post_init)
-        .connect_timeout(30).read_timeout(1000).write_timeout(1000).pool_timeout(30)
+        .connect_timeout(30).read_timeout(120).write_timeout(120).pool_timeout(30)
         .concurrent_updates(True)
         .build()
     )
