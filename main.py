@@ -249,118 +249,143 @@ def _t(key: str, lang: str = "ar", **kwargs) -> str:
 # إدارة قاعدة البيانات الشاملة (مع إضافات الحماية)
 # ==========================================================
 
+# ==========================================================
+# إدارة قاعدة البيانات الشاملة (Firebase Firestore Enterprise)
+# ==========================================================
+
+import json
+import firebase_admin
+from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1 import Increment
+
+db = None
+
 def init_db():
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY,
-                    username TEXT,
-                    first_name TEXT,
-                    last_name TEXT,
-                    first_seen INTEGER,
-                    last_seen INTEGER
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS stats (
-                    key TEXT PRIMARY KEY,
-                    value INTEGER
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS banned_users (
-                    id INTEGER PRIMARY KEY
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS settings (
-                    key TEXT PRIMARY KEY,
-                    value TEXT
-                )
-            """)
-            for k in ["requests", "success", "failed", "bytes", "broadcasts"]:
-                conn.execute("INSERT OR IGNORE INTO stats (key, value) VALUES (?, 0)", (k,))
-            conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('maintenance', '0')")
+    global db
+    try:
+        firebase_json_str = os.getenv("FIREBASE_KEY_JSON")
+        if not firebase_json_str:
+            logger.error("❌ متغير FIREBASE_KEY_JSON غير موجود في السيرفر.")
+            return
+            
+        cred_dict = json.loads(firebase_json_str)
+        cred = credentials.Certificate(cred_dict)
+        
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+            
+        db = firestore.client()
+        logger.info("✅ تم الاتصال بقاعدة بيانات Firebase Firestore بنجاح.")
+        
+        # تهيئة الإحصائيات الافتراضية إذا لم تكن موجودة مسبقاً
+        stats_ref = db.collection('settings').document('stats')
+        if not stats_ref.get().exists:
+            stats_ref.set({k: 0 for k in ["requests", "success", "failed", "bytes", "broadcasts"]})
+            
+        # تهيئة وضع الصيانة الافتراضي
+        config_ref = db.collection('settings').document('config')
+        if not config_ref.get().exists:
+            config_ref.set({'maintenance': '0'})
+    except Exception as e:
+        logger.error(f"❌ فشل تهيئة Firebase: {e}")
 
 def load_banned_users():
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            return {row[0] for row in conn.execute("SELECT id FROM banned_users").fetchall()}
+    try:
+        docs = db.collection('banned_users').stream()
+        return {int(doc.id) for doc in docs}
+    except Exception:
+        return set()
 
 def ban_user_db(uid):
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("INSERT OR IGNORE INTO banned_users (id) VALUES (?)", (uid,))
+    try:
+        db.collection('banned_users').document(str(uid)).set({'banned_at': int(time.time())})
+    except Exception as e:
+        logger.error(f"Error banning user: {e}")
 
 def set_setting(key, value):
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    try:
+        db.collection('settings').document('config').set({key: str(value)}, merge=True)
+    except Exception as e:
+        logger.error(f"Error setting config: {e}")
 
 def get_setting(key, default="0"):
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
-            return row[0] if row else default
+    try:
+        doc = db.collection('settings').document('config').get()
+        if doc.exists:
+            return doc.to_dict().get(key, default)
+    except Exception: pass
+    return default
 
 def optimize_db():
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("VACUUM")
+    pass
 
 def register_user_sync(user):
     if not user: return
     now = int(time.time())
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT first_seen FROM users WHERE id = ?", (user.id,))
-            row = cur.fetchone()
-            first_seen = row[0] if row else now
-            conn.execute("""
-                INSERT OR REPLACE INTO users (id, username, first_name, last_name, first_seen, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (user.id, user.username or "", user.first_name or "", user.last_name or "", first_seen, now))
+    try:
+        doc_ref = db.collection('users').document(str(user.id))
+        doc = doc_ref.get()
+        if not doc.exists:
+            doc_ref.set({
+                'id': user.id,
+                'username': user.username or "",
+                'first_name': user.first_name or "",
+                'last_name': user.last_name or "",
+                'first_seen': now,
+                'last_seen': now
+            })
+        else:
+            doc_ref.update({
+                'username': user.username or "",
+                'first_name': user.first_name or "",
+                'last_name': user.last_name or "",
+                'last_seen': now
+            })
+    except Exception as e:
+        logger.error(f"Error registering user: {e}")
 
 def stat_inc_sync(key: str, value: int = 1):
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.execute("UPDATE stats SET value = value + ? WHERE key = ?", (value, key))
+    try:
+        db.collection('settings').document('stats').update({key: Increment(value)})
+    except Exception as e:
+        logger.error(f"Error incrementing stat: {e}")
 
 def load_stats_sync() -> dict:
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            rows = conn.execute("SELECT key, value FROM stats").fetchall()
-            return {k: v for k, v in rows}
+    try:
+        doc = db.collection('settings').document('stats').get()
+        return doc.to_dict() if doc.exists else {}
+    except Exception:
+        return {}
 
 def all_user_ids() -> list:
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            rows = conn.execute("SELECT id FROM users").fetchall()
-            return [row[0] for row in rows]
+    try:
+        docs = db.collection('users').select(['id']).stream()
+        return [int(doc.id) for doc in docs]
+    except Exception as e:
+        logger.error(f"Error getting all user ids: {e}")
+        return []
 
 def get_all_users_data() -> list:
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("SELECT * FROM users").fetchall()
-            return [dict(r) for r in rows]
+    try:
+        docs = db.collection('users').stream()
+        return [doc.to_dict() for doc in docs]
+    except Exception:
+        return []
 
 def get_active_users_48h() -> list:
     threshold = int(time.time()) - (48 * 3600)
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            rows = conn.execute("SELECT id FROM users WHERE last_seen >= ?", (threshold,)).fetchall()
-            return [row[0] for row in rows]
+    try:
+        docs = db.collection('users').where('last_seen', '>=', threshold).select(['id']).stream()
+        return [int(doc.id) for doc in docs]
+    except Exception:
+        return []
 
 def get_latest_users(limit: int = 10) -> list:
-    with DB_LOCK:
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute("SELECT * FROM users ORDER BY last_seen DESC LIMIT ?", (limit,)).fetchall()
-            return [dict(r) for r in rows]
+    try:
+        docs = db.collection('users').order_by('last_seen', direction=firestore.Query.DESCENDING).limit(limit).stream()
+        return [doc.to_dict() for doc in docs]
+    except Exception:
+        return []
 
 # ==========================================================
 # أدوات الفحص، التنسيق، وتنبيهات الإدارة الحية
