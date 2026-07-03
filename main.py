@@ -777,15 +777,16 @@ def search_youtube(query: str, limit: int = 50):
     seen_ids = set()
     
     with ThreadPoolExecutor(max_workers=3) as pool:
-        future_ytm = pool.submit(_execute_single_search, "ytmsearch", query, limit, opts)
+        # تم استبدال ytmsearch بـ ytsearch مع تغيير الكلمات الدلالية لتفادي خطأ السيرفر Unsupported url scheme
         future_music = pool.submit(_execute_single_search, "ytsearch", f"{query} official audio", limit, opts)
+        future_lyrics = pool.submit(_execute_single_search, "ytsearch", f"{query} lyrics", limit, opts)
         future_general = pool.submit(_execute_single_search, "ytsearch", query, limit, opts)
         
-        ytm_entries = future_ytm.result()
         music_entries = future_music.result()
+        lyrics_entries = future_lyrics.result()
         general_entries = future_general.result()
         
-    for entry in ytm_entries + music_entries + general_entries:
+    for entry in music_entries + general_entries + lyrics_entries:
         if entry and entry.get('id') and entry['id'] not in seen_ids:
             combined_entries.append(entry)
             seen_ids.add(entry['id'])
@@ -1464,7 +1465,7 @@ async def post_init(app: Application):
         logger.warning(f"فشل تهيئة الأوامر: {e}")
 
 def main():
-    if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
+    if not TOKEN: raise RuntimeError("الم المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     init_db()
     
