@@ -763,7 +763,7 @@ def _execute_single_search(engine: str, query: str, limit: int, opts: dict):
         logger.warning(f"Engine {engine} failed: {e}")
         return []
 
-def search_youtube(query: str, limit: int = 10):
+def search_youtube(query: str, limit: int = 30):
     opts = {
         "quiet": True,
         "extract_flat": True,
@@ -776,14 +776,16 @@ def search_youtube(query: str, limit: int = 10):
     combined_entries = []
     seen_ids = set()
     
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        future_ytm = pool.submit(_execute_single_search, "ytmsearch", query, limit, opts)
         future_music = pool.submit(_execute_single_search, "ytsearch", f"{query} official audio", limit, opts)
         future_general = pool.submit(_execute_single_search, "ytsearch", query, limit, opts)
         
+        ytm_entries = future_ytm.result()
         music_entries = future_music.result()
         general_entries = future_general.result()
         
-    for entry in music_entries + general_entries:
+    for entry in ytm_entries + music_entries + general_entries:
         if entry and entry.get('id') and entry['id'] not in seen_ids:
             combined_entries.append(entry)
             seen_ids.add(entry['id'])
@@ -1073,7 +1075,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         status = await update.message.reply_text(_t("msg_searching", lang, query=esc(text)), parse_mode="HTML")
         try:
             loop = asyncio.get_running_loop()
-            search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=10))
+            search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=30))
             entries = search_info.get("entries", []) if search_info else []
             
             if not entries:
