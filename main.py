@@ -246,10 +246,6 @@ def _t(key: str, lang: str = "ar", **kwargs) -> str:
     return text
 
 # ==========================================================
-# إدارة قاعدة البيانات الشاملة (مع إضافات الحماية)
-# ==========================================================
-
-# ==========================================================
 # إدارة قاعدة البيانات الشاملة (Firebase Firestore Enterprise)
 # ==========================================================
 
@@ -268,14 +264,25 @@ def init_db():
             logger.error("❌ متغير FIREBASE_KEY_JSON غير موجود في السيرفر.")
             return
             
-        cred_dict = json.loads(firebase_json_str)
+        # تنظيف وفحص معطيات المفتاح البرمجي بدقة لحل مشكلة السطور الملتوية \\n وعلامات الاقتباس في السيرفرات السحابية
+        firebase_json_str = firebase_json_str.strip()
+        if firebase_json_str.startswith("'") and firebase_json_str.endswith("'"):
+            firebase_json_str = firebase_json_str[1:-1].strip()
+        elif firebase_json_str.startswith('"') and firebase_json_str.endswith('"'):
+            firebase_json_str = firebase_json_str[1:-1].strip()
+            
+        # تحويل الهيكل النصي إلى معطيات JSON مع معالجة الأسطر البرمجية الحساسة للـ Private Key
+        cred_dict = json.loads(firebase_json_str, strict=False)
+        if "private_key" in cred_dict:
+            cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
+            
         cred = credentials.Certificate(cred_dict)
         
         if not firebase_admin._apps:
             firebase_admin.initialize_app(cred)
             
         db = firestore.client()
-        logger.info("✅ تم الاتصال بقاعدة بيانات Firebase Firestore بنجاح.")
+        logger.info("✅ تم الاتصال بقاعدة بيانات Firebase Firestore بنجاح وبأعلى مستويات الاستقرار.")
         
         # تهيئة الإحصائيات الافتراضية إذا لم تكن موجودة مسبقاً
         stats_ref = db.collection('settings').document('stats')
@@ -382,7 +389,7 @@ def get_active_users_48h() -> list:
 
 def get_latest_users(limit: int = 10) -> list:
     try:
-        docs = db.collection('users').order_by('last_seen', direction=firestore.Query.DESCENDING).limit(limit).stream()
+        docs = db.collection('users').order_by('last_seen', direction='DESCENDING').limit(limit).stream()
         return [doc.to_dict() for doc in docs]
     except Exception:
         return []
@@ -505,7 +512,6 @@ def cookie_file_is_usable(path: Path) -> bool:
                 try: exp = int(expires)
                 except Exception: exp = 0
                 
-                # تم إزالة شرط وجود يوتيوب تحديداً، السماح بوجود أي كوكيز لأي منصة
                 if value.strip() and (exp == 0 or exp > now): 
                     has_valid_cookie = True
                     break
@@ -646,7 +652,7 @@ def build_admin_users_text(limit: int, lang: str = "ar") -> str:
     for u in users:
         name = esc(f"{u.get('first_name', '')} {u.get('last_name', '')}".strip())
         if not name: name = "بدون اسم"
-        text += f"• <code>{u['id']}</code> | {name}\n"
+        text += f"• <code>{u.get('id', '0')}</code> | {name}\n"
     return text
 
 def build_server_status_text(lang: str = "ar") -> str:
@@ -698,7 +704,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
 
     if mode == "audio":
-        # التعديل هنا: سحب أعلى جودة صوتية خام متوفرة في السيرفر أياً كانت صيغتها
         opts["format"] = "bestaudio/best"
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
@@ -722,7 +727,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
 def extract_metadata(url: str):
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
-    opts["extract_flat"] = False # السماح باستخراج بيانات كاملة للمنصات الاخرى
+    opts["extract_flat"] = False
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
@@ -818,9 +823,6 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         else:
             cmd.extend(["-vn"])
             
-        # التعديل الاحترافي للصوت:
-        # -q:a 0 : أعلى جودة متغيرة بذكاء (VBR) تحافظ على كل الترددات الدقيقة
-        # -compression_level 0 : أبطأ وأدق خوارزمية ضغط لمنع أي تشوه في الصوت
         cmd.extend(["-c:a", "libmp3lame", "-q:a", "0", "-compression_level", "0", "-threads", "0", str(output_file)])
         
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
@@ -837,17 +839,17 @@ async def user_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     try:
         uid = int(context.args[0])
-        with DB_LOCK:
-            with sqlite3.connect(DB_FILE) as conn:
-                conn.row_factory = sqlite3.Row
-                u = conn.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
-        if u:
+        doc_ref = db.collection('users').document(str(uid))
+        u_doc = doc_ref.get()
+        if u_doc.exists:
+            u = u_doc.to_dict()
             status = "🔴 Banned" if uid in BANNED_USERS_CACHE else "🟢 Active"
-            text = f"👤 <b>معلومات المستخدم:</b>\n\n• ID: <code>{u['id']}</code>\n• الاسم: {esc(u['first_name'])} {esc(u['last_name'])}\n• المعرف: @{u['username']}\n• الحالة: {status}"
+            text = f"👤 <b>معلومات المستخدم:</b>\n\n• ID: <code>{u.get('id', uid)}</code>\n• الاسم: {esc(u.get('first_name'))} {esc(u.get('last_name'))}\n• المعرف: @{u.get('username')}\n• الحالة: {status}"
             await update.message.reply_text(text, parse_mode="HTML")
         else:
             await update.message.reply_text("❌ المستخدم غير موجود بقاعدة البيانات.")
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking user info on Firebase: {e}")
         await update.message.reply_text("طريقة الاستخدام: /user ID")
 
 async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1136,7 +1138,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         writer = csv.writer(output)
         writer.writerow(["ID", "Username", "First Name", "Last Name", "First Seen", "Last Seen"])
         for u in users:
-            writer.writerow([u['id'], u.get('username',''), u.get('first_name',''), u.get('last_name',''), u.get('first_seen',''), u.get('last_seen','')])
+            writer.writerow([u.get('id',''), u.get('username',''), u.get('first_name',''), u.get('last_name',''), u.get('first_seen',''), u.get('last_seen','')])
         output.seek(0)
         file_bytes = io.BytesIO(output.getvalue().encode('utf-8'))
         file_bytes.name = f"PlayZone_Users_{int(time.time())}.csv"
@@ -1402,14 +1404,12 @@ async def youtube_health_monitor(app: Application):
 # ==========================================================
 
 async def post_init(app: Application):
-    # أوامر المستخدمين العاديين
     user_commands = [
         BotCommand("start", "بدء / Start"), 
         BotCommand("language", "تغيير اللغة / Toggle Language"), 
         BotCommand("links", "الروابط / Links")
     ]
     
-    # أوامر الإدارة (المستخدمين العاديين + أوامر التحكم)
     admin_commands = user_commands + [
         BotCommand("admin", "لوحة التحكم / Admin Panel"),
         BotCommand("user", "معلومات مستخدم / User Info"),
@@ -1419,10 +1419,8 @@ async def post_init(app: Application):
     ]
 
     try:
-        # تعيين القائمة الافتراضية للجميع
         await app.bot.set_my_commands(user_commands)
         
-        # تعيين قائمة الإدارة للمدراء فقط بناءً على الآي دي
         for admin_id in parse_admin_ids():
             try:
                 await app.bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(admin_id))
@@ -1458,7 +1456,6 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
-    # أمر الإدارة مخفي عن القائمة ولكنه يعمل إذا كتبته يدوياً
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("user", user_info_command))
     app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
