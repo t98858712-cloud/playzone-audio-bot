@@ -763,7 +763,7 @@ def _execute_single_search(engine: str, query: str, limit: int, opts: dict):
         logger.warning(f"Engine {engine} failed: {e}")
         return []
 
-def search_youtube(query: str, limit: int = 30):
+def search_youtube(query: str, limit: int = 50):
     opts = {
         "quiet": True,
         "extract_flat": True,
@@ -960,13 +960,15 @@ async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search
     page = data["page"]
     query = data["query"]
     
-    start_idx = page * 5
-    end_idx = start_idx + 5
+    start_idx = page * 10
+    end_idx = start_idx + 10
     current_entries = entries[start_idx:end_idx]
     
     results_text = _t("msg_search_results", lang, query=esc(query)) + "\n\n"
-    keyboard_row = []
-    number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+    number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    
+    btn_rows = []
+    current_row = []
     
     for i, entry in enumerate(current_entries):
         if not entry: continue
@@ -981,7 +983,13 @@ async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search
         results_text += f"   👤 {esc(uploader)} • ⏱ {esc(duration)}\n\n"
         
         if video_id:
-            keyboard_row.append(InlineKeyboardButton(num_emoji, callback_data=f"selsrc:{video_id}"))
+            current_row.append(InlineKeyboardButton(num_emoji, callback_data=f"selsrc:{video_id}"))
+            if len(current_row) == 5:
+                btn_rows.append(current_row)
+                current_row = []
+                
+    if current_row:
+        btn_rows.append(current_row)
     
     nav_row = []
     if page > 0:
@@ -989,15 +997,12 @@ async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search
     if end_idx < len(entries):
         nav_row.append(InlineKeyboardButton(_t("btn_next", lang), callback_data=f"page:{search_id}:{page+1}"))
         
-    final_keyboard = []
-    if keyboard_row:
-        final_keyboard.append(keyboard_row)
     if nav_row: 
-        final_keyboard.append(nav_row)
+        btn_rows.append(nav_row)
         
-    final_keyboard.append([InlineKeyboardButton(_t("btn_cancel", lang), callback_data="cancel_search")])
+    btn_rows.append([InlineKeyboardButton(_t("btn_cancel", lang), callback_data="cancel_search")])
     
-    await edit_message_smart(message, results_text, InlineKeyboardMarkup(final_keyboard))
+    await edit_message_smart(message, results_text, InlineKeyboardMarkup(btn_rows))
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
@@ -1075,7 +1080,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         status = await update.message.reply_text(_t("msg_searching", lang, query=esc(text)), parse_mode="HTML")
         try:
             loop = asyncio.get_running_loop()
-            search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=30))
+            search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=50))
             entries = search_info.get("entries", []) if search_info else []
             
             if not entries:
