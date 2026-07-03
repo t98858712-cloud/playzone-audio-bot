@@ -253,6 +253,7 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1 import Increment
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 db = None
 firebase_init_error = None
@@ -395,7 +396,7 @@ def get_active_users_48h() -> list:
     if db is None: return []
     threshold = int(time.time()) - (48 * 3600)
     try:
-        docs = db.collection('users').where('last_seen', '>=', threshold).select(['id']).stream()
+        docs = db.collection('users').where(filter=FieldFilter('last_seen', '>=', threshold)).select(['id']).stream()
         return [int(doc.id) for doc in docs]
     except Exception as e:
         logger.error(f"Error getting active users: {e}")
@@ -404,7 +405,7 @@ def get_active_users_48h() -> list:
 def get_latest_users(limit: int = 10) -> list:
     if db is None: return []
     try:
-        docs = db.collection('users').order_by('last_seen', direction='DESCENDING').limit(limit).stream()
+        docs = db.collection('users').order_by('last_seen', direction=firestore.Query.DESCENDING).limit(limit).stream()
         return [doc.to_dict() for doc in docs]
     except Exception as e:
         logger.error(f"Error getting latest users: {e}")
