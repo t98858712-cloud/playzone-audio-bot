@@ -252,6 +252,7 @@ def _t(key: str, lang: str = "ar", **kwargs) -> str:
 import json
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1 import Increment
 
 db = None
 firebase_init_error = None
@@ -359,7 +360,7 @@ def register_user_sync(user):
 def stat_inc_sync(key: str, value: int = 1):
     if db is None: return
     try:
-        db.collection('settings').document('stats').update({key: firestore.Increment(value)})
+        db.collection('settings').document('stats').update({key: Increment(value)})
     except Exception as e:
         logger.error(f"Error incrementing stat {key}: {e}")
 
@@ -403,7 +404,7 @@ def get_active_users_48h() -> list:
 def get_latest_users(limit: int = 10) -> list:
     if db is None: return []
     try:
-        docs = db.collection('users').order_by('last_seen', direction=firestore.Query.DESCENDING).limit(limit).stream()
+        docs = db.collection('users').order_by('last_seen', direction='DESCENDING').limit(limit).stream()
         return [doc.to_dict() for doc in docs]
     except Exception as e:
         logger.error(f"Error getting latest users: {e}")
