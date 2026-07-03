@@ -754,7 +754,7 @@ def extract_metadata(url: str):
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
-def search_youtube(query: str, limit: int = 50):
+def search_youtube(query: str, limit: int = 30):
     opts = {
         "quiet": True,
         "extract_flat": True,
@@ -768,7 +768,6 @@ def search_youtube(query: str, limit: int = 50):
     seen_ids = set()
     
     try:
-        # بحث يوتيوب العام فقط (Pure YouTube Search) لضمان التوافق وتفادي رسائل الأخطاء
         with yt_dlp.YoutubeDL(opts) as ydl:
             res = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
             entries = res.get('entries', []) if res else []
@@ -950,12 +949,12 @@ async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search
     page = data["page"]
     query = data["query"]
     
-    start_idx = page * 10
-    end_idx = start_idx + 10
+    start_idx = page * 5
+    end_idx = start_idx + 5
     current_entries = entries[start_idx:end_idx]
     
     results_text = _t("msg_search_results", lang, query=esc(query)) + "\n\n"
-    number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+    number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
     
     btn_rows = []
     current_row = []
@@ -1070,8 +1069,9 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         status = await update.message.reply_text(_t("msg_searching", lang, query=esc(text)), parse_mode="HTML")
         try:
             loop = asyncio.get_running_loop()
-            search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=50))
+            search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=30))
             entries = search_info.get("entries", []) if search_info else []
+            entries = entries[:25]
             
             if not entries:
                 return await status.edit_text(_t("msg_no_results", lang, query=esc(text)), parse_mode="HTML")
