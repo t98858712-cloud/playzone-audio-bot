@@ -4,11 +4,13 @@ import time
 import shutil
 import logging
 import asyncio
+import os
+import subprocess
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.error import RetryAfter, BadRequest
 
-import database.connection as conn  # تصحيح الاستيراد ليكون حركياً ديناميكياً
+import database.connection as conn
 from database.operations import (
     all_user_ids, get_active_users_48h, stat_inc_sync, load_stats_sync, 
     get_latest_users, get_setting, get_all_users_data, optimize_db, 
@@ -19,8 +21,6 @@ from utils.keyboards import admin_main_keyboard, admin_broadcast_menu, admin_bro
 from locales.language import _t
 from core.config import BASE_DOWNLOAD_DIR, COOKIES_FILE, DB_FILE, EXECUTOR
 from core.security import BANNED_USERS_CACHE
-import os
-import subprocess
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
@@ -42,7 +42,13 @@ async def user_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if u_doc.exists:
             u = u_doc.to_dict()
             status = "🔴 Banned" if uid in BANNED_USERS_CACHE else "🟢 Active"
-            text = f"👤 <b>معلومات المستخدم:</b>\n\n• ID: <code>{u.get('id', uid)}</code>\n• الاسم: {esc(u.get('first_name'))} {esc(u.get('last_name'))}\n• المعرف: @{u.get('username')}\n• الحالة: {status}"
+            text = (
+                f"👤 <b>معلومات المستخدم:</b>\n\n"
+                f"• ID: <code>{u.get('id', uid)}</code>\n"
+                f"• الاسم: {esc(u.get('first_name'))} {esc(u.get('last_name'))}\n"
+                f"• المعرف: @{u.get('username')}\n"
+                f"• الحالة: {status}"
+            )
             await update.message.reply_text(text, parse_mode="HTML")
         else:
             await update.message.reply_text("❌ المستخدم غير موجود بقاعدة البيانات.")
@@ -71,9 +77,13 @@ async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     try:
         with open(DB_FILE, "rb") as f:
-            await update.message.reply_document(document=f, filename="bot_database.db", caption="نسخة احتياطية لقاعدة البيانات المحلية.")
+            await update.message.reply_document(
+                document=f, 
+                filename="bot_database.db", 
+                caption="📦 نسخة احتياطية لقاعدة البيانات المحلية الناتجة عن النظام المؤسسي."
+            )
     except Exception as e:
-        await update.message.reply_text(f"❌ تعذر النسخ الاحتياطي: {e}")
+        await update.message.reply_text(f"❌ تعذر إجراء النسخ الاحتياطي: {e}")
 
 async def safe_delete(message):
     try: await message.delete()
@@ -113,7 +123,8 @@ async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_T
             except Exception: fail += 1
         except Exception: fail += 1
         if i % 20 == 0 and i > 0:
-            try: await status.edit_text(f"⏳ <b>جاري تقدم الإذاعة:</b> {i} / {total}\n✅ نجاح: {sent} | ❌ فشل: {fail}", parse_mode="HTML")
+            try: 
+                await status.edit_text(f"⏳ <b>جاري تقدم الإذاعة:</b> {i} / {total}\n✅ نجاح: {sent} | ❌ فشل: {fail}", parse_mode="HTML")
             except Exception: pass
     stat_inc_sync("broadcasts")
     await status.edit_text(_t("msg_adm_bc_done", lang, sent=sent, fail=fail), parse_mode="HTML")
@@ -125,7 +136,18 @@ def build_admin_stats_text(lang: str = "ar") -> str:
     total_users = len(all_user_ids())
     active_users = len(get_active_users_48h())
     downloaded = format_size(stats.get('bytes', 0), lang)
-    return f"📊 <b>إحصائيات البوت الشاملة:</b>\n\n👥 إجمالي المستخدمين: <code>{total_users}</code>\n⚡ النشطين (آخر 48 ساعة): <code>{active_users}</code>\n\n📥 إجمالي الطلبات: <code>{stats.get('requests', 0)}</code>\n✅ الطلبات الناجحة: <code>{stats.get('success', 0)}</code>\n❌ الطلبات الفاشلة: <code>{stats.get('failed', 0)}</code>\n💾 حجم البيانات المحملة: <code>{downloaded}</code>\n📢 عدد الإذاعات: <code>{stats.get('broadcasts', 0)}</code>"
+    
+    text = (
+        f"📊 <b>إحصائيات البوت الشاملة:</b>\n\n"
+        f"👥 إجمالي المستخدمين: <code>{total_users}</code>\n"
+        f"⚡ النشطين (آخر 48 ساعة): <code>{active_users}</code>\n\n"
+        f"📥 إجمالي الطلبات: <code>{stats.get('requests', 0)}</code>\n"
+        f"✅ الطلبات الناجحة: <code>{stats.get('success', 0)}</code>\n"
+        f"❌ الطلبات الفاشلة: <code>{stats.get('failed', 0)}</code>\n"
+        f"💾 حجم البيانات المحملة: <code>{downloaded}</code>\n"
+        f"📢 عدد الإذاعات: <code>{stats.get('broadcasts', 0)}</code>"
+    )
+    return text
 
 def build_admin_users_text(limit: int, lang: str = "ar") -> str:
     if conn.db is None: return "⚠️ قاعدة البيانات غير متصلة."
@@ -140,7 +162,14 @@ def build_admin_users_text(limit: int, lang: str = "ar") -> str:
 
 def build_server_status_text(lang: str = "ar") -> str:
     total, used, free = shutil.disk_usage(BASE_DOWNLOAD_DIR)
-    return f"📁 <b>حالة السيرفر ومساحة التخزين:</b>\n\n💽 المساحة الكلية: <code>{format_size(total, lang)}</code>\n🟢 المساحة المستخدمة: <code>{format_size(used, lang)}</code>\n⚪ المساحة الحرة: <code>{format_size(free, lang)}</code>\n\n⚙️ مسار التحميل: <code>{BASE_DOWNLOAD_DIR}</code>"
+    text = (
+        f"📁 <b>حالة السيرفر ومساحة التخزين:</b>\n\n"
+        f"💽 المساحة الكلية: <code>{format_size(total, lang)}</code>\n"
+        f"🟢 المساحة المستخدمة: <code>{format_size(used, lang)}</code>\n"
+        f"⚪ المساحة الحرة: <code>{format_size(free, lang)}</code>\n\n"
+        f"⚙️ مسار التحميل: <code>{BASE_DOWNLOAD_DIR}</code>"
+    )
+    return text
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
