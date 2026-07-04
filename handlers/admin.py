@@ -220,8 +220,8 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
                     await update.message.reply_text(text, reply_markup=admin_users_menu(lang), parse_mode="HTML")
                 else:
                     await update.message.reply_text("❌ المستخدم غير موجود بقاعدة البيانات.", reply_markup=admin_users_menu(lang))
-                except Exception as e:
-                    await update.message.reply_text(f"❌ خطأ في القراءة: الرجاء إرسال ID صالح.", reply_markup=admin_users_menu(lang))
+            except Exception as e:
+                await update.message.reply_text(f"❌ خطأ في القراءة: الرجاء إرسال ID صالح.", reply_markup=admin_users_menu(lang))
             return True
 
-        return False
+    return False
