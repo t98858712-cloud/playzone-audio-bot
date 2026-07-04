@@ -731,7 +731,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
 
     if mode == "audio":
-        # سحب أفضل جودة صوتية خام متوفرة من الخوادم للحصول على أنقى طبقة صوتية
         opts["format"] = "bestaudio/best"
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
@@ -831,28 +830,13 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     except Exception: return None
 
 def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path = None) -> bool:
-    if not shutil.which("ffmpeg"):
-        logger.warning("أداة FFmpeg غير مثبتة في السيرفر. سيتم استخدام الملف الصوتي الخام.")
-        return False
-        
     try:
         cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(input_file)]
         if local_thumb and local_thumb.exists():
             cmd.extend(["-i", str(local_thumb), "-map", "0:a", "-map", "1:v", "-c:v", "mjpeg", "-id3v2_version", "3", "-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
         else:
             cmd.extend(["-vn"])
-            
-        # إجبار FFmpeg على استخدام أعلى جودة MP3 ممكنة (320kbps CBR, 48000Hz Stereo)
-        cmd.extend([
-            "-c:a", "libmp3lame", 
-            "-b:a", "320k",       
-            "-ar", "48000",       
-            "-ac", "2",           
-            "-compression_level", "0", 
-            "-threads", "0", 
-            str(output_file)
-        ])
-        
+        cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "48000", "-ac", "2", "-threads", "0", str(output_file)])
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
     except Exception as e:
