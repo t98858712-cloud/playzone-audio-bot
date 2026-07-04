@@ -6,7 +6,7 @@ import urllib.request
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
-from telegram.ext import Application  # تم إضافة السطر المصحح والمطلوب هنا لتعريف الحاوية المؤسسية
+from telegram.ext import Application  # تعريف الحاوية المؤسسية للمراقبة الذكية
 from core.config import COOKIES_FILE, LOCAL_API_URL, EXECUTOR
 from utils.helpers import cookie_file_is_usable, make_progress_bar, format_size
 from locales.language import _t
@@ -55,6 +55,25 @@ def extract_metadata(url: str) -> dict:
         if "sign in" in str(e).lower() or "confirm your age" in str(e).lower():
             raise ContentRestrictedException("المقطع يتطلب تسجيل دخول أو مقيد بالفئة العمرية.", {"url": url})
         raise MediaDownloadException(f"فشل استخراج بيانات المعاينة للمقطع: {e}", {"url": url})
+
+# إعادة دمج محرك البحث المعتمد والذكي التابع للمنصة
+def search_youtube(query: str, limit: int = 30):
+    opts = {"quiet": True, "extract_flat": True, "no_warnings": True, "ignoreerrors": True}
+    if cookie_file_is_usable(COOKIES_FILE):
+        opts["cookiefile"] = str(COOKIES_FILE)
+    combined_entries = []
+    seen_ids = set()
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            res = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+            entries = res.get('entries', []) if res else []
+        for entry in entries:
+            if entry and entry.get('id') and entry['id'] not in seen_ids:
+                combined_entries.append(entry)
+                seen_ids.add(entry['id'])
+    except Exception as e:
+        logger.warning(f"Engine ytsearch failed: {e}")
+    return {"entries": combined_entries}
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720") -> dict:
     try:
