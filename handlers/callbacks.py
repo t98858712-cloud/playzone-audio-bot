@@ -34,7 +34,9 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query: return
-    data, uid, lang = query.data or "", query.fromuser.id if hasattr(query, 'from_user') else query.from_user.id, context.user_data.get("lang", "ar")
+    
+    # تم تصحيح الخطأ المطبعي هنا من fromuser إلى from_user
+    data, uid, lang = query.data or "", query.from_user.id, context.user_data.get("lang", "ar")
     
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer("⛔ هذا الزر مخصص للمدراء فقط.", show_alert=True)
@@ -187,7 +189,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
             with open(target_file, "rb") as f:
                 if mode == "audio":
-                    # كود إرسال الصوت الأصلي بالكامل دون أي تعديل
                     t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
                     try:
                         await context.bot.send_audio(
