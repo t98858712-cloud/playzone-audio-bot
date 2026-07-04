@@ -13,6 +13,7 @@ def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
     )
 
 def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
+    # ... (كما هو بدون تغيير)
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(_t("btn_audio", lang), callback_data=f"aud:{request_id}")],
         [InlineKeyboardButton(_t("btn_video", lang), callback_data=f"vid:{request_id}")],
@@ -20,57 +21,63 @@ def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardM
     ])
 
 def build_resolution_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
+    # ... (كما هو بدون تغيير)
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("360p", callback_data=f"res:360:{request_id}"),
-            InlineKeyboardButton("480p", callback_data=f"res:480:{request_id}")
-        ],
-        [
-            InlineKeyboardButton("720p", callback_data=f"res:720:{request_id}"),
-            InlineKeyboardButton("1080p", callback_data=f"res:1080:{request_id}")
-        ],
+        [InlineKeyboardButton("360p", callback_data=f"res:360:{request_id}"), InlineKeyboardButton("480p", callback_data=f"res:480:{request_id}")],
+        [InlineKeyboardButton("720p", callback_data=f"res:720:{request_id}"), InlineKeyboardButton("1080p", callback_data=f"res:1080:{request_id}")],
         [InlineKeyboardButton(_t("btn_best_quality", lang), callback_data=f"res:best:{request_id}")],
         [InlineKeyboardButton(_t("btn_back", lang), callback_data=f"back:{request_id}")]
     ])
 
 def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
+    # ... (كما هو بدون تغيير)
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌐 Website PlayZone", url=WEBSITE_PLAYZONE)],
-        [InlineKeyboardButton("📘 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
+        [InlineKeyboardButton("🔗 Website PlayZone", url=WEBSITE_PLAYZONE)],
+        [InlineKeyboardButton("📱 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=TELEGRAM_BOT_PLAYZONE)],
     ])
 
+# ================= لوحات الإدارة الجديدة =================
+
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(_t("btn_adm_bc_menu", lang), callback_data="adm_bc_menu"), InlineKeyboardButton(_t("btn_adm_users_menu", lang), callback_data="adm_users_menu")],
-        [InlineKeyboardButton(_t("btn_adm_sec_menu", lang), callback_data="adm_sec_menu"), InlineKeyboardButton(_t("btn_adm_srv", lang), callback_data="adm_server")],
-        [InlineKeyboardButton(_t("btn_adm_close", lang), callback_data="adm_close")]
+        [InlineKeyboardButton("📢 الإذاعة الشاملة", callback_data="adm_bc_menu"), InlineKeyboardButton("👥 المستخدمين", callback_data="adm_users_menu")],
+        [InlineKeyboardButton("🛡️ الحماية والصيانة", callback_data="adm_sec_menu"), InlineKeyboardButton("⚙️ إعدادات النظام", callback_data="adm_sys_menu")],
+        [InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")]
     ])
 
-def admin_broadcast_menu(lang: str = "ar") -> InlineKeyboardMarkup:
+def admin_system_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(_t("btn_adm_bc_all", lang), callback_data="adm_bc_start:all")],
-        [InlineKeyboardButton(_t("btn_adm_bc_active", lang), callback_data="adm_bc_start:active")],
-        [InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]
+        [InlineKeyboardButton("🔄 تحديث المكتبة (yt-dlp)", callback_data="adm_update_dlp")],
+        [InlineKeyboardButton("🍪 تحديث الكوكيز", callback_data="adm_req_cookie"), InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="adm_main_back")]
     ])
 
 def admin_users_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(_t("btn_adm_stats", lang), callback_data="adm_stats"), InlineKeyboardButton(_t("btn_adm_users_list", lang), callback_data="adm_users")],
-        [InlineKeyboardButton(_t("btn_adm_export", lang), callback_data="adm_export_db")],
-        [InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]
+        [InlineKeyboardButton("📊 الإحصائيات", callback_data="adm_stats"), InlineKeyboardButton("📋 آخر المستخدمين", callback_data="adm_users")],
+        [InlineKeyboardButton("🔍 الاستعلام عن مستخدم", callback_data="adm_req_user")],
+        [InlineKeyboardButton("📥 تصدير البيانات (CSV)", callback_data="adm_export_db")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="adm_main_back")]
     ])
 
 def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     maint = get_setting("maintenance", "0")
-    maint_btn = InlineKeyboardButton(_t("btn_adm_maint_off", lang), callback_data="adm_toggle_maint") if maint == "1" else InlineKeyboardButton(_t("btn_adm_maint_on", lang), callback_data="adm_toggle_maint")
+    maint_btn = InlineKeyboardButton("إيقاف الصيانة 🟢", callback_data="adm_toggle_maint") if maint == "1" else InlineKeyboardButton("تشغيل الصيانة 🔴", callback_data="adm_toggle_maint")
     return InlineKeyboardMarkup([
         [maint_btn],
-        [InlineKeyboardButton(_t("btn_adm_vacuum", lang), callback_data="adm_vacuum_db"), InlineKeyboardButton(_t("btn_adm_clean", lang), callback_data="adm_clean")],
-        [InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]
+        [InlineKeyboardButton("🗜️ تحسين الـ Database", callback_data="adm_vacuum_db"), InlineKeyboardButton("🧹 تنظيف الكاش", callback_data="adm_clean")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="adm_main_back")]
     ])
 
-def admin_broadcast_cancel_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
+def admin_broadcast_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(_t("btn_adm_cancel_bc", lang), callback_data="adm_cancel_bc")]
+        [InlineKeyboardButton("رسالة للجميع 🌍", callback_data="adm_bc_start:all")],
+        [InlineKeyboardButton("للنشطين (48h) ⚡", callback_data="adm_bc_start:active")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="adm_main_back")]
+    ])
+
+def admin_cancel_action_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ إلغاء العملية والرجوع", callback_data="adm_main_back")]
     ])
