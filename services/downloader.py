@@ -8,9 +8,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 from telegram.ext import Application
 from core.config import COOKIES_FILE, LOCAL_API_URL, PROGRESS_UPDATE_SECONDS, EXECUTOR
-from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progress_bar, format_size
+from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progress_bar, format_size, progress_lock
 from locales.language import _t
-from utils.helpers import progress_lock
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
@@ -19,6 +18,15 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        
+        "external_downloader": "aria2c",
+        "external_downloader_args": [
+            "--min-split-size=1M", 
+            "--max-connection-per-server=16", 
+            "--split=16",
+            "--jpipe=true"
+        ],
+        
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -33,8 +41,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # استخدام <? يعني (أقل من الحجم، أو إذا كان الحجم مجهولاً)
-        # وإضافة /best في النهاية كمسار إنقاذ احتياطي لمنع خطأ Requested format is not available
         if resolution == "best":
             opts["format"] = f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/bestvideo[filesize<?{max_fs}]+bestaudio/best[filesize<?{max_fs}]/best"
         else:
@@ -55,7 +61,6 @@ def extract_metadata(url: str):
     opts["skip_download"] = True
     opts["extract_flat"] = False
     
-    # السطر الذهبي: إزالة شرط الصيغة تماماً عند طلب المعاينة لتجنب أي أخطاء
     opts.pop("format", None) 
     
     with yt_dlp.YoutubeDL(opts) as ydl:
@@ -130,7 +135,7 @@ async def youtube_health_monitor(app: Application):
         await asyncio.sleep(6 * 3600)
         try:
             if not cookie_file_is_usable(COOKIES_FILE):
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر من لوحة التحكم لمنع توقف التحميل.")
                 continue
             opts = {"quiet": True, "extract_flat": True, "cookiefile": str(COOKIES_FILE)}
             with yt_dlp.YoutubeDL(opts) as ydl:
