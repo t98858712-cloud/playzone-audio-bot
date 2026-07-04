@@ -61,18 +61,55 @@ async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from handlers.admin import handle_broadcast_media
+    from utils.keyboards import admin_main_keyboard
+    from database.connection import db
+    from core.config import COOKIES_FILE
+    
     uid = update.effective_user.id
     if uid in BANNED_USERS_CACHE: return
+    
     maintenance = get_setting("maintenance", "0")
     lang = context.user_data.get("lang", "ar")
+    
     if maintenance == "1" and not is_admin(uid):
         return await update.message.reply_text(_t("msg_maintenance", lang), parse_mode="HTML")
-    if getattr(update, "message", None):
-        if is_admin(uid) and context.user_data.get("bc_active"):
+
+    if is_admin(uid):
+        if context.user_data.get("bc_active"):
             return await handle_broadcast_media(update, context)
+
+        if context.user_data.get("admin_state") == "wait_user_id" and update.message.text:
+            context.user_data.pop("admin_state", None)
+            target_uid = update.message.text.strip()
+            try:
+                doc_ref = db.collection('users').document(str(target_uid))
+                u_doc = doc_ref.get()
+                if u_doc.exists:
+                    u = u_doc.to_dict()
+                    status = "🔴 Banned" if int(target_uid) in BANNED_USERS_CACHE else "🟢 Active"
+                    text = f"👤 <b>معلومات المستخدم:</b>\n\n• ID: <code>{u.get('id', target_uid)}</code>\n• الاسم: {esc(u.get('first_name'))} {esc(u.get('last_name'))}\n• المعرف: @{u.get('username')}\n• الحالة: {status}"
+                else:
+                    text = "❌ المستخدم غير موجود بقاعدة بيانات Firebase."
+            except Exception:
+                text = "❌ خطأ: يرجى إرسال رقم ID صالح."
+
+            await update.message.reply_text(text, parse_mode="HTML", reply_markup=admin_main_keyboard(lang))
+            return
+
+        if context.user_data.get("admin_state") == "wait_cookie_file":
+            if getattr(update.message, "document", None) and update.message.document.file_name == "cookies.txt":
+                context.user_data.pop("admin_state", None)
+                new_file = await context.bot.get_file(update.message.document.file_id)
+                await new_file.download_to_drive(COOKIES_FILE)
+                await update.message.reply_text("✅ تم استلام وتحديث ملف <code>cookies.txt</code> بنجاح!", parse_mode="HTML", reply_markup=admin_main_keyboard(lang))
+            else:
+                await update.message.reply_text("❌ الرجاء إرسال ملف بصيغة txt وباسم <code>cookies.txt</code> حصراً.", parse_mode="HTML", reply_markup=admin_main_keyboard(lang))
+            return
+
     if not update.message or not update.message.text: return
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
+    
     if not is_admin(uid):
         now = time.time()
         reqs = ANTI_SPAM_CACHE.setdefault(uid, [])
