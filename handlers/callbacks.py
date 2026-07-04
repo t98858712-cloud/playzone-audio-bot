@@ -35,7 +35,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query: return
     
-    # تم تصحيح الخطأ المطبعي هنا من fromuser إلى from_user
+    # تصحيح مسار query.from_user.id بشكل نهائي هنا
     data, uid, lang = query.data or "", query.from_user.id, context.user_data.get("lang", "ar")
     
     if data.startswith("adm_"):
@@ -149,6 +149,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
             
+            # استخلاص الجودة المختارة من الخيارات الـ 5
             info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data, resolution))
             
             files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
@@ -172,6 +173,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             stop_event.set()
             await edit_message_smart(query.message, _t("msg_uploading", lang), reply_markup=None)
 
+            # استخراج أبعاد الشاشة للمصدر بدقة وحقنها لتليجرام لمنع التشويه
             native_width = info_dict.get("width")
             native_height = info_dict.get("height")
             
@@ -204,8 +206,8 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                     await context.bot.send_video(
                         chat_id=query.message.chat_id, video=f, caption=caption, 
                         supports_streaming=True, duration=duration, 
-                        width=native_width,
-                        height=native_height,
+                        width=native_width,    # تمرير العرض الأصلي
+                        height=native_height,  # تمرير الارتفاع الأصلي
                         reply_markup=media_keyboard, parse_mode="HTML", 
                         read_timeout=120, write_timeout=120
                     )
