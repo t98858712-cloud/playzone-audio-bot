@@ -27,7 +27,6 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     register_user_sync(update.effective_user)
     
-    # تفريغ أي حالات سابقة
     context.user_data.pop("bc_active", None)
     context.user_data.pop("awaiting_cookie", None)
     context.user_data.pop("awaiting_uid", None)
@@ -50,7 +49,33 @@ async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: 
     except Exception as e:
         logger.debug(f"تخطي تحديث الرسالة: {e}")
 
-# ... (دوال build_admin_stats_text و build_admin_users_text و build_server_status_text و handle_broadcast_media تبقى كما هي بدون تغيير)
+async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["bc_active"] = False
+    lang = context.user_data.get("lang", "ar")
+    target = context.user_data.get("bc_target", "all")
+    users = all_user_ids() if target == "all" else get_active_users_48h()
+    if not users: return await update.message.reply_text(_t("msg_adm_no_users", lang))
+    status = await update.message.reply_text(_t("msg_adm_bc_start", lang))
+    sent, fail = 0, 0
+    total = len(users)
+    for i, user_id in enumerate(users):
+        try:
+            await update.message.copy(chat_id=user_id)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except RetryAfter as e: 
+            await asyncio.sleep(int(e.retry_after) + 1)
+            try:
+                await update.message.copy(chat_id=user_id)
+                sent += 1
+            except Exception: fail += 1
+        except Exception: fail += 1
+        if i % 20 == 0 and i > 0:
+            try: await status.edit_text(f"⏳ <b>جاري تقدم الإذاعة:</b> {i} / {total}\n✅ نجاح: {sent} | ❌ فشل: {fail}", parse_mode="HTML")
+            except Exception: pass
+    stat_inc_sync("broadcasts")
+    await status.edit_text(_t("msg_adm_bc_done", lang, sent=sent, fail=fail), parse_mode="HTML")
+
 def build_admin_stats_text(lang: str = "ar") -> str:
     if db is None: return f"⚠️ <b>خطأ تشخيص حي في الاتصال بـ Firebase:</b>\n<code>{firebase_init_error}</code>"
     stats = load_stats_sync()
@@ -74,12 +99,10 @@ def build_server_status_text(lang: str = "ar") -> str:
     total, used, free = shutil.disk_usage(BASE_DOWNLOAD_DIR)
     return f"📁 <b>حالة السيرفر ومساحة التخزين:</b>\n\n💽 المساحة الكلية: <code>{format_size(total, lang)}</code>\n🟢 المساحة المستخدمة: <code>{format_size(used, lang)}</code>\n⚪ المساحة الحرة: <code>{format_size(free, lang)}</code>\n\n⚙️ مسار التحميل: <code>{BASE_DOWNLOAD_DIR}</code>"
 
-
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     lang = context.user_data.get("lang", "ar")
     
-    # تصفير حالات الانتظار عند التنقل في القوائم
     context.user_data.pop("awaiting_cookie", None)
     context.user_data.pop("awaiting_uid", None)
     
@@ -88,7 +111,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return await edit_message_smart(query.message, _t("msg_adm_panel", lang), reply_markup=admin_main_keyboard(lang))
         
-    # --- قوائم التنقل الرئيسية ---
     elif data == "adm_bc_menu":
         await query.answer()
         return await edit_message_smart(query.message, "📢 <b>خيارات الإذاعة الشاملة:</b>\nاختر الشريحة المستهدفة:", reply_markup=admin_broadcast_menu(lang))
@@ -102,7 +124,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return await edit_message_smart(query.message, "⚙️ <b>إعدادات النظام والسيرفر:</b>", reply_markup=admin_system_menu(lang))
         
-    # --- وظائف إعدادات النظام ---
     elif data == "adm_update_dlp":
         await query.answer("جاري تحديث yt-dlp... 🔄")
         try:
@@ -118,7 +139,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return await edit_message_smart(query.message, build_server_status_text(lang), reply_markup=admin_system_menu(lang))
 
-    # --- وظائف إدارة المستخدمين ---
     elif data == "adm_stats":
         await query.answer()
         return await edit_message_smart(query.message, build_admin_stats_text(lang), reply_markup=admin_users_menu(lang))
@@ -142,7 +162,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_document(chat_id=query.message.chat_id, document=file_bytes, caption="📊 نسخة كاملة من بيانات المستخدمين.")
         return
 
-    # --- وظائف الحماية والصيانة ---
     elif data == "adm_toggle_maint":
         current = get_setting("maintenance", "0")
         new_val = "0" if current == "1" else "1"
@@ -158,7 +177,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
         return await edit_message_smart(query.message, f"✅ <b>تم التنظيف!</b>\nتم إزالة {removed} ملف مؤقت.", reply_markup=admin_security_menu(lang))
         
-    # --- وظائف الإذاعة ---
     elif data.startswith("adm_bc_start:"):
         target = data.split(":")[1]
         context.user_data["bc_active"] = True
@@ -166,25 +184,17 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return await edit_message_smart(query.message, _t("msg_adm_bc_ask", lang), reply_markup=admin_cancel_action_keyboard(lang))
         
-    # --- الإغلاق ---
     elif data == "adm_close":
         await query.answer("تم الإغلاق ✖️")
         return await safe_delete(query.message)
 
-
-# ================= دالة التقاط مدخلات الإدارة =================
 async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """
-    تلتقط النصوص أو الملفات إذا كان المدير في حالة انتظار لشيء معين (ID أو Cookies).
-    تعيد True إذا تم التعامل مع الحدث (لمنع تمريره لوظائف المستخدم العادية).
-    """
     if getattr(update, "message", None) is None: return False
     uid = update.effective_user.id
     if not is_admin(uid): return False
     
     lang = context.user_data.get("lang", "ar")
 
-    # 1. استقبال ملف الكوكيز
     if context.user_data.get("awaiting_cookie"):
         if update.message.document:
             new_file = await context.bot.get_file(update.message.document.file_id)
@@ -195,7 +205,6 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("❌ الرجاء إرسال الكوكيز كملف (Document) أو اضغط 'إلغاء العملية'.", reply_markup=admin_cancel_action_keyboard(lang))
         return True
 
-    # 2. استقبال ID المستخدم للاستعلام
     if context.user_data.get("awaiting_uid"):
         if update.message.text:
             context.user_data["awaiting_uid"] = False
@@ -211,8 +220,8 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
                     await update.message.reply_text(text, reply_markup=admin_users_menu(lang), parse_mode="HTML")
                 else:
                     await update.message.reply_text("❌ المستخدم غير موجود بقاعدة البيانات.", reply_markup=admin_users_menu(lang))
-            except Exception as e:
-                await update.message.reply_text(f"❌ خطأ في القراءة: الرجاء إرسال ID صالح.", reply_markup=admin_users_menu(lang))
-        return True
+                except Exception as e:
+                    await update.message.reply_text(f"❌ خطأ في القراءة: الرجاء إرسال ID صالح.", reply_markup=admin_users_menu(lang))
+            return True
 
-    return False
+        return False
