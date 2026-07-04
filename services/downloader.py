@@ -6,9 +6,9 @@ import urllib.request
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
-from telegram.ext import Application  # تعريف الحاوية المؤسسية للمراقبة الذكية
-from core.config import COOKIES_FILE, LOCAL_API_URL, EXECUTOR
-from utils.helpers import cookie_file_is_usable, make_progress_bar, format_size
+from telegram.ext import Application 
+from core.config import COOKIES_FILE, LOCAL_API_URL, EXECUTOR, PROGRESS_UPDATE_SECONDS
+from utils.helpers import cookie_file_is_usable, make_progress_bar, format_size, progress_lock
 from locales.language import _t
 from core.exceptions import MediaDownloadException, ContentRestrictedException
 
@@ -56,7 +56,6 @@ def extract_metadata(url: str) -> dict:
             raise ContentRestrictedException("المقطع يتطلب تسجيل دخول أو مقيد بالفئة العمرية.", {"url": url})
         raise MediaDownloadException(f"فشل استخراج بيانات المعاينة للمقطع: {e}", {"url": url})
 
-# إعادة دمج محرك البحث المعتمد والذكي التابع للمنصة
 def search_youtube(query: str, limit: int = 30):
     opts = {"quiet": True, "extract_flat": True, "no_warnings": True, "ignoreerrors": True}
     if cookie_file_is_usable(COOKIES_FILE):
@@ -83,6 +82,18 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, re
     except Exception as e:
         raise MediaDownloadException(f"فشل تنزيل ملف الميديا من المصدر: {e}", {"url": url, "mode": mode})
 
+def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
+    from utils.helpers import is_public_host
+    try:
+        if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
+        req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=6) as response:
+            data = response.read(2 * 1024 * 1024 + 1)
+        if len(data) > 2 * 1024 * 1024: return None
+        output_path.write_bytes(data)
+        return output_path if output_path.exists() else None
+    except Exception: return None
+
 def download_hook(progress_data: dict):
     def hook(d):
         if d.get("status") == "downloading":
@@ -98,6 +109,18 @@ def download_hook(progress_data: dict):
         elif d.get("status") == "finished":
             progress_data["text"] = _t("msg_dl_finished", progress_data.get("lang", "ar"))
     return hook
+
+async def run_progress_updates(message, progress_data: dict, stop_event: asyncio.Event):
+    from handlers.admin import edit_message_smart
+    last_text = ""
+    while not stop_event.is_set():
+        with progress_lock: text = progress_data.get("text", "")
+        if text and text != last_text:
+            try:
+                await edit_message_smart(message, text, reply_markup=None)
+                last_text = text
+            except Exception: pass
+        await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 async def youtube_health_monitor(app: Application):
     while True:
