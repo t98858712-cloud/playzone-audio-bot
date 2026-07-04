@@ -19,9 +19,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
-        # --- حل مشكلة HTTP Error 403: Forbidden ---
-        # استخدام واجهات تطبيقات الهواتف لتخطي حظر يوتيوب للويب
-        "extractor_args": {"youtube": ["player_client=ios,android,web"]},
+        
+        # --- التعديلات الجديدة لحل مشكلة 403 Forbidden ---
+        "source_address": "0.0.0.0", # إجبار السيرفر على استخدام IPv4 لتخطي حظر شبكات الـ Datacenter
+        "extractor_args": {"youtube": ["player_client=android,ios"]}, # استخدام واجهات الموبايل فقط لأنها أقل حماية وتتخطى الـ 403
     }
     
     if mode == "audio":
@@ -44,20 +45,17 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     return opts
 
 def extract_metadata(url: str):
-    # --- حل مشكلة الحجم الكبير جداً في رسالة المعاينة ---
-    # نمرر دقة 720p الافتراضية، وبذلك يقوم بقراءة حجمها المعقول بدلاً من حجم 4K
     opts = get_ydl_options(mode="video", resolution="720")
     opts["skip_download"] = True
     opts["extract_flat"] = False
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        # نقوم بفلترة الصيغ لكي لا يقرأ البوت سوى صيغة 720p عند حساب الحجم
         if info and 'requested_downloads' in info:
             info['formats'] = info['requested_downloads']
         return info
 
 def search_youtube(query: str, limit: int = 30):
-    opts = {"quiet": True, "extract_flat": True, "no_warnings": True, "ignoreerrors": True}
+    opts = {"quiet": True, "extract_flat": True, "no_warnings": True, "ignoreerrors": True, "source_address": "0.0.0.0"}
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
     combined_entries = []
@@ -127,7 +125,11 @@ async def youtube_health_monitor(app: Application):
             if not cookie_file_is_usable(COOKIES_FILE):
                 await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر لوحة الإدارة لمنع توقف التحميل.")
                 continue
-            opts = {"quiet": True, "extract_flat": True, "cookiefile": str(COOKIES_FILE), "extractor_args": {"youtube": ["player_client=ios,android,web"]}}
+            opts = {
+                "quiet": True, "extract_flat": True, "cookiefile": str(COOKIES_FILE), 
+                "source_address": "0.0.0.0", 
+                "extractor_args": {"youtube": ["player_client=android,ios"]}
+            }
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
         except Exception as e:
