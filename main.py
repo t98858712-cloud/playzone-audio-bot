@@ -660,7 +660,7 @@ def build_admin_stats_text(lang: str = "ar") -> str:
         f"📥 إجمالي الطلبات: <code>{stats.get('requests', 0)}</code>\n"
         f"✅ الطلبات الناجحة: <code>{stats.get('success', 0)}</code>\n"
         f"❌ الطلبات الفاشلة: <code>{stats.get('failed', 0)}</code>\n"
-        f"💾 حجم البيانات المحملة: <code>{downloaded}</code>\n"
+        f"💾 حجم البيانات المح المحملة: <code>{downloaded}</code>\n"
         f"📢 عدد الإذاعات: <code>{stats.get('broadcasts', 0)}</code>"
     )
 
@@ -715,7 +715,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و البحث المتوازي الذكي
+# yt-dlp و البحث المتوازي الذكي والتحديثات الهندسية
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
@@ -727,19 +727,21 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
 
     if mode == "audio":
-        # تعزيز أمان الاستقرار الصوتي عبر تفضيل صيغة m4a المتوافقة مع التيليجرام افتراضياً
         opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
+        # إجبار السحب بترميز H.264 (avc1) لضمان توافق القياسات مع شاشات الهواتف بالكامل دون مشاكل في العرض
         if resolution == "best":
-            opts["format"] = f"bestvideo[filesize<{max_fs}]+bestaudio/best[filesize<{max_fs}]/best"
+            opts["format"] = f"bestvideo[ext=mp4][vcodec^=avc1][filesize<{max_fs}]+bestaudio[ext=m4a]/bestvideo[ext=mp4][filesize<{max_fs}]+bestaudio/best[filesize<{max_fs}]"
         else:
-            opts["format"] = f"bestvideo[height<={resolution}][filesize<{max_fs}]+bestaudio/best[height<={resolution}][filesize<{max_fs}]/best"
+            opts["format"] = f"bestvideo[ext=mp4][vcodec^=avc1][height<={resolution}][filesize<{max_fs}]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<={resolution}][filesize<{max_fs}]+bestaudio/best[height<={resolution}][filesize<{max_fs}]"
             
         opts["merge_output_format"] = "mp4"
         
         if shutil.which("ffmpeg"):
             opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
+            # ترتيب بيانات الفيديو للتشغيل الفوري والسريع داخل تيليجرام (حماية واستقرار للملف)
+            opts["postprocessor_args"] = {"video": ["-movflags", "+faststart"]}
 
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
@@ -838,7 +840,16 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         else:
             cmd.extend(["-vn"])
             
-        cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "48000", "-ac", "2", "-threads", "0", str(output_file)])
+        # رفع الصوت مع وضع "محدد" (alimiter) لمنع التشويش والاهتزاز الصوتي (ضمان استقرار ونقاوة 100%)
+        cmd.extend([
+            "-c:a", "libmp3lame", 
+            "-b:a", "320k", 
+            "-ar", "48000", 
+            "-ac", "2", 
+            "-af", "volume=1.3,alimiter=limit=-1dB", 
+            "-threads", "0", 
+            str(output_file)
+        ])
         
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
@@ -1373,7 +1384,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                                 read_timeout=120, write_timeout=120
                             )
                         except Exception as audio_err:
-                            # خط الدفاع الثاني المستقر: التراجع الفوري لإرسال الملف كـ Document مسمى عند رفض خوادم تيليجرام لـ metadata الصوت
+                            # خط الدفاع الثاني المستقر: التراجع الفوري لإرسال الملف كـ Document متين عند رفض خوادم تيليجرام لـ metadata الصوت
                             logger.warning(f"فشل إرسال الملف كـ Audio، جاري التراجع للإرسال كـ Document متين: {audio_err}")
                             f.seek(0)
                             ext = ".mp3" if target_file.suffix == ".mp3" else target_file.suffix
