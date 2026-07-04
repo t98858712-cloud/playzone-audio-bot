@@ -1,3 +1,0 @@
-ACTIVE_USERS = set()
-BANNED_USERS_CACHE = set()
-ANTI_SPAM_CACHE = {}
