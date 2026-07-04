@@ -68,6 +68,13 @@ MAX_WORKERS = int(os.getenv("MAX_WORKERS", str(os.cpu_count() or 2)))
 DOWNLOAD_SEMAPHORE = asyncio.Semaphore(MAX_WORKERS)
 EXECUTOR = ThreadPoolExecutor(max_workers=max(4, MAX_WORKERS * 2))
 
+# --- إعدادات جودة الصوت (MP3) الشاملة ---
+AUDIO_FORMAT_YTDLP = "bestaudio/best"
+AUDIO_CODEC_FFMPEG = "libmp3lame"
+AUDIO_BITRATE = "320k"
+AUDIO_SAMPLE_RATE = "48000"
+AUDIO_CHANNELS = "2"
+
 # كاش الحماية من السبام والحظر
 ACTIVE_USERS = set()
 BANNED_USERS_CACHE = set()
@@ -727,7 +734,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
 
     if mode == "audio":
-        opts["format"] = "bestaudio/best"
+        opts["format"] = AUDIO_FORMAT_YTDLP
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         if resolution == "best":
@@ -837,7 +844,7 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         else:
             cmd.extend(["-vn"])
             
-        cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "48000", "-ac", "2", "-threads", "0", str(output_file)])
+        cmd.extend(["-c:a", AUDIO_CODEC_FFMPEG, "-b:a", AUDIO_BITRATE, "-ar", AUDIO_SAMPLE_RATE, "-ac", AUDIO_CHANNELS, "-threads", "0", str(output_file)])
         
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
