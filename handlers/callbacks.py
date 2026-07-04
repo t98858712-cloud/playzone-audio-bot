@@ -120,7 +120,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if not request: return await query.answer(_t("msg_session_expired", lang), show_alert=True)
         
-        # 🔒 قفل الحساب الفوري لحظة الضغط لحماية الطابور ومنع الانهيار والسبام التكراري نهائياً
+        # 🔒 قفل الحساب الفوري في الذاكرة المؤقتة لمنع إرسال طلبات متعددة لنفس الملف
         if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
         ACTIVE_USERS.add(uid)
         
@@ -240,4 +240,4 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception: pass
         try: shutil.rmtree(job_dir)
         except Exception: pass
-        ACTIVE_USERS.discard(uid)  # إلغاء قفل الحساب نهائياً وفكه للطلبات الجديدة عند الانتهاء أو الانهيار
+        ACTIVE_USERS.discard(uid)  # فك قفل الحساب عند الانتهاء بسلام أو الانهيار لاستقبال روابط جديدة
