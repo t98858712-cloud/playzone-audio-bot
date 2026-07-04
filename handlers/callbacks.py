@@ -34,7 +34,7 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query: return
-    data, uid, lang = query.data or "", query.from_user.id, context.user_data.get("lang", "ar")
+    data, uid, lang = query.data or "", query.fromuser.id if hasattr(query, 'from_user') else query.from_user.id, context.user_data.get("lang", "ar")
     
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer("⛔ هذا الزر مخصص للمدراء فقط.", show_alert=True)
@@ -147,7 +147,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
             
-            await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data, resolution))
+            info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data, resolution))
             
             files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
             if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
@@ -170,6 +170,15 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             stop_event.set()
             await edit_message_smart(query.message, _t("msg_uploading", lang), reply_markup=None)
 
+            native_width = info_dict.get("width")
+            native_height = info_dict.get("height")
+            
+            try: native_width = int(native_width) if native_width else None
+            except Exception: native_width = None
+            
+            try: native_height = int(native_height) if native_height else None
+            except Exception: native_height = None
+
             title, duration = clean_title(request.get("title", _t("txt_media_file", lang)), 80, lang), int(request.get("duration") or 0)
             caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration, lang))}"            
             
@@ -178,6 +187,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
             with open(target_file, "rb") as f:
                 if mode == "audio":
+                    # كود إرسال الصوت الأصلي بالكامل دون أي تعديل
                     t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
                     try:
                         await context.bot.send_audio(
@@ -193,6 +203,8 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                     await context.bot.send_video(
                         chat_id=query.message.chat_id, video=f, caption=caption, 
                         supports_streaming=True, duration=duration, 
+                        width=native_width,
+                        height=native_height,
                         reply_markup=media_keyboard, parse_mode="HTML", 
                         read_timeout=120, write_timeout=120
                     )
