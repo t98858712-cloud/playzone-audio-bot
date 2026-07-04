@@ -17,14 +17,12 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
-        "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "retries": 10, "fragment_retries": 10, "socket_timeout": 30, "cachedir": False,
+        "no_check_certificate": True,
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9", "Connection": "keep-alive"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "*/*", "Accept-Language": "en-US,en;q=0.9", "Connection": "keep-alive"
         },
-        # 🛡️ كاسر حظر يوتيوب المؤسسي: إجبار المحرك على استخدام بروتوكولات تطبيقات الهواتف الذكية لتجاوز فحص الروبوتات
         "extractor_args": {
             "youtube": {
                 "player_client": ["ios", "android", "webpage_safari"], 
@@ -56,19 +54,19 @@ def extract_metadata(url: str) -> dict:
     try:
         opts = get_ydl_options(mode="video")
         opts["skip_download"] = True
-        opts.pop("format", None)  # تنظيف القيود أثناء الفحص الأولي للمعاينة
+        opts.pop("format", None)
         with yt_dlp.YoutubeDL(opts) as ydl:
             return ydl.extract_info(url, download=False)
     except Exception as e:
         if "sign in" in str(e).lower() or "confirm your age" in str(e).lower():
-            raise ContentRestrictedException("المقطع يتطلب تسجيل دخول أو مقيد بالفئة العمرية لتأكيد الهوية الشخصية.", {"url": url})
+            raise ContentRestrictedException("المقطع يتطلب تسجيل دخول أو مقيد بالفئة العمرية.", {"url": url})
         raise MediaDownloadException(f"فشل استخراج بيانات المعاينة للمقطع: {e}", {"url": url})
 
+# 🔙 العودة إلى كود دالة البحث السابقة والمستقلة تماماً
 def search_youtube(query: str, limit: int = 30):
-    opts = get_ydl_options(mode="video")
-    opts.update({"extract_flat": True, "ignoreerrors": True})
-    opts.pop("format", None)
-    
+    opts = {"quiet": True, "extract_flat": True, "no_warnings": True, "ignoreerrors": True}
+    if cookie_file_is_usable(COOKIES_FILE):
+        opts["cookiefile"] = str(COOKIES_FILE)
     combined_entries = []
     seen_ids = set()
     try:
