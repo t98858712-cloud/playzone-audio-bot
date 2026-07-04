@@ -837,7 +837,7 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         else:
             cmd.extend(["-vn"])
             
-        cmd.extend(["-c:a", "libmp3lame", "-q:a", "0", "-compression_level", "0", "-threads", "0", str(output_file)])
+        cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-ar", "48000", "-ac", "2", "-threads", "0", str(output_file)])
         
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True, timeout=180)
         return output_file.exists() and output_file.stat().st_size > 0
