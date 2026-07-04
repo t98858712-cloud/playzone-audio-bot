@@ -7,26 +7,39 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 @dataclass(order=True)
 class PriorityTask:
-    priority: int  # 0 = إدارة/VIP (أولوية مطلقة)، 1 = مستخدم عادي
+    priority: int  # 0 = إدارة/VIP، 1 = مستخدم عادي
     uid: int = field(compare=False)
     action: Callable[[], Coroutine[Any, Any, Any]] = field(compare=False)
     payload: dict = field(default_factory=dict, compare=False)
 
 class EnterpriseTaskOrchestrator:
     def __init__(self, concurrency_limit: int = 4):
-        self._queue: asyncio.PriorityQueue[PriorityTask] = asyncio.PriorityQueue()
-        self._sem = asyncio.Semaphore(concurrency_limit)
+        self.concurrency_limit = concurrency_limit
+        self._queue = None
+        self._sem = None
         self._workers = []
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        """ضمان إنشاء أدوات التزامن بأمان داخل الحلقة النشطة والفعالة حالياً"""
+        if not self._initialized:
+            self._queue = asyncio.PriorityQueue()
+            self._sem = asyncio.Semaphore(self.concurrency_limit)
+            self._initialized = True
+            logger.info("⚡ تم ربط وتهيئة طابور الأولويات الذكي داخل حلقة التزامن النشطة.")
 
     async def start(self):
         """إطلاق عمال معالجة الطوابير في الخلفية"""
-        for i in range(self._sem._value):
+        self._ensure_initialized()
+        self._workers = []
+        for i in range(self.concurrency_limit):
             worker = asyncio.create_task(self._worker_loop(i))
             self._workers.append(worker)
-        logger.info(f"✅ تم إطلاق {len(self._workers)} عمال معالجة بنظام طابور الأولويات.")
+        logger.info(f"✅ تم إطلاق {len(self._workers)} عمال معالجة بنظام طابور الأولويات والمزامنة السحابية.")
 
     async def submit(self, task: PriorityTask):
-        """حقن مهمة جديدة في نظام الطابور"""
+        """حقن مهمة جديدة في نظام الطابور بأمان"""
+        self._ensure_initialized()
         await self._queue.put(task)
         logger.info(f"📥 تم إدراج المهمة للمطلب {task.uid} في طابور الأولويات (مستوى: {task.priority})")
 
@@ -42,5 +55,5 @@ class EnterpriseTaskOrchestrator:
             finally:
                 self._queue.task_done()
 
-# نسخة عالمية موحدة ليعتمد عليها البوت كاملاً
+# نسخة عالمية موحدة ومحمية ليعتمد عليها البوت كاملاً
 TaskOrchestrator = EnterpriseTaskOrchestrator(concurrency_limit=4)
