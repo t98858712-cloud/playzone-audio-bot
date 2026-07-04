@@ -7,7 +7,7 @@ import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
 from telegram.ext import Application
-from core.config import COOKIES_FILE, LOCAL_API_URL, PROGRESS_UPDATE_SECONDS, EXECUTOR, EXECUTOR
+from core.config import COOKIES_FILE, LOCAL_API_URL, PROGRESS_UPDATE_SECONDS, EXECUTOR
 from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progress_bar, format_size
 from locales.language import _t
 from utils.helpers import progress_lock
@@ -27,14 +27,18 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         },
         "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
     }
+    
     if mode == "audio":
+        # الكود الصوتي الأصلي كما هو تماماً
         opts["format"] = "bestaudio/best"
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
+        
         if resolution == "best":
-            opts["format"] = f"bestvideo[filesize<{max_fs}]+bestaudio/best[filesize<{max_fs}]/best"
+            opts["format"] = f"bestvideo[ext=mp4][filesize<{max_fs}]+bestaudio[ext=m4a]/best[ext=mp4][filesize<{max_fs}]/bestvideo[filesize<{max_fs}]+bestaudio/best"
         else:
-            opts["format"] = f"bestvideo[height<={resolution}][filesize<{max_fs}]+bestaudio/best[height<={resolution}][filesize<{max_fs}]/best"
+            opts["format"] = f"bestvideo[height<={resolution}][filesize<{max_fs}]+bestaudio/best[height<={resolution}][filesize<{max_fs}]/best[filesize<{max_fs}]"
+            
         opts["merge_output_format"] = "mp4"
         if shutil.which("ffmpeg"):
             opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
