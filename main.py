@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from telegram import Update, BotCommand, BotCommandScopeChat, MenuButtonCommands
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 # استدعاء الإعدادات وقواعد البيانات والمساعدات
 from core.config import TOKEN, LOCAL_API_URL
