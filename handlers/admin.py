@@ -4,7 +4,9 @@ import time
 import shutil
 import logging
 import asyncio
-from telegram import Update
+import os
+import subprocess
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.error import RetryAfter, BadRequest
 from database.connection import db, firebase_init_error
@@ -18,8 +20,6 @@ from utils.keyboards import admin_main_keyboard, admin_broadcast_menu, admin_bro
 from locales.language import _t
 from core.config import BASE_DOWNLOAD_DIR, COOKIES_FILE, DB_FILE, EXECUTOR
 from core.security import BANNED_USERS_CACHE
-import os
-import subprocess
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
@@ -27,53 +27,9 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
     register_user_sync(update.effective_user)
     context.user_data.pop("bc_active", None)
+    context.user_data.pop("admin_state", None)
     lang = context.user_data.get("lang", "ar")
     await update.message.reply_text(_t("msg_adm_panel", lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
-
-async def user_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id): return
-    try:
-        uid = int(context.args[0])
-        doc_ref = db.collection('users').document(str(uid))
-        u_doc = doc_ref.get()
-        if u_doc.exists:
-            u = u_doc.to_dict()
-            status = "🔴 Banned" if uid in BANNED_USERS_CACHE else "🟢 Active"
-            text = f"👤 <b>معلومات المستخدم:</b>\n\n• ID: <code>{u.get('id', uid)}</code>\n• الاسم: {esc(u.get('first_name'))} {esc(u.get('last_name'))}\n• المعرف: @{u.get('username')}\n• الحالة: {status}"
-            await update.message.reply_text(text, parse_mode="HTML")
-        else:
-            await update.message.reply_text("❌ المستخدم غير موجود بقاعدة البيانات.")
-    except Exception as e:
-        logger.error(f"Error checking user info on Firebase: {e}")
-        await update.message.reply_text("طريقة الاستخدام: /user ID")
-
-async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id): return
-    lang = context.user_data.get("lang", "ar")
-    msg = await update.message.reply_text("جاري تحديث مكتبة التحميل...")
-    try:
-        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
-        await msg.edit_text("✅ تم تحديث yt-dlp لآخر إصدار بنجاح.")
-    except Exception as e:
-        await msg.edit_text(f"❌ فشل التحديث: {e}")
-
-async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id): return
-    lang = context.user_data.get("lang", "ar")
-    if not update.message.document:
-        return await update.message.reply_text("الرجاء إرسال ملف cookies.txt كملف وثيقة مباشرة مع الأمر.")
-    new_file = await context.bot.get_file(update.message.document.file_id)
-    await new_file.download_to_drive(COOKIES_FILE)
-    await update.message.reply_text("✅ تم استقبال وتحديث ملف الكوكيز بنجاح.")
-
-async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id): return
-    lang = context.user_data.get("lang", "ar")
-    try:
-        with open(DB_FILE, "rb") as f:
-            await update.message.reply_document(document=f, filename="bot_database.db", caption="نسخة احتياطية لقاعدة البيانات المحلية.")
-    except Exception as e:
-        await update.message.reply_text(f"❌ تعذر النسخ الاحتياطي: {e}")
 
 async def safe_delete(message):
     try: await message.delete()
@@ -143,25 +99,74 @@ def build_server_status_text(lang: str = "ar") -> str:
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     lang = context.user_data.get("lang", "ar")
+    
     if data == "adm_main_back":
+        context.user_data.pop("admin_state", None)
         await query.answer()
         return await edit_message_smart(query.message, _t("msg_adm_panel", lang), reply_markup=admin_main_keyboard(lang))
+
+    elif data == "adm_view_stats":
+        await query.answer()
+        return await edit_message_smart(query.message, build_admin_stats_text(lang), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]]))
+
+    elif data == "adm_view_server":
+        await query.answer()
+        return await edit_message_smart(query.message, build_server_status_text(lang), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]]))
+
+    elif data == "adm_req_user":
+        context.user_data["admin_state"] = "wait_user_id"
+        await query.answer()
+        back_kb = InlineKeyboardMarkup([[InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]])
+        return await edit_message_smart(query.message, "👤 <b>أرسل الآن الـ ID الخاص بالمستخدم هنا:</b>", reply_markup=back_kb)
+
+    elif data == "adm_req_cookie":
+        context.user_data["admin_state"] = "wait_cookie_file"
+        await query.answer()
+        back_kb = InlineKeyboardMarkup([[InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]])
+        return await edit_message_smart(query.message, "🍪 <b>أرسل ملف <code>cookies.txt</code> الجديد كـ Document الآن:</b>", reply_markup=back_kb)
+
+    elif data == "adm_update_dlp":
+        await query.answer("جاري التحديث... ⏳")
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(EXECUTOR, lambda: subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"]))
+            await query.message.reply_text("✅ تم تحديث مكتبة التحميل بنجاح!")
+        except Exception as e:
+            await query.message.reply_text(f"❌ فشل التحديث: {e}")
+        return await edit_message_smart(query.message, _t("msg_adm_panel", lang), reply_markup=admin_main_keyboard(lang))
+
+    elif data == "adm_backup":
+        await query.answer("جاري سحب النسخة... 💾")
+        try:
+            if os.path.exists(DB_FILE):
+                with open(DB_FILE, "rb") as f:
+                    await context.bot.send_document(chat_id=query.message.chat_id, document=f, filename="bot_database.db", caption="💾 نسخة احتياطية محلية.")
+            else:
+                await query.message.reply_text("❌ ملف القاعدة غير موجود.")
+        except Exception as e:
+            await query.message.reply_text(f"❌ خطأ: {e}")
+        return await edit_message_smart(query.message, _t("msg_adm_panel", lang), reply_markup=admin_main_keyboard(lang))
+
     elif data == "adm_bc_menu":
         await query.answer()
         return await edit_message_smart(query.message, "📢 <b>خيارات الإذاعة الشاملة:</b>\nاختر الشريحة المستهدفة:", reply_markup=admin_broadcast_menu(lang))
+        
     elif data.startswith("adm_bc_start:"):
         target = data.split(":")[1]
         context.user_data["bc_active"] = True
         context.user_data["bc_target"] = target
         await query.answer()
         return await edit_message_smart(query.message, _t("msg_adm_bc_ask", lang), reply_markup=admin_broadcast_cancel_keyboard(lang))
+        
     elif data == "adm_cancel_bc":
         context.user_data["bc_active"] = False
         await query.answer("تم إلغاء الإذاعة ❌")
         return await edit_message_smart(query.message, "✅ تم إلغاء وضع الإذاعة بنجاح.", reply_markup=admin_main_keyboard(lang))
+        
     elif data == "adm_users_menu":
         await query.answer()
         return await edit_message_smart(query.message, "👥 <b>إدارة المستخدمين:</b>", reply_markup=admin_users_menu(lang))
+        
     elif data == "adm_export_db":
         await query.answer("جاري سحب البيانات... 📥")
         users = get_all_users_data()
@@ -175,32 +180,36 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         file_bytes.name = f"PlayZone_Users_{int(time.time())}.csv"
         await context.bot.send_document(chat_id=query.message.chat_id, document=file_bytes, caption="📊 نسخة كاملة من بيانات المستخدمين.")
         return
+        
     elif data == "adm_sec_menu":
         await query.answer()
         return await edit_message_smart(query.message, "🛡️ <b>خيارات الصيانة والحماية:</b>", reply_markup=admin_security_menu(lang))
+        
     elif data == "adm_toggle_maint":
         current = get_setting("maintenance", "0")
         new_val = "0" if current == "1" else "1"
         set_setting("maintenance", new_val)
         await query.answer("✅ تم تحديث حالة الصيانة")
         return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+        
     elif data == "adm_vacuum_db":
         await query.answer("جاري تحسين القاعدة... 🗜️")
         optimize_db()
         return await edit_message_smart(query.message, "✅ <b>تم ضغط وتحسين قاعدة البيانات بنجاح!</b>", reply_markup=admin_main_keyboard(lang))
-    elif data == "adm_close":
-        await query.answer("تم الإغلاق ✖️")
-        return await safe_delete(query.message)
-    elif data == "adm_stats":
-        await query.answer()
-        return await edit_message_smart(query.message, build_admin_stats_text(lang), reply_markup=admin_users_menu(lang))
-    elif data == "adm_users":
-        await query.answer()
-        return await edit_message_smart(query.message, build_admin_users_text(10, lang), reply_markup=admin_users_menu(lang))
-    elif data == "adm_server":
-        await query.answer()
-        return await edit_message_smart(query.message, build_server_status_text(lang), reply_markup=admin_main_keyboard(lang))
+        
     elif data == "adm_clean":
         await query.answer("جاري تنظيف الملفات المؤقتة... 🧹")
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
         return await edit_message_smart(query.message, f"✅ <b>تم التنظيف!</b>\nتم إزالة {removed} ملف مؤقت.", reply_markup=admin_security_menu(lang))
+        
+    elif data == "adm_close":
+        await query.answer("تم الإغلاق ✖️")
+        return await safe_delete(query.message)
+        
+    elif data == "adm_stats":
+        await query.answer()
+        return await edit_message_smart(query.message, build_admin_stats_text(lang), reply_markup=admin_users_menu(lang))
+        
+    elif data == "adm_users":
+        await query.answer()
+        return await edit_message_smart(query.message, build_admin_users_text(10, lang), reply_markup=admin_users_menu(lang))
