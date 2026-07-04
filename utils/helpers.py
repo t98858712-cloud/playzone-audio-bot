@@ -8,7 +8,10 @@ import ipaddress
 import threading
 from pathlib import Path
 from urllib.parse import urlparse
+
+from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+
 from core.config import (
     BASE_DOWNLOAD_DIR, COOKIES_FILE, REQUEST_EXPIRE_SECONDS, 
     OLD_DOWNLOADS_EXPIRE_SECONDS, MAX_THUMBNAIL_BYTES
@@ -157,3 +160,24 @@ def _force_cleanup_all_sync() -> int:
             except Exception: pass
     except Exception: pass
     return removed
+
+async def send_preview(update: Update, thumb: str, caption: str, keyboard: InlineKeyboardMarkup):
+    """
+    دالة إرسال معاينة الروابط والبحث مع دعم الصور المصغرة
+    """
+    if thumb and (thumb.startswith("http://") or thumb.startswith("https://")):
+        try:
+            return await update.message.reply_photo(
+                photo=thumb, 
+                caption=caption, 
+                reply_markup=keyboard, 
+                parse_mode="HTML"
+            )
+        except Exception: pass
+        
+    return await update.message.reply_text(
+        text=caption, 
+        reply_markup=keyboard, 
+        parse_mode="HTML", 
+        disable_web_page_preview=True
+    )
