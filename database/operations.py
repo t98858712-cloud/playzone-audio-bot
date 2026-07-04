@@ -117,3 +117,10 @@ def get_latest_users(limit: int = 10) -> list:
     except Exception as e:
         logger.error(f"Error getting latest users: {e}")
         return []
+
+def optimize_db():
+    """
+    قاعدة بيانات Firebase السحابية لا تتطلب عملية ضغط (Vacuum) كالسابق،
+    لذا تبقى هذه الدالة لتلبية طلب زر (تحسين الـ Database) في لوحة التحكم دون التسبب بأخطاء.
+    """
+    pass
