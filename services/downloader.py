@@ -6,6 +6,7 @@ import urllib.request
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
+from telegram.ext import Application  # تم إضافة السطر المصحح والمطلوب هنا لتعريف الحاوية المؤسسية
 from core.config import COOKIES_FILE, LOCAL_API_URL, EXECUTOR
 from utils.helpers import cookie_file_is_usable, make_progress_bar, format_size
 from locales.language import _t
