@@ -164,7 +164,7 @@ LANG_DICT = {
         "msg_adm_bc_start": "🚀 جاري بدء الإذاعة... يرجى متابعة التحديث:",
         "msg_adm_bc_done": "✅ <b>اكتملت الإذاعة بنجاح!</b>\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}",
         "msg_maintenance": "🚧 <b>عذراً!</b>\nالبوت حالياً في وضع الصيانة والتحديث لإضافة ميزات جديدة. سنعود للعمل قريباً جداً ⚙️",
-        "msg_spam_blocked": "❌ <b>تم حظرك مؤقتاً</b> بسبب إرسال طلبات كثيرة جداً في وقت قصير. يرجى التواصل مع الإدارة."
+        "msg_spam_blocked": "❌ <b>تم حظرك مؤقتاً</b> بسبب إرسال طلبات كثيرة جداً in وقت قصير. يرجى التواصل مع الإدارة."
     },
     "en": {
         "btn_guide": "📘 User Guide",
@@ -188,7 +188,7 @@ LANG_DICT = {
         "msg_search_results": "🔎 Search results for: <b>{query}</b>\n\nChoose the appropriate media below:",
         "msg_no_results": "❌ No results found for: <b>{query}</b>",
         "msg_wait_current": "⏳ You have an ongoing download.\n\nWait until it finishes, then send a new link.",
-        "msg_link_error": "❌ Could not read the link.\n\nMake sure the media is public and not deleted, then try again.",
+        "msg_links_error": "❌ Could not read the link.\n\nMake sure the media is public and not deleted, then try again.",
         "msg_select_res": "Please select resolution",
         "msg_prep_audio": "Preparing audio...",
         "msg_prep_video": "Preparing...",
@@ -727,7 +727,8 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
 
     if mode == "audio":
-        opts["format"] = "bestaudio/best"
+        # تعزيز أمان الاستقرار الصوتي عبر تفضيل صيغة m4a المتوافقة مع التيليجرام افتراضياً
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         if resolution == "best":
@@ -1363,12 +1364,25 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 if mode == "audio":
                     t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
                     try:
-                        await context.bot.send_audio(
-                            chat_id=query.message.chat_id, audio=f, title=title,
-                            performer=request.get("artist", _t("txt_unknown", lang)), duration=duration,
-                            caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
-                            read_timeout=120, write_timeout=120
-                        )
+                        try:
+                            # المحاولة الأساسية: إرسال الملف الصوتي بكامل الميزات والصورة البصرية المدمجة
+                            await context.bot.send_audio(
+                                chat_id=query.message.chat_id, audio=f, title=title,
+                                performer=request.get("artist", _t("txt_unknown", lang)), duration=duration,
+                                caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
+                                read_timeout=120, write_timeout=120
+                            )
+                        except Exception as audio_err:
+                            # خط الدفاع الثاني المستقر: التراجع الفوري لإرسال الملف كـ Document مسمى عند رفض خوادم تيليجرام لـ metadata الصوت
+                            logger.warning(f"فشل إرسال الملف كـ Audio، جاري التراجع للإرسال كـ Document متين: {audio_err}")
+                            f.seek(0)
+                            ext = ".mp3" if target_file.suffix == ".mp3" else target_file.suffix
+                            await context.bot.send_document(
+                                chat_id=query.message.chat_id, document=f,
+                                filename=f"{title}{ext}",
+                                caption=caption, reply_markup=media_keyboard, parse_mode="HTML",
+                                read_timeout=120, write_timeout=120
+                            )
                     finally:
                         if t_file: t_file.close()
                 else:
