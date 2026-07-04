@@ -16,8 +16,14 @@ import ipaddress
 from pathlib import Path
 from urllib.parse import urlparse, quote
 from concurrent.futures import ThreadPoolExecutor
+import json
 
 import yt_dlp
+import firebase_admin
+from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1 import Increment
+from google.cloud.firestore_v1.base_query import FieldFilter
+
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -109,7 +115,7 @@ LANG_DICT = {
         "btn_prev": "➡️ السابق",
         "msg_start": "👋 أهلاً {first_name}\n\n💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n📥 أرسل رابط أي فيديو، أو اكتب اسم أغنية للبحث عنها.\n\nثم اختر:\n🎬 تحميل فيديو\n🎵 تحميل صوت",
         "msg_guide": "📘 دليل الاستخدام\n\nيمكنك التحميل بإحدى الطرق التالية:\n\n🔗 1. عبر الرابط\nأرسل رابط الفيديو، ثم اختر تحميله كفيديو أو كصوت.\n\n🔎 2. عبر البحث\nاكتب اسم الأغنية، أو اسم المغني، أو جزءًا من كلمات الأغنية، ثم اختر النتيجة المطلوبة ونوع التحميل (فيديو أو صوت).",
-        "msg_add_group": "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل المباشر، اضغط على الزر أدناه:",
+        "msg_add_group": "🤖 لإضافة البوت إلى مجموعتك والتمتع بالتحميل، اضغط على الزر أدناه:",
         "btn_add_group_url": "➕ اضغط هنا لإضافة البوت",
         "msg_links": "💚 دعمك يصنع الفرق\n\nتابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\nكل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.",
         "msg_check_link": "🔍 جاري فحص الرابط وتجهيز المعاينة...",
@@ -143,7 +149,6 @@ LANG_DICT = {
         "msg_dl_finished": "⚙️ اكتمل التحميل، جاري التجهيز والضغط الاحترافي...",
         "share_text": "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:",
         "btn_share": "🌟 أعجبك البوت؟ شاركه",
-        # رسائل الإدارة المتقدمة
         "msg_adm_panel": "🛠 <b>مركز التحكم المؤسسي</b>\n\nالرجاء اختيار القسم المطلوب من الأزرار أدناه:",
         "btn_adm_bc_menu": "📢 الإذاعة الشاملة",
         "btn_adm_users_menu": "👥 إدارة المستخدمين",
@@ -164,7 +169,7 @@ LANG_DICT = {
         "msg_adm_bc_start": "🚀 جاري بدء الإذاعة... يرجى متابعة التحديث:",
         "msg_adm_bc_done": "✅ <b>اكتملت الإذاعة بنجاح!</b>\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}",
         "msg_maintenance": "🚧 <b>عذراً!</b>\nالبوت حالياً في وضع الصيانة والتحديث لإضافة ميزات جديدة. سنعود للعمل قريباً جداً ⚙️",
-        "msg_spam_blocked": "❌ <b>تم حظرك مؤقتاً</b> بسبب إرسال طلبات كثيرة جداً in وقت قصير. يرجى التواصل مع الإدارة."
+        "msg_spam_blocked": "❌ <b>تم حظرك مؤقتاً</b> بسبب إرسال طلبات كثيرة جداً في وقت قصير. يرجى التواصل مع الإدارة."
     },
     "en": {
         "btn_guide": "📘 User Guide",
@@ -179,7 +184,7 @@ LANG_DICT = {
         "btn_prev": "⬅️ Prev",
         "msg_start": "👋 Hello {first_name}\n\n💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.\n\n📥 Send any video link, or type a song name to search.\n\nThen choose:\n🎬 Download Video\n🎵 Download Audio",
         "msg_guide": "📘 User Guide\n\nYou can download using one of the following methods:\n\n🔗 1. Via Link\nSend the media link, then choose to download it as video or audio.\n\n🔎 2. Via Search\nType the song name, artist name, or part of the lyrics, then choose the desired result and download type (video or audio).",
-        "msg_add_group": "🤖 To add the bot to your group and enjoy direct downloading, click the button below:",
+        "msg_add_group": "🤖 To add the bot to your group and enjoy downloading, click the button below:",
         "btn_add_group_url": "➕ Click here to add the bot",
         "msg_links": "💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.",
         "msg_check_link": "🔍 Checking link and preparing preview...",
@@ -188,7 +193,7 @@ LANG_DICT = {
         "msg_search_results": "🔎 Search results for: <b>{query}</b>\n\nChoose the appropriate media below:",
         "msg_no_results": "❌ No results found for: <b>{query}</b>",
         "msg_wait_current": "⏳ You have an ongoing download.\n\nWait until it finishes, then send a new link.",
-        "msg_links_error": "❌ Could not read the link.\n\nMake sure the media is public and not deleted, then try again.",
+        "msg_link_error": "❌ Could not read the link.\n\nMake sure the media is public and not deleted, then try again.",
         "msg_select_res": "Please select resolution",
         "msg_prep_audio": "Preparing audio...",
         "msg_prep_video": "Preparing...",
@@ -213,7 +218,6 @@ LANG_DICT = {
         "msg_dl_finished": "⚙️ Download complete, preparing and compressing...",
         "share_text": "📥 Download any video or MP3 in seconds!\n⚡ Fast, free, and highest quality.\n👇 Try it now:",
         "btn_share": "🌟 Like the bot? Share it",
-        # Admin text
         "msg_adm_panel": "🛠 <b>Enterprise Control Center</b>\n\nPlease select a category:",
         "btn_adm_bc_menu": "📢 Broadcast Menu",
         "btn_adm_users_menu": "👥 Users Management",
@@ -248,12 +252,6 @@ def _t(key: str, lang: str = "ar", **kwargs) -> str:
 # ==========================================================
 # إدارة قاعدة البيانات الشاملة (Firebase Firestore Enterprise)
 # ==========================================================
-
-import json
-import firebase_admin
-from firebase_admin import credentials, firestore
-from google.cloud.firestore_v1 import Increment
-from google.cloud.firestore_v1.base_query import FieldFilter
 
 db = None
 firebase_init_error = None
@@ -660,7 +658,7 @@ def build_admin_stats_text(lang: str = "ar") -> str:
         f"📥 إجمالي الطلبات: <code>{stats.get('requests', 0)}</code>\n"
         f"✅ الطلبات الناجحة: <code>{stats.get('success', 0)}</code>\n"
         f"❌ الطلبات الفاشلة: <code>{stats.get('failed', 0)}</code>\n"
-        f"💾 حجم البيانات المح المحملة: <code>{downloaded}</code>\n"
+        f"💾 حجم البيانات المحملة: <code>{downloaded}</code>\n"
         f"📢 عدد الإذاعات: <code>{stats.get('broadcasts', 0)}</code>"
     )
 
@@ -715,7 +713,7 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     return await update.message.reply_text(text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
 
 # ==========================================================
-# yt-dlp و البحث المتوازي الذكي والتحديثات الهندسية
+# yt-dlp و البحث المتوازي الذكي وجلب الجودة العالية
 # ==========================================================
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
@@ -723,25 +721,29 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive"
+        },
         "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
     }
 
     if mode == "audio":
-        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
+        # سحب أفضل جودة صوتية خام متوفرة من الخوادم للحصول على أنقى طبقة صوتية
+        opts["format"] = "bestaudio/best"
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
-        # إجبار السحب بترميز H.264 (avc1) لضمان توافق القياسات مع شاشات الهواتف بالكامل دون مشاكل في العرض
         if resolution == "best":
-            opts["format"] = f"bestvideo[ext=mp4][vcodec^=avc1][filesize<{max_fs}]+bestaudio[ext=m4a]/bestvideo[ext=mp4][filesize<{max_fs}]+bestaudio/best[filesize<{max_fs}]"
+            opts["format"] = f"bestvideo[filesize<{max_fs}]+bestaudio/best[filesize<{max_fs}]/best"
         else:
-            opts["format"] = f"bestvideo[ext=mp4][vcodec^=avc1][height<={resolution}][filesize<{max_fs}]+bestaudio[ext=m4a]/bestvideo[ext=mp4][height<={resolution}][filesize<{max_fs}]+bestaudio/best[height<={resolution}][filesize<{max_fs}]"
+            opts["format"] = f"bestvideo[height<={resolution}][filesize<{max_fs}]+bestaudio/best[height<={resolution}][filesize<{max_fs}]/best"
             
         opts["merge_output_format"] = "mp4"
         
         if shutil.which("ffmpeg"):
             opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
-            # ترتيب بيانات الفيديو للتشغيل الفوري والسريع داخل تيليجرام (حماية واستقرار للملف)
-            opts["postprocessor_args"] = {"video": ["-movflags", "+faststart"]}
 
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
@@ -840,13 +842,13 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         else:
             cmd.extend(["-vn"])
             
-        # رفع الصوت مع وضع "محدد" (alimiter) لمنع التشويش والاهتزاز الصوتي (ضمان استقرار ونقاوة 100%)
+        # إجبار FFmpeg على استخدام أعلى جودة MP3 ممكنة (320kbps CBR, 48000Hz Stereo)
         cmd.extend([
             "-c:a", "libmp3lame", 
-            "-b:a", "320k", 
-            "-ar", "48000", 
-            "-ac", "2", 
-            "-af", "volume=1.3,alimiter=limit=-1dB", 
+            "-b:a", "320k",       
+            "-ar", "48000",       
+            "-ac", "2",           
+            "-compression_level", "0", 
             "-threads", "0", 
             str(output_file)
         ])
@@ -1375,25 +1377,12 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 if mode == "audio":
                     t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
                     try:
-                        try:
-                            # المحاولة الأساسية: إرسال الملف الصوتي بكامل الميزات والصورة البصرية المدمجة
-                            await context.bot.send_audio(
-                                chat_id=query.message.chat_id, audio=f, title=title,
-                                performer=request.get("artist", _t("txt_unknown", lang)), duration=duration,
-                                caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
-                                read_timeout=120, write_timeout=120
-                            )
-                        except Exception as audio_err:
-                            # خط الدفاع الثاني المستقر: التراجع الفوري لإرسال الملف كـ Document متين عند رفض خوادم تيليجرام لـ metadata الصوت
-                            logger.warning(f"فشل إرسال الملف كـ Audio، جاري التراجع للإرسال كـ Document متين: {audio_err}")
-                            f.seek(0)
-                            ext = ".mp3" if target_file.suffix == ".mp3" else target_file.suffix
-                            await context.bot.send_document(
-                                chat_id=query.message.chat_id, document=f,
-                                filename=f"{title}{ext}",
-                                caption=caption, reply_markup=media_keyboard, parse_mode="HTML",
-                                read_timeout=120, write_timeout=120
-                            )
+                        await context.bot.send_audio(
+                            chat_id=query.message.chat_id, audio=f, title=title,
+                            performer=request.get("artist", _t("txt_unknown", lang)), duration=duration,
+                            caption=caption, thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML",
+                            read_timeout=120, write_timeout=120
+                        )
                     finally:
                         if t_file: t_file.close()
                 else:
