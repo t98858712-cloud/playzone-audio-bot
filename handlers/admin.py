@@ -9,7 +9,7 @@ import subprocess
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.error import RetryAfter, BadRequest
-from database.connection import db, firebase_init_error
+import database.connection as db_conn
 from database.operations import (
     all_user_ids, get_active_users_48h, stat_inc_sync, load_stats_sync, 
     get_latest_users, get_setting, get_all_users_data, optimize_db, 
@@ -77,7 +77,7 @@ async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_T
     await status.edit_text(_t("msg_adm_bc_done", lang, sent=sent, fail=fail), parse_mode="HTML")
 
 def build_admin_stats_text(lang: str = "ar") -> str:
-    if db is None: return f"⚠️ <b>خطأ تشخيص حي في الاتصال بـ Firebase:</b>\n<code>{firebase_init_error}</code>"
+    if db_conn.db is None: return f"⚠️ <b>خطأ تشخيص حي في الاتصال بـ Firebase:</b>\n<code>{db_conn.firebase_init_error}</code>"
     stats = load_stats_sync()
     total_users = len(all_user_ids())
     active_users = len(get_active_users_48h())
@@ -85,7 +85,7 @@ def build_admin_stats_text(lang: str = "ar") -> str:
     return f"📊 <b>إحصائيات البوت الشاملة:</b>\n\n👥 إجمالي المستخدمين: <code>{total_users}</code>\n⚡ النشطين (آخر 48 ساعة): <code>{active_users}</code>\n\n📥 إجمالي الطلبات: <code>{stats.get('requests', 0)}</code>\n✅ الطلبات الناجحة: <code>{stats.get('success', 0)}</code>\n❌ الطلبات الفاشلة: <code>{stats.get('failed', 0)}</code>\n💾 حجم البيانات المحملة: <code>{downloaded}</code>\n📢 عدد الإذاعات: <code>{stats.get('broadcasts', 0)}</code>"
 
 def build_admin_users_text(limit: int, lang: str = "ar") -> str:
-    if db is None: return "⚠️ قاعدة البيانات غير متصلة."
+    if db_conn.db is None: return "⚠️ قاعدة البيانات غير متصلة."
     users = get_latest_users(limit)
     if not users: return "📋 لا يوجد مستخدمين بعد."
     text = "📋 <b>أحدث المستخدمين:</b>\n\n"
@@ -211,7 +211,7 @@ async def handle_admin_inputs(update: Update, context: ContextTypes.DEFAULT_TYPE
             target_uid = update.message.text.strip()
             
             try:
-                doc_ref = db.collection('users').document(str(target_uid))
+                doc_ref = db_conn.db.collection('users').document(str(target_uid))
                 u_doc = doc_ref.get()
                 if u_doc.exists:
                     u = u_doc.to_dict()
