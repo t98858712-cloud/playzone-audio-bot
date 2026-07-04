@@ -119,7 +119,10 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         trim_old_pending_requests(context)
         
         if not request: return await query.answer(_t("msg_session_expired", lang), show_alert=True)
+        
+        # 🔒 قفل الحساب الفوري لحظة الضغط لحماية الطابور ومنع الانهيار والسبام التكراري نهائياً
         if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
+        ACTIVE_USERS.add(uid)
         
         await query.answer()
         await edit_message_smart(query.message, "⏳ <b>تمت إضافة طلبك بنجاح إلى طابور المعالجة الذكي...</b>\nجاري تحديد أولوية حسابك وبدء التنفيذ الفوري.", reply_markup=None)
@@ -141,7 +144,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str, lang: str):
     uid = query.from_user.id
     url = request.get("url")
-    ACTIVE_USERS.add(uid)
     
     job_dir = BASE_DOWNLOAD_DIR / f"{uid}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -238,4 +240,4 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception: pass
         try: shutil.rmtree(job_dir)
         except Exception: pass
-        ACTIVE_USERS.discard(uid)
+        ACTIVE_USERS.discard(uid)  # إلغاء قفل الحساب نهائياً وفكه للطلبات الجديدة عند الانتهاء أو الانهيار
