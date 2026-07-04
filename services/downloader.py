@@ -16,12 +16,19 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
-        "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
-        "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "quiet": True, 
+        "no_warnings": True, 
+        "noplaylist": True, 
+        "playlist_items": "1",
+        "retries": 15, 
+        "fragment_retries": 15, 
+        "socket_timeout": 45, 
+        "cachedir": False,
+        "concurrent_fragment_downloads": 10, 
+        "no_check_certificate": True,
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
             "Connection": "keep-alive"
         },
@@ -33,10 +40,9 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # استخدام <? يعني (أقل من الحجم، أو إذا كان الحجم مجهولاً)
-        # وإضافة /best في النهاية كمسار إنقاذ احتياطي لمنع خطأ Requested format is not available
+        # سحب أعلى جودة متاحة للمصدر دون أي تقليص للأبعاد الأصلية
         if resolution == "best":
-            opts["format"] = f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/bestvideo[filesize<?{max_fs}]+bestaudio/best[filesize<?{max_fs}]/best"
+            opts["format"] = f"bestvideo[filesize<?{max_fs}]+bestaudio/best[filesize<?{max_fs}]/best"
         else:
             opts["format"] = f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/best[height<={resolution}][filesize<?{max_fs}]/best[filesize<?{max_fs}]/best"
             
@@ -54,10 +60,7 @@ def extract_metadata(url: str):
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
     opts["extract_flat"] = False
-    
-    # السطر الذهبي: إزالة شرط الصيغة تماماً عند طلب المعاينة لتجنب أي أخطاء
-    opts.pop("format", None) 
-    
+    opts.pop("format", None)  # إزالة قيود الحجم أثناء فحص الرابط لمنع خطأ Requested format is not available
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
