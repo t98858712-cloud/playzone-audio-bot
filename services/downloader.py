@@ -20,7 +20,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "retries": 10, "fragment_retries": 10, "socket_timeout": 30, "cachedir": False,
         "no_check_certificate": True,
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "*/*", "Accept-Language": "en-US,en;q=0.9", "Connection": "keep-alive"
         },
         "extractor_args": {
@@ -62,7 +62,6 @@ def extract_metadata(url: str) -> dict:
             raise ContentRestrictedException("المقطع يتطلب تسجيل دخول أو مقيد بالفئة العمرية.", {"url": url})
         raise MediaDownloadException(f"فشل استخراج بيانات المعاينة للمقطع: {e}", {"url": url})
 
-# 🔙 العودة إلى كود دالة البحث السابقة والمستقلة تماماً
 def search_youtube(query: str, limit: int = 30):
     opts = {"quiet": True, "extract_flat": True, "no_warnings": True, "ignoreerrors": True}
     if cookie_file_is_usable(COOKIES_FILE):
