@@ -19,22 +19,13 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Connection": "keep-alive"
-        },
-        "extractor_args": {"youtube": {"player_client": ["ios", "android", "webpage_safari"], "skip": ["webpage"]}},
+        # تم إزالة custom headers و extractor_args القديمة لأنها تتعارض مع تحديثات yt-dlp وتسبب الحظر
     }
     
     if mode == "audio":
         opts["format"] = "bestaudio/best"
     else:
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
-        
-        # استخدام <? يعني (أقل من الحجم، أو إذا كان الحجم مجهولاً)
-        # وإضافة /best في النهاية كمسار إنقاذ احتياطي لمنع خطأ Requested format is not available
         if resolution == "best":
             opts["format"] = f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/bestvideo[filesize<?{max_fs}]+bestaudio/best[filesize<?{max_fs}]/best"
         else:
@@ -54,10 +45,7 @@ def extract_metadata(url: str):
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
     opts["extract_flat"] = False
-    
-    # السطر الذهبي: إزالة شرط الصيغة تماماً عند طلب المعاينة لتجنب أي أخطاء
     opts.pop("format", None) 
-    
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
 
