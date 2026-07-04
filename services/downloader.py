@@ -15,14 +15,21 @@ from utils.helpers import progress_lock
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
+    # سنعيد التوقيع الأساسي الذي كان يعمل لديك ببراعة، مع تحديث وكيل المستخدم (User-Agent)
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         
-        # --- التعديلات الجديدة لحل مشكلة 403 Forbidden ---
-        "source_address": "0.0.0.0", # إجبار السيرفر على استخدام IPv4 لتخطي حظر شبكات الـ Datacenter
-        "extractor_args": {"youtube": ["player_client=android,ios"]}, # استخدام واجهات الموبايل فقط لأنها أقل حماية وتتخطى الـ 403
+        # التعديل الأساسي: إعادة تفعيل التوقيع الذي كان يعمل لديك، مع توجيه ذكي للحظر
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-us,en;q=0.5",
+            "Sec-Fetch-Mode": "navigate",
+        },
+        # إجبار yt-dlp على استخدام هذا التوقيع وتخطي التحديثات التي تسبب تعارضاً
+        "extractor_args": {"youtube": ["player_client=ios"]},
     }
     
     if mode == "audio":
