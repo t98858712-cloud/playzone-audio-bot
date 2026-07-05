@@ -18,25 +18,30 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 10, "no_check_certificate": True
+        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        # استعادة هوية الهواتف المحمولة لإجبار يوتيوب على إرسال ملفات صغيرة الحجم
+        "extractor_args": {"youtube": {"player_client": ["ios", "android"], "skip": ["webpage"]}}
     }
     
     if mode == "audio":
-        opts["format"] = "bestaudio/best"
+        # إجبار المحرك على سحب صيغة m4a الخفيفة جداً للصوت
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
     else:
+        from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # استخدام <? يعني (أقل من الحجم، أو إذا كان الحجم مجهولاً)
-        # وإضافة /best في النهاية كمسار إنقاذ احتياطي لمنع خطأ Requested format is not available
         if resolution == "best":
             opts["format"] = f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/bestvideo[filesize<?{max_fs}]+bestaudio/best[filesize<?{max_fs}]/best"
         else:
             opts["format"] = f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/best[height<={resolution}][filesize<?{max_fs}]/best[filesize<?{max_fs}]/best"
             
         opts["merge_output_format"] = "mp4"
+        import shutil
         if shutil.which("ffmpeg"):
             opts["postprocessors"] = [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}]
 
+    from core.config import COOKIES_FILE
+    from utils.helpers import cookie_file_is_usable
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
@@ -46,9 +51,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
 def extract_metadata(url: str):
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
-    opts["extract_flat"] = True  # تم التعديل لتسريع الجلب وتجنب استهلاك الكوكيز
-    
-    # السطر الذهبي: إزالة شرط الصيغة تماماً عند طلب المعاينة لتجنب أي أخطاء
+    opts["extract_flat"] = True
     opts.pop("format", None) 
     
     with yt_dlp.YoutubeDL(opts) as ydl:
