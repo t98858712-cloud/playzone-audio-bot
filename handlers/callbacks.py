@@ -58,12 +58,15 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = f"https://www.youtube.com/watch?v={video_id}"
         await query.answer()
         
-        # حماية من النقرات المزدوجة المتتالية (Double Click) لمنع خطأ عدم تعديل النص
+        # حماية من النقرات المزدوجة المتتالية (Double Click) لمنع التكرار وضرب يوتيوب بطلبات متزامنة
         try:
             await query.message.edit_text(_t("msg_check_link", lang), reply_markup=None)
         except BadRequest as e:
-            if "Message is not modified" not in str(e) and "There is no text" not in str(e):
-                logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
+            # إذا كانت الرسالة معدلة بالفعل أو قيد التعديل، ننهي تنفيذ هذه النقرة فوراً لحماية السيرفر
+            if "Message is not modified" in str(e) or "There is no text" in str(e):
+                return
+            logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
+            return
         
         try:
             loop = asyncio.get_running_loop()
@@ -165,7 +168,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "⚠️ <b>Please watch a short ad first to unlock the direct cloud download for free.</b>\n\n"
                 "Click the watch ad button below, and once it finishes and you return, click verify to start your download automatically ❤️"
             )
-            # استخدام الدالة الذكية والمؤسسية لتجنب خطأ تعديل رسائل الصور والمعاينات
             await edit_message_smart(query.message, msg_text, reply_markup=ad_keyboard)
         return
 
