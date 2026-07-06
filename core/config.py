@@ -37,4 +37,4 @@ THREADS_PLAYZONE = "https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ=="
 TELEGRAM_BOT_PLAYZONE = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
 
 # AdsGram Monetization Config
-ADSGRAM_BLOCK_ID = "37505"
+ADSTERRA_SMARTLINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
