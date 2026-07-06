@@ -124,3 +124,28 @@ def optimize_db():
     لذا تبقى هذه الدالة لتلبية طلب زر (تحسين الـ Database) في لوحة التحكم دون التسبب بأخطاء.
     """
     pass
+
+def verify_user_ad_completion(user_id: int):
+    """تسجيل وقت اكتمال مشاهدة الإعلان للمخدم بداخل الفايرستور للتأكيد"""
+    if db is None: return
+    try:
+        db.collection('users').document(str(user_id)).update({
+            'last_ad_completion': int(time.time())
+        })
+        logger.info(f"💰 AdsGram: Recorded ad completion for user {user_id}")
+    except Exception as e:
+        logger.error(f"Error updating ad completion for {user_id}: {e}")
+
+def check_ad_verified_status(user_id: int) -> bool:
+    """التحقق هل أكمل المستخدم الإعلان خلال آخر 10 دقائق لتخطي حجب التنزيل"""
+    if db is None: return False
+    try:
+        doc = db.collection('users').document(str(user_id)).get()
+        if doc.exists:
+            data = doc.to_dict()
+            last_ad = data.get('last_ad_completion', 0)
+            if int(time.time()) - last_ad < 600:
+                return True
+    except Exception as e:
+        logger.error(f"Error checking ad status for {user_id}: {e}")
+    return False
