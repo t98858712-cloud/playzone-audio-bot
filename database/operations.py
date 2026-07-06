@@ -132,7 +132,8 @@ def verify_user_ad_completion(user_id: int):
         db.collection('users').document(str(user_id)).update({
             'last_ad_completion': int(time.time())
         })
-        logger.info(f"💰 AdsGram: Recorded ad completion for user {user_id}")
+        # تم إلغاء اسم المنصة السابقة هنا ليصبح السجل عاماً ونظيفاً تماماً
+        logger.info(f"💰 Recorded ad completion for user {user_id}")
     except Exception as e:
         logger.error(f"Error updating ad completion for {user_id}: {e}")
 
