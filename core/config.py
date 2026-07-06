@@ -37,4 +37,4 @@ THREADS_PLAYZONE = "https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ=="
 TELEGRAM_BOT_PLAYZONE = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
 
 # AdsGram Monetization Config
-ADSGRAM_BLOCK_ID = "37463"
+ADSGRAM_BLOCK_ID = "37505"
