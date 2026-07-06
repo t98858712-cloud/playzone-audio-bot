@@ -5,7 +5,8 @@ import shutil
 import logging
 from urllib.parse import quote
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+# ⚠️ تم استدعاء WebAppInfo لتفعيل نافذة الإعلانات
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
@@ -57,7 +58,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         video_id = data.split(":")[1]
         url = f"https://www.youtube.com/watch?v={video_id}"
         
-        # قفل حالة لمنع النقرات المزدوجة المتزامنة وحماية الكوكيز
         if context.user_data.get("loading_preview"):
             return await query.answer("⏳ جاري فحص خيارات الرابط بالفعل، يرجى الانتظار...", show_alert=True)
         
@@ -70,8 +70,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if "Message is not modified" in str(e) or "There is no text" in str(e):
                 context.user_data.pop("loading_preview", None)
                 return
-            logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
-        
+            
         try:
             loop = asyncio.get_running_loop()
             info = await loop.run_in_executor(EXECUTOR, lambda: extract_metadata(url))
@@ -155,24 +154,14 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await query.answer()
             
-            # 🌐 ضرب الـ API مالت AdsGram برمجياً لسحب رابط الإعلان المباشر الحقيقي للبوتات (click_url)
-            import httpx
-            ad_url = f"https://id.adsgram.ai/api?space=37463&user_id={uid}"  # الرابط الاحتياطي الافتراضي
-            try:
-                async with httpx.AsyncClient() as client:
-                    res = await client.get(f"https://api.adsgram.ai/v1/bot/get-ad?space=37463&user_id={uid}", timeout=4.0)
-                    if res.status_code == 200:
-                        json_data = res.json()
-                        if json_data.get("click_url"):
-                            ad_url = json_data.get("click_url")
-            except Exception as e:
-                logger.error(f"AdsGram Bot API Error: {e}")
+            # 🌐 استدعاء نافذة الإعلانات المصغرة عبر رابط سيرفرك المباشر والشرعي
+            ad_url = f"https://playzone-audio-bot-production.up.railway.app/ad_viewer?user_id={uid}"
             
             btn_watch = "📺 مشاهدة الإعلان لدعم السيرفر" if lang == "ar" else "📺 Watch Ad to Support"
             btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
             
             ad_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(btn_watch, url=ad_url)],
+                [InlineKeyboardButton(btn_watch, web_app=WebAppInfo(url=ad_url))],
                 [InlineKeyboardButton(btn_verify, callback_data=f"v_ad:{mode}:{resolution}:{request_id}")]
             ])
             
