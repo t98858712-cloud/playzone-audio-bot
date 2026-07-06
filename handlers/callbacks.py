@@ -61,7 +61,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if context.user_data.get("loading_preview"):
             return await query.answer("⏳ جاري فحص خيارات الرابط بالفعل، يرجى الانتظار...", show_alert=True)
         
-        # تفعيل القفل فوراً قبل أي عملية await
         context.user_data["loading_preview"] = True
         await query.answer()
         
@@ -103,7 +102,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"فشل جلب المعاينة من البحث: {e}")
             await context.bot.send_message(chat_id=uid, text=_t("msg_link_error", lang))
         finally:
-            # إزالة القفل بأمان بعد انتهاء معالجة اليوتيوب بالكامل
             context.user_data.pop("loading_preview", None)
         return
 
@@ -135,7 +133,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         from database.operations import check_ad_verified_status
         
-        # السماح للمدراء أو من أكمل مشاهدة الإعلان بالتحميل الفوري
         if is_admin(uid) or check_ad_verified_status(uid):
             if data.startswith("v_ad:"):
                 await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
@@ -151,13 +148,23 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await start_download_from_callback(query, context, request, mode, resolution, lang)
         else:
-            # إذا نقر على زر التحقق المباشر ولم تكتمل المشاهدة بالسيستم بعد
             if data.startswith("v_ad:"):
                 return await query.answer("❌ لم يتم العثور على مشاهدة مكتملة للإعلان حتى الآن. يرجى مشاهدة الإعلان كاملاً ثم المحاولة مجدداً.", show_alert=True)
             
-            # حظر التحميل التلقائي وعرض واجهة إعلانات AdsGram لدعم السيرفر للمهتمين بالخدمة مجاناً
             await query.answer()
-            ad_url = f"https://id.adsgram.ai/api?space=37463&user_id={uid}"
+            
+            # 🌐 ضرب الـ API مالت AdsGram برمجياً لسحب رابط الإعلان الحقيقي للبوت (click_url)
+            import httpx
+            ad_url = f"https://id.adsgram.ai/api?space=37463&user_id={uid}"  # الرابط الاحتياطي الافتراضي
+            try:
+                async with httpx.AsyncClient() as client:
+                    res = await client.get(f"https://api.adsgram.ai/v1/bot/get-ad?space=37463&user_id={uid}", timeout=4.0)
+                    if res.status_code == 200:
+                        json_data = res.json()
+                        if json_data.get("click_url"):
+                            ad_url = json_data.get("click_url")
+            except Exception as e:
+                logger.error(f"AdsGram Bot API Error: {e}")
             
             btn_watch = "📺 مشاهدة الإعلان لدعم السيرفر" if lang == "ar" else "📺 Watch Ad to Support"
             btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
