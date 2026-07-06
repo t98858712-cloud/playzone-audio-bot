@@ -19,20 +19,23 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
-        # السلاح السري لتخطي خطأ 403: إجبار يوتيوب على معاملة الطلب كأنه من تطبيق أندرويد/آيفون رسمي
+        # لتخطي حظر 403 من يوتيوب
         "extractor_args": {"youtube": {"player_client": ["android", "ios"]}}
     }
     
     if mode == "audio":
-        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
+        # الكود الأساسي الخاص بك: لا تغيير هنا أبداً للحفاظ على الجودة الأصلية الخام للصوت
+        opts["format"] = "bestaudio/best"
     else:
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
+        # بالنسبة للفيديو: نطلب مسار الصورة بصيغة mp4 ومسار الصوت بصيغة m4a 
+        # هذا التطابق يمنع FFmpeg من إعادة تشفير الصوت، فينزل الفيديو بصوته الأصلي النقي تماماً
         if resolution == "best":
-            opts["format"] = f"best[ext=mp4][filesize<?{max_fs}]/bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/best"
+            opts["format"] = f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
         else:
-            opts["format"] = f"best[ext=mp4][height<={resolution}][filesize<?{max_fs}]/bestvideo[ext=mp4][height<={resolution}][filesize<?{max_fs}]+bestaudio[ext=m4a]/best"
+            opts["format"] = f"bestvideo[ext=mp4][height<={resolution}][filesize<?{max_fs}]+bestaudio[ext=m4a]/bestvideo[height<={resolution}]+bestaudio/best"
             
         opts["merge_output_format"] = "mp4"
 
