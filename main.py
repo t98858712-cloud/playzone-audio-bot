@@ -11,12 +11,13 @@ import core.security as sec
 from database.connection import init_db
 from database.operations import load_banned_users
 
-# استدعاء المساعدات (المسار الصحيح الذي تم تصحيحه)
+# استدعاء المساعدات
 from utils.helpers import _cleanup_old_downloads_sync, parse_admin_ids
 
 # استدعاء معالجات المستخدم والإدارة
 from handlers.user import start, toggle_lang_command, show_playzone_links, handle_incoming_text
-from handlers.admin import admin_panel, user_info_command, update_ytdlp_command, set_cookie_command, backup_db_command
+# تم إبقاء أوامر الإدارة الأساسية فقط، وإزالة السلاشات التي تحولت لأزرار
+from handlers.admin import admin_panel, user_info_command
 from handlers.callbacks import handle_callbacks
 
 # استدعاء الخدمات
@@ -36,12 +37,10 @@ async def post_init(app: Application):
         BotCommand("links", "الروابط / Links")
     ]
     
+    # القائمة التي ستظهر للمدراء فقط
     admin_commands = user_commands + [
         BotCommand("admin", "لوحة التحكم / Admin Panel"),
-        BotCommand("user", "معلومات مستخدم / User Info"),
-        BotCommand("update_dlp", "تحديث مكتبات / Update"),
-        BotCommand("setcookie", "تحديث الكوكيز / Set Cookie"),
-        BotCommand("backup", "نسخة احتياطية / Backup DB")
+        BotCommand("user", "معلومات مستخدم / User Info")
     ]
 
     try:
@@ -80,15 +79,12 @@ def main():
         .build()
     )
 
-    # تسجيل مسارات الأوامر
+    # تسجيل مسارات الأوامر الأساسية والإدارية
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("user", user_info_command))
-    app.add_handler(CommandHandler("update_dlp", update_ytdlp_command))
-    app.add_handler(CommandHandler("setcookie", set_cookie_command))
-    app.add_handler(CommandHandler("backup", backup_db_command))
     
     # تسجيل مسار الرسائل النصية
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_text))
