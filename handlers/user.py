@@ -16,13 +16,13 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
     lang = context.user_data.get("lang", "ar")
-    await update.message.reply_text(_t("msg_start", lang, first_name=esc(update.effective_user.first_name or "")), reply_markup=user_main_keyboard(lang), parse_mode="HTML", disable_web_page_preview=True)
+    await update.message.reply_text(_t("msg_start", lang, first_name=esc(update.effective_user.first_name or "")), reply_markup=user_main_keyboard(lang, update.effective_user.id), parse_mode="HTML", disable_web_page_preview=True)
 
 async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_lang = context.user_data.get("lang", "ar")
     new_lang = "en" if current_lang == "ar" else "ar"
     context.user_data["lang"] = new_lang
-    await update.message.reply_text(_t("msg_lang_changed", new_lang), reply_markup=user_main_keyboard(new_lang))
+    await update.message.reply_text(_t("msg_lang_changed", new_lang), reply_markup=user_main_keyboard(new_lang, update.effective_user.id))
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ar")
@@ -60,7 +60,7 @@ async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search
     await edit_message_smart(message, results_text, InlineKeyboardMarkup(btn_rows))
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from handlers.admin import handle_broadcast_media
+    from handlers.admin import handle_broadcast_media, admin_panel
     uid = update.effective_user.id
     if uid in BANNED_USERS_CACHE: return
     maintenance = get_setting("maintenance", "0")
@@ -73,6 +73,11 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if not update.message or not update.message.text: return
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
+    
+    # التقاط ضغطة زر لوحة التحكم السري وتحويلها مباشرة لقسم الإدارة
+    if text == "⚙️ لوحة التحكم" and is_admin(uid):
+        return await admin_panel(update, context)
+        
     if not is_admin(uid):
         now = time.time()
         reqs = ANTI_SPAM_CACHE.setdefault(uid, [])
@@ -85,7 +90,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             await alert_admins_live(context.bot, f"🚨 <b>نظام الحماية:</b> تم حظر المستخدم <code>{uid}</code> مؤقتاً بسبب السبام.")
             return await update.message.reply_text(_t("msg_spam_blocked", lang), parse_mode="HTML")
             
-    if text in [_t("btn_links", "ar"), _t("btn_links", "en"), "/links", "\\links"]:
+    if text in [_t("btn_links", "ar"), _t("btn_links", "en"), "/links", "\links"]:
         return await show_playzone_links(update, context)
     if text in [_t("btn_guide", "ar"), _t("btn_guide", "en")]:
         return await update.message.reply_text(_t("msg_guide", lang), disable_web_page_preview=True)
