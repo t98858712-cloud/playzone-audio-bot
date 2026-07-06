@@ -83,6 +83,17 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if not update.message or not update.message.text: return
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
+    
+    # --- التقاط ID المستخدم بعد الضغط على زر "الاستعلام عن مستخدم" ---
+    if is_admin(uid) and context.user_data.get("awaiting_user_id"):
+        context.user_data.pop("awaiting_user_id", None)
+        try:
+            target_uid = int(text)
+            from handlers.admin import process_user_info
+            return await process_user_info(update, context, target_uid)
+        except ValueError:
+            return await update.message.reply_text("❌ يرجى إرسال أرقام فقط (ID صالح).")
+    # ------------------------------------------------------------------
         
     if not is_admin(uid):
         now = time.time()
