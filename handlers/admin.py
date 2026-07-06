@@ -170,7 +170,14 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         new_val = "0" if current == "1" else "1"
         set_setting("maintenance", new_val)
         await query.answer("✅ تم تحديث حالة الصيانة")
-        return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+        
+        # حماية من النقرات المزدوجة المتكررة للمدراء بداخل قائمة الصيانة لمنع كراش السيرفر
+        try:
+            return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                return
+            raise e
 
     elif data == "adm_update_dlp":
         await query.answer("جاري تحديث محرك التحميل... قد يستغرق الأمر ثواني ⏳")
