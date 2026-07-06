@@ -14,27 +14,12 @@ from utils.helpers import progress_lock
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# الهوية لتخطي خطأ 403 وحظر يوتيوب# الهوية لتخطي خطأ 403 وحظر يوتيوبdef get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):import uuid
-import shutil
-import logging
-import asyncio
-import urllib.request
-import yt_dlp
-from pathlib import Path
-from urllib.parse import urlparse
-from telegram.ext import Application
-from core.config import COOKIES_FILE, LOCAL_API_URL, PROGRESS_UPDATE_SECONDS, EXECUTOR
-from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progress_bar, format_size
-from locales.language import _t
-from utils.helpers import progress_lock
-
-logger = logging.getLogger("PlayZoneEnterpriseBot")
-def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
+    def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
-        "extractor_args": {"youtube": {"player_client": ["android", "ios"]}}
+        "extractor_args": {"youtube": {"player_client": ["web", "android", "ios"]}}
     }
     
     if mode == "audio":
@@ -44,11 +29,12 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
         if resolution == "best":
-            opts["format"] = f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
+            opts["format"] = f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio/bestvideo+bestaudio/best"
         else:
-            opts["format"] = f"bestvideo[ext=mp4][height<={resolution}][filesize<?{max_fs}]+bestaudio[ext=m4a]/bestvideo[height<={resolution}]+bestaudio/best"
+            opts["format"] = f"bestvideo[ext=mp4][height<={resolution}][filesize<?{max_fs}]+bestaudio/bestvideo[height<={resolution}]+bestaudio/best"
             
         opts["merge_output_format"] = "mp4"
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
