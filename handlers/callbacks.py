@@ -35,7 +35,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query: return
     
-    # تم تصحيح الخطأ المطبعي هنا من fromuser إلى from_user
     data, uid, lang = query.data or "", query.from_user.id, context.user_data.get("lang", "ar")
     
     if data.startswith("adm_"):
@@ -108,24 +107,60 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(_t("msg_select_res", lang))
         return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id, lang))
 
-    if data.startswith("aud:") or data.startswith("res:"):
-        if data.startswith("aud:"):
+    if data.startswith("aud:") or data.startswith("res:") or data.startswith("v_ad:"):
+        if data.startswith("v_ad:"):
+            parts = data.split(":")
+            mode, resolution, request_id = parts[1], parts[2], parts[3]
+        elif data.startswith("aud:"):
             mode, resolution, request_id = "audio", "720", data.split(":")[1]
-            await query.answer(_t("msg_prep_audio", lang))
         else:
             mode = "video"
             parts = data.split(":")
             resolution, request_id = parts[1], parts[2]
-            await query.answer(_t("msg_prep_video", lang))
-            
-        request = ensure_pending_requests(context).pop(request_id, None)
-        trim_old_pending_requests(context)
-        
-        if not request: return await query.answer(_t("msg_session_expired", lang), show_alert=True)
-        if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
-        
-        await start_download_from_callback(query, context, request, mode, resolution, lang)
 
+        from database.operations import check_ad_verified_status
+        
+        # السماح للمدراء أو من أكمل مشاهدة الإعلان بالتحميل الفوري
+        if is_admin(uid) or check_ad_verified_status(uid):
+            if data.startswith("v_ad:"):
+                await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
+            else:
+                if mode == "audio": await query.answer(_t("msg_prep_audio", lang))
+                else: await query.answer(_t("msg_prep_video", lang))
+
+            request = ensure_pending_requests(context).pop(request_id, None)
+            trim_old_pending_requests(context)
+            
+            if not request: return await query.message.edit_text(_t("msg_session_expired", lang))
+            if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
+            
+            await start_download_from_callback(query, context, request, mode, resolution, lang)
+        else:
+            # إذا نقر على زر التحقق المباشر ولم تكتمل المشاهدة بالسيستم بعد
+            if data.startswith("v_ad:"):
+                return await query.answer("❌ لم يتم العثور على مشاهدة مكتملة للإعلان حتى الآن. يرجى مشاهدة الإعلان كاملاً ثم المحاولة مجدداً.", show_alert=True)
+            
+            # حظر التحميل التلقائي وعرض واجهة إعلانات AdsGram لدعم السيرفر للمستخدم العادي
+            await query.answer()
+            ad_url = f"https://id.adsgram.ai/api?space=37463&user_id={uid}"
+            
+            btn_watch = "📺 مشاهدة الإعلان لدعم السيرفر" if lang == "ar" else "📺 Watch Ad to Support"
+            btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
+            
+            ad_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(btn_watch, url=ad_url)],
+                [InlineKeyboardButton(btn_verify, callback_data=f"v_ad:{mode}:{resolution}:{request_id}")]
+            ])
+            
+            msg_text = (
+                "⚠️ <b>يجب مشاهدة إعلان قصير أولاً لفتح رابط التحميل المباشر وتوفير التنزيل السحابي مجاناً.</b>\n\n"
+                "اضغط على زر المشاهدة أدناه، وفور انتهائه اضغط على زر التحقق ليبدأ تنزيل ملفك تلقائياً ❤️"
+                if lang == "ar" else
+                "⚠️ <b>Please watch a short ad first to unlock the direct cloud download for free.</b>\n\n"
+                "Click the watch button below, and once it finishes, click verify to start your download automatically ❤️"
+            )
+            await query.message.edit_text(msg_text, reply_markup=ad_keyboard, parse_mode="HTML")
+        return
 
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str, lang: str):
     uid = query.from_user.id
