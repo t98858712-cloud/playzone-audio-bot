@@ -4,6 +4,7 @@ import asyncio
 import shutil
 import logging
 from urllib.parse import quote
+import httpx  # لاستدعاء رابط الإعلان برمجياً وبصمت
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
@@ -57,7 +58,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         video_id = data.split(":")[1]
         url = f"https://www.youtube.com/watch?v={video_id}"
         
-        # قفل حماية مؤسسي لمنع تدبيل الرسائل وضرب يوتيوب بطلبات متزامنة
+        # حماية أساسية لمنع النقرات المزدوجة اللي تحرق كوكيز اليوتيوب
         if context.user_data.get("loading_preview"):
             return await query.answer("⏳ جاري فحص خيارات الرابط بالفعل، يرجى الانتظار...", show_alert=True)
         
@@ -151,7 +152,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await start_download_from_callback(query, context, request, mode, resolution, lang)
         else:
             if data.startswith("v_ad:"):
-                # نظام التحقق الذكي لمنع تعليق المستخدمين
                 ad_start = context.user_data.get(f"ad_start_{request_id}", 0)
                 if time.time() - ad_start >= 12:
                     from database.operations import verify_user_ad_completion
@@ -167,30 +167,38 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return await query.answer("❌ لم تنتهِ من مشاهدة الإعلان بالكامل. يرجى الانتظار والمحاولة.", show_alert=True)
             else:
                 await query.answer()
-                
                 context.user_data[f"ad_start_{request_id}"] = time.time()
                 
                 # --------------------------------------------------------
-                # ⚠️ استبدل هذا الرابط بالرابط المباشر (Direct Link) من لوحتك
-                # ادخل على: https://partner.adsgram.ai/units/bot-37463/
-                # وانسخ رابط الـ Direct Link وضعه هنا:
-                ad_url = f"https://t.me/AdsgramBot?start=bot-37463"
+                # الطريقة الأساسية 100%: سحب رابط الإعلان الحقيقي للبوتات برمجياً 
                 # --------------------------------------------------------
+                ad_url = "https://t.me/AdsgramBot?start=bot-37463" # رابط احتياطي
+                try:
+                    async with httpx.AsyncClient() as client:
+                        # طلب صامت للـ API لجلب الإعلان
+                        res = await client.get(f"https://api.adsgram.ai/v1/bot/get-ad?space=37463&user_id={uid}", timeout=4.0)
+                        if res.status_code == 200:
+                            json_data = res.json()
+                            if "click_url" in json_data:
+                                ad_url = json_data["click_url"] # هذا هو الرابط المباشر الصحيح
+                except Exception as e:
+                    logger.error(f"فشل جلب رابط AdsGram: {e}")
                 
                 btn_watch = "📺 مشاهدة الإعلان لدعم السيرفر" if lang == "ar" else "📺 Watch Ad to Support"
                 btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
                 
                 ad_keyboard = InlineKeyboardMarkup([
+                    # زر تليغرام عادي جداً بدون أي WebApp أو جيتهاب
                     [InlineKeyboardButton(btn_watch, url=ad_url)],
                     [InlineKeyboardButton(btn_verify, callback_data=f"v_ad:{mode}:{resolution}:{request_id}")]
                 ])
                 
                 msg_text = (
                     "⚠️ <b>يجب مشاهدة إعلان قصير أولاً لفتح رابط التحميل وتوفير التنزيل السحابي مجاناً.</b>\n\n"
-                    "اضغط على زر مشاهدة الإعلان أدناه، وفور انتهائه ورجوعك للبوت اضغط على زر التحقق ليبدأ تنزيل ملفك تلقائياً ❤️"
+                    "اضغط على زر المشاهدة أدناه، وفور انتهائه اضغط على زر التحقق ليبدأ تنزيل ملفك تلقائياً ❤️"
                     if lang == "ar" else
                     "⚠️ <b>Please watch a short ad first to unlock the download link for free.</b>\n\n"
-                    "Click the watch ad button below, and once it finishes and you return, click verify to start your download automatically ❤️"
+                    "Click the watch button below, and once it finishes, click verify to start your download automatically ❤️"
                 )
                 await edit_message_smart(query.message, msg_text, reply_markup=ad_keyboard)
         return
