@@ -178,7 +178,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 webapp_domain = os.getenv("WEBAPP_URL", "https://your-app-domain.up.railway.app").rstrip("/")
                 ad_webapp_url = f"{webapp_domain}/ad_viewer?user_id={uid}"
                 
-                btn_watch = "📺 مشاهدة الإعلان لدعم السيرفر" if lang == "ar" else "📺 Watch Ad to Support"
+                btn_watch = "📺 مشاهدة الإعلان " if lang == "ar" else "📺 Watch Ad"
                 btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
                 
                 ad_keyboard = InlineKeyboardMarkup([
