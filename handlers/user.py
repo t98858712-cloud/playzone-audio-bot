@@ -62,19 +62,30 @@ async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from handlers.admin import handle_broadcast_media, admin_panel
     uid = update.effective_user.id
+    lang = context.user_data.get("lang", "ar")
+    
+    # التقاط ملف الكوكيز تلقائياً من الإدارة وتحديثه فوراً
+    if getattr(update.message, "document", None) and is_admin(uid):
+        if update.message.document.file_name == "cookies.txt":
+            from core.config import COOKIES_FILE
+            new_file = await context.bot.get_file(update.message.document.file_id)
+            await new_file.download_to_drive(COOKIES_FILE)
+            return await update.message.reply_text("✅ تم استلام وتحديث ملف الكوكيز (cookies.txt) بنجاح.")
+
     if uid in BANNED_USERS_CACHE: return
     maintenance = get_setting("maintenance", "0")
-    lang = context.user_data.get("lang", "ar")
+    
     if maintenance == "1" and not is_admin(uid):
         return await update.message.reply_text(_t("msg_maintenance", lang), parse_mode="HTML")
     if getattr(update, "message", None):
         if is_admin(uid) and context.user_data.get("bc_active"):
             return await handle_broadcast_media(update, context)
+            
     if not update.message or not update.message.text: return
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
     
-    # التقاط ضغطة زر لوحة التحكم السري وتحويلها مباشرة لقسم الإدارة
+    # فتح لوحة الإدارة من الزر مباشرة (بدون سلاش)
     if text == "⚙️ لوحة التحكم" and is_admin(uid):
         return await admin_panel(update, context)
         
