@@ -185,12 +185,16 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ])
                 
                 msg_text = (
-                    "⚠️ <b>يجب مشاهدة إعلان قصير أولاً لفتح رابط التحميل وتوفير التنزيل السحابي مجاناً.</b>\n\n"
-                    "اضغط على زر المشاهدة أدناه، وفور انتهائه اضغط على زر التحقق ليبدأ تنزيل ملفك تلقائياً ❤️"
-                    if lang == "ar" else
-                    "⚠️ <b>Please watch a short ad first to unlock the download link for free.</b>\n\n"
-                    "Click the watch button below, and once it finishes, click verify to start your download automatically ❤️"
-                )
+    "📥 <b>لفك قفل التحميل:</b>\n\n"
+    "1️⃣ اضغط على زر الإعلان.\n"
+    "2️⃣ افتح الرابط ثم أغلقه.\n"
+    "3️⃣ اضغط على زر التحقق، وسيبدأ التحميل مباشرة. ❤️"
+    if lang == "ar" else
+    "📥 <b>To unlock your download:</b>\n\n"
+    "1️⃣ Tap the ad button.\n"
+    "2️⃣ Open the link, then close it.\n"
+    "3️⃣ Tap Verify to start your download instantly. ❤️"
+)
                 await edit_message_smart(query.message, msg_text, reply_markup=ad_keyboard)
         return
 
