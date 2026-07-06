@@ -3,27 +3,20 @@ import asyncio
 from telegram import Update, BotCommand, BotCommandScopeChat, MenuButtonCommands
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
-# استدعاء الإعدادات
 from core.config import TOKEN, LOCAL_API_URL
 import core.security as sec
 
-# استدعاء قواعد البيانات
 from database.connection import init_db
 from database.operations import load_banned_users
 
-# استدعاء المساعدات
 from utils.helpers import _cleanup_old_downloads_sync, parse_admin_ids
 
-# استدعاء معالجات المستخدم والإدارة
 from handlers.user import start, toggle_lang_command, show_playzone_links, handle_incoming_text
-# تم إبقاء أوامر الإدارة الأساسية فقط، وإزالة السلاشات التي تحولت لأزرار
-from handlers.admin import admin_panel, user_info_command
+from handlers.admin import admin_panel
 from handlers.callbacks import handle_callbacks
 
-# استدعاء الخدمات
 from services.downloader import youtube_health_monitor
 
-# إعداد السجلات
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
@@ -37,10 +30,8 @@ async def post_init(app: Application):
         BotCommand("links", "الروابط / Links")
     ]
     
-    # القائمة التي ستظهر للمدراء فقط
     admin_commands = user_commands + [
-        BotCommand("admin", "لوحة التحكم / Admin Panel"),
-        BotCommand("user", "معلومات مستخدم / User Info")
+        BotCommand("admin", "لوحة التحكم / Admin Panel")
     ]
 
     try:
@@ -60,14 +51,10 @@ async def post_init(app: Application):
 def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
-    # تهيئة قاعدة البيانات والكاش
     init_db()
     sec.BANNED_USERS_CACHE = load_banned_users()
-    
-    # تنظيف الملفات القديمة
     _cleanup_old_downloads_sync()
 
-    # بناء التطبيق
     builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
         builder.base_url(LOCAL_API_URL)
@@ -79,12 +66,11 @@ def main():
         .build()
     )
 
-    # تسجيل مسارات الأوامر الأساسية والإدارية
+    # تسجيل مسارات الأوامر الأساسية والإدارية (أصبحت تعتمد على admin فقط)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("user", user_info_command))
     
     # تسجيل مسار الرسائل النصية
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_text))
@@ -94,7 +80,6 @@ def main():
 
     logger.info("🚀 تم تشغيل البوت بنظام الإدارة المؤسسية (Enterprise Control Center) بعد التقسيم بنجاح.")
     
-    # تشغيل البوت
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
