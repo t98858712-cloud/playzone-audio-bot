@@ -56,17 +56,20 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("selsrc:"):
         video_id = data.split(":")[1]
         url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        # قفل حالة مؤسسي لمنع تضارب النقرات المزدوجة المتزامنة وحماية الكوكيز من الاحتراق
+        if context.user_data.get("loading_preview"):
+            return await query.answer("⏳ جاري فحص خيارات الرابط بالفعل، يرجى الانتظار...", show_alert=True)
+        
+        # تفعيل القفل فوراً قبل أي عملية await
+        context.user_data["loading_preview"] = True
         await query.answer()
         
-        # حماية من النقرات المزدوجة المتتالية (Double Click) لمنع التكرار وضرب يوتيوب بطلبات متزامنة
         try:
             await query.message.edit_text(_t("msg_check_link", lang), reply_markup=None)
         except BadRequest as e:
-            # إذا كانت الرسالة معدلة بالفعل أو قيد التعديل، ننهي تنفيذ هذه النقرة فوراً لحماية السيرفر
-            if "Message is not modified" in str(e) or "There is no text" in str(e):
-                return
-            logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
-            return
+            if "Message is not modified" not in str(e) and "There is no text" not in str(e):
+                logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
         
         try:
             loop = asyncio.get_running_loop()
@@ -99,6 +102,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.warning(f"فشل جلب المعاينة من البحث: {e}")
             await context.bot.send_message(chat_id=uid, text=_t("msg_link_error", lang))
+        finally:
+            # إزالة القفل بأمان بعد انتهاء معالجة اليوتيوب بالكامل
+            context.user_data.pop("loading_preview", None)
         return
 
     if data.startswith("cancel:"):
