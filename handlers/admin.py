@@ -47,6 +47,33 @@ async def user_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error checking user info on Firebase: {e}")
         await update.message.reply_text("طريقة الاستخدام: /user ID")
 
+# تم إعادة هذه الدوال للعمل كاحتياط وكجسر اتصال مع ملف main.py لكي لا ينهار
+async def update_ytdlp_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    msg = await update.message.reply_text("جاري تحديث مكتبة التحميل...")
+    try:
+        subprocess.check_call([os.sys.executable, "-m", "pip", "install", "-U", "yt-dlp"])
+        await msg.edit_text("✅ تم تحديث yt-dlp لآخر إصدار بنجاح.")
+    except Exception as e:
+        await msg.edit_text(f"❌ فشل التحديث: {e}")
+
+async def set_cookie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    if not update.message.document:
+        return await update.message.reply_text("الرجاء إرسال ملف cookies.txt كملف وثيقة مباشرة مع الأمر.")
+    new_file = await context.bot.get_file(update.message.document.file_id)
+    await new_file.download_to_drive(COOKIES_FILE)
+    await update.message.reply_text("✅ تم استقبال وتحديث ملف الكوكيز بنجاح.")
+
+async def backup_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    try:
+        if DB_FILE.exists():
+            with open(DB_FILE, "rb") as f:
+                await update.message.reply_document(document=f, filename="bot_database.db", caption="نسخة احتياطية لقاعدة البيانات المحلية.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ تعذر النسخ الاحتياطي: {e}")
+
 async def safe_delete(message):
     try: await message.delete()
     except Exception: pass
@@ -157,7 +184,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("✅ تم تحديث حالة الصيانة")
         return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
 
-    # --- الأزرار الإدارية التفاعلية الجديدة ---
+    # --- الأزرار الإدارية التفاعلية ---
     elif data == "adm_update_dlp":
         await query.answer("جاري تحديث محرك التحميل... قد يستغرق الأمر ثواني ⏳")
         try:
@@ -180,7 +207,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             "لا حاجة لأي أوامر! فقط قم باستخراج ملف <code>cookies.txt</code> جديد من المتصفح الخاص بك، وأرسله كملف مباشر في هذه المحادثة، وسيقوم البوت بالتقاطه وتحديثه تلقائياً."
         )
         return await edit_message_smart(query.message, guide_text, reply_markup=admin_security_menu(lang))
-    # ----------------------------------------
         
     elif data == "adm_vacuum_db":
         await query.answer("جاري تحسين القاعدة... 🗜️")
