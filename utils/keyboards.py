@@ -81,9 +81,9 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
         [maint_btn], 
         [InlineKeyboardButton("🔄 تحديث مكتبة المحرك", callback_data="adm_update_dlp"), 
          InlineKeyboardButton("🍪 إرشادات الكوكيز", callback_data="adm_cookie_guide")],
-        [InlineKeyboardButton("🗜️ تحسين وضغط القاعدة", callback_data="adm_vacuum_db"), 
+        [InlineKeyboardButton("🗜️ تحسين القاعدة", callback_data="adm_vacuum_db"), 
          InlineKeyboardButton("🧹 تنظيف التخزين المؤقت", callback_data="adm_clean")],
-        [InlineKeyboardButton("💾 تحميل نسخة احتياطية محلية (DB)", callback_data="adm_backup_db")],
+        [InlineKeyboardButton("💾 تحميل نسخة احتياطية (DB)", callback_data="adm_backup_db")],
         [InlineKeyboardButton("🔙 رجوع للقائمة الرئيسية", callback_data="adm_main_back")]
     ])
 
