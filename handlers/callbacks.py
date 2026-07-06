@@ -3,10 +3,10 @@ import time
 import asyncio
 import shutil
 import logging
+import os
 from urllib.parse import quote
-import httpx  # لاستدعاء رابط الإعلان برمجياً وبصمت
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
@@ -170,26 +170,20 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.user_data[f"ad_start_{request_id}"] = time.time()
                 
                 # --------------------------------------------------------
-                # الطريقة الأساسية 100%: سحب رابط الإعلان الحقيقي للبوتات برمجياً 
+                # التوجيه الصحيح: استخدام WebApp لفتح الإعلان واحتساب المشاهدات
                 # --------------------------------------------------------
-                ad_url = "https://t.me/AdsgramBot?start=bot-37463" # رابط احتياطي
-                try:
-                    async with httpx.AsyncClient() as client:
-                        # طلب صامت للـ API لجلب الإعلان
-                        res = await client.get(f"https://api.adsgram.ai/v1/bot/get-ad?space=37463&user_id={uid}", timeout=4.0)
-                        if res.status_code == 200:
-                            json_data = res.json()
-                            if "click_url" in json_data:
-                                ad_url = json_data["click_url"] # هذا هو الرابط المباشر الصحيح
-                except Exception as e:
-                    logger.error(f"فشل جلب رابط AdsGram: {e}")
+                
+                # جلب الدومين الأساسي للسيرفر الخاص بك (تأكد من إضافته في إعدادات Railway)
+                # مثال: https://playzone-app.up.railway.app
+                webapp_domain = os.getenv("WEBAPP_URL", "https://your-app-domain.up.railway.app").rstrip("/")
+                ad_webapp_url = f"{webapp_domain}/ad_viewer?user_id={uid}"
                 
                 btn_watch = "📺 مشاهدة الإعلان لدعم السيرفر" if lang == "ar" else "📺 Watch Ad to Support"
                 btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
                 
                 ad_keyboard = InlineKeyboardMarkup([
-                    # زر تليغرام عادي جداً بدون أي WebApp أو جيتهاب
-                    [InlineKeyboardButton(btn_watch, url=ad_url)],
+                    # استخدام web_app لفتح صفحة HTML المصغرة داخل التليغرام بدلاً من url
+                    [InlineKeyboardButton(btn_watch, web_app=WebAppInfo(url=ad_webapp_url))],
                     [InlineKeyboardButton(btn_verify, callback_data=f"v_ad:{mode}:{resolution}:{request_id}")]
                 ])
                 
