@@ -73,7 +73,7 @@ async def start_adsgram_http_server():
     <div id="status">
         <h2>جاري تحميل الإعلان...</h2>
         <div class="loader"></div>
-        <p>يرجى المشاهدة لدعم السيرفر ❤️</p>
+        <p>يرجى المشاهدة ❤️</p>
     </div>
     <script>
         window.Telegram.WebApp.ready();
