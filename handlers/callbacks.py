@@ -10,7 +10,8 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppI
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
-from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME
+# تم إضافة ADSTERRA_SMARTLINK إلى الإعدادات المستوردة هنا
+from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, ADSTERRA_SMARTLINK
 from core.security import ACTIVE_USERS
 from database.operations import stat_inc_sync
 from locales.language import _t
@@ -170,20 +171,16 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.user_data[f"ad_start_{request_id}"] = time.time()
                 
                 # --------------------------------------------------------
-                # التوجيه الصحيح: استخدام WebApp لفتح الإعلان واحتساب المشاهدات
+                # التوجيه الجديد: استخدام رابط Adsterra الذكي المباشر بنظام النقرة
                 # --------------------------------------------------------
-                
-                # جلب الدومين الأساسي للسيرفر الخاص بك (تأكد من إضافته في إعدادات Railway)
-                # مثال: https://playzone-app.up.railway.app
-                webapp_domain = os.getenv("WEBAPP_URL", "https://your-app-domain.up.railway.app").rstrip("/")
-                ad_webapp_url = f"{webapp_domain}/ad_viewer?user_id={uid}"
+                ad_direct_url = f"{ADSTERRA_SMARTLINK}&sub={uid}"
                 
                 btn_watch = "📺 مشاهدة الإعلان " if lang == "ar" else "📺 Watch Ad"
                 btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
                 
                 ad_keyboard = InlineKeyboardMarkup([
-                    # استخدام web_app لفتح صفحة HTML المصغرة داخل التليغرام بدلاً من url
-                    [InlineKeyboardButton(btn_watch, web_app=WebAppInfo(url=ad_webapp_url))],
+                    # تم تحويل الزر من نظام web_app إلى نظام الـ url المباشر للرابط الخاص بك
+                    [InlineKeyboardButton(btn_watch, url=ad_direct_url)],
                     [InlineKeyboardButton(btn_verify, callback_data=f"v_ad:{mode}:{resolution}:{request_id}")]
                 ])
                 
