@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from telegram.error import TimedOut, NetworkError
+from telegram.error import TimedOut, NetworkError, BadRequest
 
 from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME
 from core.security import ACTIVE_USERS
@@ -57,7 +57,13 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         video_id = data.split(":")[1]
         url = f"https://www.youtube.com/watch?v={video_id}"
         await query.answer()
-        await query.message.edit_text(_t("msg_check_link", lang), reply_markup=None)
+        
+        # حماية من النقرات المزدوجة المتتالية (Double Click) لمنع خطأ عدم تعديل النص
+        try:
+            await query.message.edit_text(_t("msg_check_link", lang), reply_markup=None)
+        except BadRequest as e:
+            if "Message is not modified" not in str(e) and "There is no text" not in str(e):
+                logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
         
         try:
             loop = asyncio.get_running_loop()
@@ -140,7 +146,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if data.startswith("v_ad:"):
                 return await query.answer("❌ لم يتم العثور على مشاهدة مكتملة للإعلان حتى الآن. يرجى مشاهدة الإعلان كاملاً ثم المحاولة مجدداً.", show_alert=True)
             
-            # حظر التحميل التلقائي وعرض واجهة إعلانات AdsGram لدعم السيرفر للمستخدم العادي
+            # حظر التحميل التلقائي وعرض واجهة إعلانات AdsGram لدعم السيرفر للمهتمين بالخدمة مجاناً
             await query.answer()
             ad_url = f"https://id.adsgram.ai/api?space=37463&user_id={uid}"
             
@@ -154,12 +160,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             msg_text = (
                 "⚠️ <b>يجب مشاهدة إعلان قصير أولاً لفتح رابط التحميل المباشر وتوفير التنزيل السحابي مجاناً.</b>\n\n"
-                "اضغط على زر المشاهدة أدناه، وفور انتهائه اضغط على زر التحقق ليبدأ تنزيل ملفك تلقائياً ❤️"
+                "اضغط على زر مشاهدة الإعلان أدناه، وفور انتهائه ورجوعك للبوت اضغط على زر التحقق ليبدأ تنزيل ملفك تلقائياً ❤️"
                 if lang == "ar" else
                 "⚠️ <b>Please watch a short ad first to unlock the direct cloud download for free.</b>\n\n"
-                "Click the watch button below, and once it finishes, click verify to start your download automatically ❤️"
+                "Click the watch ad button below, and once it finishes and you return, click verify to start your download automatically ❤️"
             )
-            # استخدام الدالة الذكية هنا لتجنب خطأ تعديل رسائل الميديا
+            # استخدام الدالة الذكية والمؤسسية لتجنب خطأ تعديل رسائل الصور والمعاينات
             await edit_message_smart(query.message, msg_text, reply_markup=ad_keyboard)
         return
 
