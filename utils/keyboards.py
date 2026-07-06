@@ -3,19 +3,12 @@ from locales.language import _t
 from core.config import WEBSITE_PLAYZONE, FACEBOOK_PLAYZONE, INSTAGRAM_PLAYZONE, THREADS_PLAYZONE, TELEGRAM_BOT_PLAYZONE
 from database.operations import get_setting
 
-def user_main_keyboard(lang: str = "ar", user_id: int = 0) -> ReplyKeyboardMarkup:
-    from utils.helpers import is_admin
-    keys = [
-        [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
-        [KeyboardButton(_t("btn_add_group", lang))]
-    ]
-    
-    # إظهار زر لوحة التحكم حصرياً للمدراء
-    if is_admin(user_id):
-        keys.append([KeyboardButton("⚙️ لوحة التحكم")])
-        
+def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
-        keys,
+        [
+            [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
+            [KeyboardButton(_t("btn_add_group", lang))]
+        ],
         resize_keyboard=True, is_persistent=True, input_field_placeholder=_t("txt_placeholder", lang)
     )
 
