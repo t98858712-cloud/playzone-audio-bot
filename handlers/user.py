@@ -64,7 +64,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
-    # التقاط ملف الكوكيز تلقائياً من الإدارة وتحديثه فوراً
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
             from core.config import COOKIES_FILE
@@ -85,7 +84,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
     
-    # فتح لوحة الإدارة من الزر مباشرة (بدون سلاش)
     if text == "⚙️ لوحة التحكم" and is_admin(uid):
         return await admin_panel(update, context)
         
@@ -101,7 +99,8 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             await alert_admins_live(context.bot, f"🚨 <b>نظام الحماية:</b> تم حظر المستخدم <code>{uid}</code> مؤقتاً بسبب السبام.")
             return await update.message.reply_text(_t("msg_spam_blocked", lang), parse_mode="HTML")
             
-    if text in [_t("btn_links", "ar"), _t("btn_links", "en"), "/links", "\links"]:
+    # السطر الذي تم إصلاحه بحل مشكلة الـ \l
+    if text in [_t("btn_links", "ar"), _t("btn_links", "en"), "/links", "\\links"]:
         return await show_playzone_links(update, context)
     if text in [_t("btn_guide", "ar"), _t("btn_guide", "en")]:
         return await update.message.reply_text(_t("msg_guide", lang), disable_web_page_preview=True)
