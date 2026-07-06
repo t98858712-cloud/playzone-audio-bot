@@ -131,7 +131,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             request = ensure_pending_requests(context).pop(request_id, None)
             trim_old_pending_requests(context)
             
-            if not request: return await query.message.edit_text(_t("msg_session_expired", lang))
+            if not request: return await edit_message_smart(query.message, _t("msg_session_expired", lang))
             if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
             
             await start_download_from_callback(query, context, request, mode, resolution, lang)
@@ -159,7 +159,8 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "⚠️ <b>Please watch a short ad first to unlock the direct cloud download for free.</b>\n\n"
                 "Click the watch button below, and once it finishes, click verify to start your download automatically ❤️"
             )
-            await query.message.edit_text(msg_text, reply_markup=ad_keyboard, parse_mode="HTML")
+            # استخدام الدالة الذكية هنا لتجنب خطأ تعديل رسائل الميديا
+            await edit_message_smart(query.message, msg_text, reply_markup=ad_keyboard)
         return
 
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str, lang: str):
