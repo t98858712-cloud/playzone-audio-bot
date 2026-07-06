@@ -57,7 +57,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         video_id = data.split(":")[1]
         url = f"https://www.youtube.com/watch?v={video_id}"
         
-        # قفل حالة مؤسسي لمنع تضارب النقرات المزدوجة المتزامنة وحماية الكوكيز من الاحتراق
+        # قفل حالة لمنع النقرات المزدوجة المتزامنة وحماية الكوكيز
         if context.user_data.get("loading_preview"):
             return await query.answer("⏳ جاري فحص خيارات الرابط بالفعل، يرجى الانتظار...", show_alert=True)
         
@@ -67,8 +67,10 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await query.message.edit_text(_t("msg_check_link", lang), reply_markup=None)
         except BadRequest as e:
-            if "Message is not modified" not in str(e) and "There is no text" not in str(e):
-                logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
+            if "Message is not modified" in str(e) or "There is no text" in str(e):
+                context.user_data.pop("loading_preview", None)
+                return
+            logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
         
         try:
             loop = asyncio.get_running_loop()
@@ -153,7 +155,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await query.answer()
             
-            # 🌐 ضرب الـ API مالت AdsGram برمجياً لسحب رابط الإعلان الحقيقي للبوت (click_url)
+            # 🌐 ضرب الـ API مالت AdsGram برمجياً لسحب رابط الإعلان المباشر الحقيقي للبوتات (click_url)
             import httpx
             ad_url = f"https://id.adsgram.ai/api?space=37463&user_id={uid}"  # الرابط الاحتياطي الافتراضي
             try:
