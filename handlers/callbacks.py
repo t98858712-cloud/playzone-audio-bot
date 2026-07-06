@@ -5,8 +5,7 @@ import shutil
 import logging
 from urllib.parse import quote
 
-# ⚠️ تم استدعاء WebAppInfo لتفعيل نافذة الإعلانات
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
@@ -58,6 +57,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         video_id = data.split(":")[1]
         url = f"https://www.youtube.com/watch?v={video_id}"
         
+        # قفل حماية مؤسسي لمنع تدبيل الرسائل وضرب يوتيوب بطلبات متزامنة
         if context.user_data.get("loading_preview"):
             return await query.answer("⏳ جاري فحص خيارات الرابط بالفعل، يرجى الانتظار...", show_alert=True)
         
@@ -70,7 +70,8 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if "Message is not modified" in str(e) or "There is no text" in str(e):
                 context.user_data.pop("loading_preview", None)
                 return
-            
+            logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
+        
         try:
             loop = asyncio.get_running_loop()
             info = await loop.run_in_executor(EXECUTOR, lambda: extract_metadata(url))
@@ -150,29 +151,48 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await start_download_from_callback(query, context, request, mode, resolution, lang)
         else:
             if data.startswith("v_ad:"):
-                return await query.answer("❌ لم يتم العثور على مشاهدة مكتملة للإعلان حتى الآن. يرجى مشاهدة الإعلان كاملاً ثم المحاولة مجدداً.", show_alert=True)
-            
-            await query.answer()
-            
-            # 🌐 استدعاء نافذة الإعلانات المصغرة عبر رابط سيرفرك المباشر والشرعي
-            ad_url = f"https://playzone-audio-bot-production.up.railway.app/ad_viewer?user_id={uid}"
-            
-            btn_watch = "📺 مشاهدة الإعلان لدعم السيرفر" if lang == "ar" else "📺 Watch Ad to Support"
-            btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
-            
-            ad_keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(btn_watch, web_app=WebAppInfo(url=ad_url))],
-                [InlineKeyboardButton(btn_verify, callback_data=f"v_ad:{mode}:{resolution}:{request_id}")]
-            ])
-            
-            msg_text = (
-                "⚠️ <b>يجب مشاهدة إعلان قصير أولاً لفتح رابط التحميل المباشر وتوفير التنزيل السحابي مجاناً.</b>\n\n"
-                "اضغط على زر مشاهدة الإعلان أدناه، وفور انتهائه ورجوعك للبوت اضغط على زر التحقق ليبدأ تنزيل ملفك تلقائياً ❤️"
-                if lang == "ar" else
-                "⚠️ <b>Please watch a short ad first to unlock the direct cloud download for free.</b>\n\n"
-                "Click the watch ad button below, and once it finishes and you return, click verify to start your download automatically ❤️"
-            )
-            await edit_message_smart(query.message, msg_text, reply_markup=ad_keyboard)
+                # نظام التحقق الذكي لمنع تعليق المستخدمين
+                ad_start = context.user_data.get(f"ad_start_{request_id}", 0)
+                if time.time() - ad_start >= 12:
+                    from database.operations import verify_user_ad_completion
+                    verify_user_ad_completion(uid)
+                    
+                    await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
+                    request = ensure_pending_requests(context).pop(request_id, None)
+                    trim_old_pending_requests(context)
+                    if not request: return await edit_message_smart(query.message, _t("msg_session_expired", lang))
+                    if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
+                    await start_download_from_callback(query, context, request, mode, resolution, lang)
+                else:
+                    return await query.answer("❌ لم تنتهِ من مشاهدة الإعلان بالكامل. يرجى الانتظار والمحاولة.", show_alert=True)
+            else:
+                await query.answer()
+                
+                context.user_data[f"ad_start_{request_id}"] = time.time()
+                
+                # --------------------------------------------------------
+                # ⚠️ استبدل هذا الرابط بالرابط المباشر (Direct Link) من لوحتك
+                # ادخل على: https://partner.adsgram.ai/units/bot-37463/
+                # وانسخ رابط الـ Direct Link وضعه هنا:
+                ad_url = f"https://t.me/AdsgramBot?start=bot-37463"
+                # --------------------------------------------------------
+                
+                btn_watch = "📺 مشاهدة الإعلان لدعم السيرفر" if lang == "ar" else "📺 Watch Ad to Support"
+                btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
+                
+                ad_keyboard = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(btn_watch, url=ad_url)],
+                    [InlineKeyboardButton(btn_verify, callback_data=f"v_ad:{mode}:{resolution}:{request_id}")]
+                ])
+                
+                msg_text = (
+                    "⚠️ <b>يجب مشاهدة إعلان قصير أولاً لفتح رابط التحميل وتوفير التنزيل السحابي مجاناً.</b>\n\n"
+                    "اضغط على زر مشاهدة الإعلان أدناه، وفور انتهائه ورجوعك للبوت اضغط على زر التحقق ليبدأ تنزيل ملفك تلقائياً ❤️"
+                    if lang == "ar" else
+                    "⚠️ <b>Please watch a short ad first to unlock the download link for free.</b>\n\n"
+                    "Click the watch ad button below, and once it finishes and you return, click verify to start your download automatically ❤️"
+                )
+                await edit_message_smart(query.message, msg_text, reply_markup=ad_keyboard)
         return
 
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str, lang: str):
