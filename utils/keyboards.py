@@ -2,13 +2,20 @@ from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, 
 from locales.language import _t
 from core.config import WEBSITE_PLAYZONE, FACEBOOK_PLAYZONE, INSTAGRAM_PLAYZONE, THREADS_PLAYZONE, TELEGRAM_BOT_PLAYZONE
 from database.operations import get_setting
+from utils.helpers import is_admin
 
-def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
+def user_main_keyboard(lang: str = "ar", user_id: int = 0) -> ReplyKeyboardMarkup:
+    keys = [
+        [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
+        [KeyboardButton(_t("btn_add_group", lang))]
+    ]
+    
+    # الزر السري يظهر للمدراء فقط
+    if is_admin(user_id):
+        keys.append([KeyboardButton("⚙️ لوحة التحكم")])
+        
     return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
-            [KeyboardButton(_t("btn_add_group", lang))]
-        ],
+        keys,
         resize_keyboard=True, is_persistent=True, input_field_placeholder=_t("txt_placeholder", lang)
     )
 
@@ -64,8 +71,13 @@ def admin_users_menu(lang: str = "ar") -> InlineKeyboardMarkup:
 def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     maint = get_setting("maintenance", "0")
     maint_btn = InlineKeyboardButton(_t("btn_adm_maint_off", lang), callback_data="adm_toggle_maint") if maint == "1" else InlineKeyboardButton(_t("btn_adm_maint_on", lang), callback_data="adm_toggle_maint")
+    
+    # دمج أزرار الإدارة الجديدة لتجنب السلاش
     return InlineKeyboardMarkup([
         [maint_btn],
+        [InlineKeyboardButton("🔄 تحديث المحرك (YT-DLP)", callback_data="adm_update_dlp")],
+        [InlineKeyboardButton("💾 تحميل نسخة احتياطية (DB)", callback_data="adm_backup_db")],
+        [InlineKeyboardButton("🍪 إرشادات الكوكيز", callback_data="adm_cookie_guide")],
         [InlineKeyboardButton(_t("btn_adm_vacuum", lang), callback_data="adm_vacuum_db"), InlineKeyboardButton(_t("btn_adm_clean", lang), callback_data="adm_clean")],
         [InlineKeyboardButton(_t("btn_back", lang), callback_data="adm_main_back")]
     ])
