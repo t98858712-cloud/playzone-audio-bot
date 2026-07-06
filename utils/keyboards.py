@@ -44,6 +44,10 @@ def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
 #               لوحات تحكم الإدارة (الترتيب الاحترافي)
 # =======================================================
 
+# =======================================================
+#               لوحات تحكم الإدارة (ترتيب مؤسسي)
+# =======================================================
+
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📢 الإذاعة والتواصل", callback_data="adm_bc_menu"), 
@@ -55,8 +59,8 @@ def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
 
 def admin_broadcast_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📨 رسالة للجميع (كل المستخدمين)", callback_data="adm_bc_start:all")],
-        [InlineKeyboardButton("⚡ رسالة للنشطين (آخر 48 ساعة)", callback_data="adm_bc_start:active")],
+        [InlineKeyboardButton("📨 إرسال للجميع (كل المستخدمين)", callback_data="adm_bc_start:all")],
+        [InlineKeyboardButton("⚡ إرسال للنشطين (آخر 48 ساعة)", callback_data="adm_bc_start:active")],
         [InlineKeyboardButton("🔙 رجوع للقائمة الرئيسية", callback_data="adm_main_back")]
     ])
 
@@ -64,8 +68,8 @@ def admin_users_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 الإحصائيات الشاملة", callback_data="adm_stats")],
         [InlineKeyboardButton("📋 أحدث المنضمين", callback_data="adm_users"), 
-         InlineKeyboardButton("🔎 استعلام (ID)", callback_data="adm_user_info_prompt")],
-        [InlineKeyboardButton("📥 تصدير بيانات المستخدمين (CSV)", callback_data="adm_export_db")],
+         InlineKeyboardButton("🔎 استعلام عن (ID)", callback_data="adm_user_info_prompt")],
+        [InlineKeyboardButton("📥 تصدير تقرير المستخدمين (CSV)", callback_data="adm_export_db")],
         [InlineKeyboardButton("🔙 رجوع للقائمة الرئيسية", callback_data="adm_main_back")]
     ])
 
@@ -74,12 +78,12 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     maint_btn = InlineKeyboardButton("🔴 إيقاف وضع الصيانة" if maint == "1" else "🟢 تفعيل وضع الصيانة", callback_data="adm_toggle_maint")
     
     return InlineKeyboardMarkup([
-        [maint_btn],  # زر تحكم أساسي وخطير، يستحق عرضاً كاملاً
-        [InlineKeyboardButton("🔄 تحديث المحرك", callback_data="adm_update_dlp"), 
+        [maint_btn], 
+        [InlineKeyboardButton("🔄 تحديث مكتبة المحرك", callback_data="adm_update_dlp"), 
          InlineKeyboardButton("🍪 إرشادات الكوكيز", callback_data="adm_cookie_guide")],
-        [InlineKeyboardButton("🗜️ ضغط وتحسين القاعدة", callback_data="adm_vacuum_db"), 
-         InlineKeyboardButton("🧹 تنظيف المؤقتات", callback_data="adm_clean")],
-        [InlineKeyboardButton("💾 سحب نسخة احتياطية للقاعدة (DB)", callback_data="adm_backup_db")], # زر البيانات دائماً يُفضل إبرازه
+        [InlineKeyboardButton("🗜️ تحسين وضغط القاعدة", callback_data="adm_vacuum_db"), 
+         InlineKeyboardButton("🧹 تنظيف التخزين المؤقت", callback_data="adm_clean")],
+        [InlineKeyboardButton("💾 تحميل نسخة احتياطية محلية (DB)", callback_data="adm_backup_db")],
         [InlineKeyboardButton("🔙 رجوع للقائمة الرئيسية", callback_data="adm_main_back")]
     ])
 
