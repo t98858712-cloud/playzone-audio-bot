@@ -15,7 +15,6 @@ from utils.helpers import progress_lock
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
-    # تم إزالة الهيدرز الوهمية فقط لتجنب حظر يوتيوب مع الكوكيز
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
@@ -23,19 +22,20 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
     
     if mode == "audio":
-        opts["format"] = "bestaudio/best"
+        # صيغة m4a الأصلية: خفيفة جداً، سريعة التحميل، وبأعلى جودة صوت للمصدر
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
     else:
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # التعديل البسيط هنا: إجبار يوتيوب على إرسال صوت m4a مع فيديو mp4 لمنع فقدان الجودة
+        # السر هنا: نطلب (best) أولاً وهي الصيغة الجاهزة من يوتيوب (صغيرة الحجم وصوتها نقي)، 
+        # وإذا لم تتوفر ننتقل للدمج الآمن كخيار احتياطي
         if resolution == "best":
-            opts["format"] = f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/best[ext=mp4][filesize<?{max_fs}]/best"
+            opts["format"] = f"best[ext=mp4][filesize<?{max_fs}]/bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/best"
         else:
-            opts["format"] = f"bestvideo[ext=mp4][height<={resolution}][filesize<?{max_fs}]+bestaudio[ext=m4a]/best[ext=mp4][height<={resolution}][filesize<?{max_fs}]/best"
+            opts["format"] = f"best[ext=mp4][height<={resolution}][filesize<?{max_fs}]/bestvideo[ext=mp4][height<={resolution}][filesize<?{max_fs}]+bestaudio[ext=m4a]/best"
             
         opts["merge_output_format"] = "mp4"
-        # تم إيقاف التحويل الإجباري لـ FFmpeg لكي لا يعبث بطبقات الصوت أثناء الدمج
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
