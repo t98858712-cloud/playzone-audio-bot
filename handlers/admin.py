@@ -184,6 +184,33 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         set_setting("maintenance", new_val)
         await query.answer("✅ تم تحديث حالة الصيانة")
         return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+        
+    # --- تمت إضافة وظائف الأزرار الجديدة هنا ---
+    elif data == "adm_update_dlp":
+        await query.answer("جاري تحديث محرك التحميل... قد يستغرق الأمر ثواني ⏳")
+        try:
+            subprocess.run(["pip", "install", "-U", "yt-dlp"], check=True)
+            return await edit_message_smart(query.message, "✅ <b>تم تحديث محرك التحميل (yt-dlp) لآخر إصدار بنجاح!</b>", reply_markup=admin_security_menu(lang))
+        except Exception as e:
+            return await edit_message_smart(query.message, f"❌ <b>حدث خطأ أثناء التحديث:</b>\n<code>{e}</code>", reply_markup=admin_security_menu(lang))
+
+    elif data == "adm_backup_db":
+        await query.answer("جاري سحب وتجهيز النسخة الاحتياطية... 💾")
+        if DB_FILE.exists():
+            await context.bot.send_document(chat_id=query.message.chat_id, document=open(DB_FILE, 'rb'), filename="bot_database.db", caption="✅ النسخة الاحتياطية المحدثة لقاعدة البيانات.")
+        return await edit_message_smart(query.message, "✅ تم إرسال النسخة الاحتياطية بنجاح.", reply_markup=admin_security_menu(lang))
+
+    elif data == "adm_cookie_guide":
+        await query.answer()
+        guide_text = (
+            "🍪 <b>طريقة تحديث الكوكيز بدون إيقاف السيرفر:</b>\n\n"
+            "1. استخرج ملف <code>cookies.txt</code> جديد من المتصفح.\n"
+            "2. قم بإرسال الملف مباشرة هنا في المحادثة كـ (ملف/Document).\n"
+            "3. اكتب في وصف الملف (Caption) الأمر المخصص <code>/setcookie</code> وسيقوم النظام بتبديله فوراً."
+        )
+        return await edit_message_smart(query.message, guide_text, reply_markup=admin_security_menu(lang))
+    # ----------------------------------------
+        
     elif data == "adm_vacuum_db":
         await query.answer("جاري تحسين القاعدة... 🗜️")
         optimize_db()
