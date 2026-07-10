@@ -171,12 +171,23 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         set_setting("maintenance", new_val)
         await query.answer("✅ تم تحديث حالة الصيانة")
         
-        # حماية من النقرات المزدوجة المتكررة للمدراء بداخل قائمة الصيانة لمنع كراش السيرفر
         try:
             return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
         except BadRequest as e:
-            if "Message is not modified" in str(e):
-                return
+            if "Message is not modified" in str(e): return
+            raise e
+
+    # 🌟 الكود الجديد: معالجة نقرة تشغيل/إيقاف الإعلانات مؤقتاً في السيرفر والقاعدة
+    elif data == "adm_toggle_ads":
+        current = get_setting("ads_status", "1")
+        new_val = "0" if current == "1" else "1"
+        set_setting("ads_status", new_val)
+        await query.answer("✅ تم تحديث حالة الإعلانات")
+        
+        try:
+            return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+        except BadRequest as e:
+            if "Message is not modified" in str(e): return
             raise e
 
     elif data == "adm_update_dlp":
