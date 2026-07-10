@@ -7,7 +7,7 @@ def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
-            [KeyboardButton(_t("btn_add_group", lang))]
+            [KeyboardButton(_t("add_group", lang))]
         ],
         resize_keyboard=True, is_persistent=True, input_field_placeholder=_t("txt_placeholder", lang)
     )
@@ -77,8 +77,13 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     maint = get_setting("maintenance", "0")
     maint_btn = InlineKeyboardButton("🔴 إيقاف وضع الصيانة" if maint == "1" else "🟢 تفعيل وضع الصيانة", callback_data="adm_toggle_maint")
     
+    # 🌟 جلب حالة الإعلانات الحالية من السيرفر وعرض الزر التفاعلي بناءً عليها
+    ads_status = get_setting("ads_status", "1")
+    ads_btn = InlineKeyboardButton("🔴 إيقاف الإعلانات مؤقتاً" if ads_status == "1" else "🟢 تفعيل الإعلانات", callback_data="adm_toggle_ads")
+    
     return InlineKeyboardMarkup([
         [maint_btn], 
+        [ads_btn], # وضع زر التحكم المباشر بالإعلانات هنا
         [InlineKeyboardButton("🔄 تحديث مكتبة المحرك", callback_data="adm_update_dlp"), 
          InlineKeyboardButton("🍪 إرشادات الكوكيز", callback_data="adm_cookie_guide")],
         [InlineKeyboardButton("🗜️ تحسين القاعدة", callback_data="adm_vacuum_db"), 
