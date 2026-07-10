@@ -10,8 +10,8 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppI
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
-# تم إضافة ADSTERRA_SMARTLINK إلى الإعدادات المستوردة هنا
-from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, ADSTERRA_SMARTLINK
+# 🌟 تم استيراد HILLTOPADS_LINK هنا مباشرة
+from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK
 from core.security import ACTIVE_USERS
 from database.operations import stat_inc_sync
 from locales.language import _t
@@ -59,7 +59,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         video_id = data.split(":")[1]
         url = f"https://www.youtube.com/watch?v={video_id}"
         
-        # حماية أساسية لمنع النقرات المزدوجة اللي تحرق كوكيز اليوتيوب
         if context.user_data.get("loading_preview"):
             return await query.answer("⏳ جاري فحص خيارات الرابط بالفعل، يرجى الانتظار...", show_alert=True)
         
@@ -135,11 +134,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parts = data.split(":")
             resolution, request_id = parts[1], parts[2]
 
-        # 🌟 استيراد التحقق من حالة الإعلانات الموقوفة مؤقتاً
         from database.operations import check_ad_verified_status, get_setting
         ads_status = get_setting("ads_status", "1")
         
-        # إذا كان المدير هو من يطلب، أو إذا قام المدير بإيقاف الإعلانات مؤقتاً (ads_status == "0")، أو إذا كان المستخدم قد تخطى بالفعل
         if is_admin(uid) or ads_status == "0" or check_ad_verified_status(uid):
             if data.startswith("v_ad:"):
                 await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
@@ -173,7 +170,8 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer()
                 context.user_data[f"ad_start_{request_id}"] = time.time()
                 
-                ad_direct_url = f"{ADSTERRA_SMARTLINK}&sub={uid}"
+                # 🌟 ربط توجيه زر الإعلان بالمتغير الجديد الحامل للرابط الفعلي الحصري للشركة
+                ad_direct_url = HILLTOPADS_LINK
                 
                 btn_watch = "📺 مشاهدة الإعلان " if lang == "ar" else "📺 Watch Ad"
                 btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
