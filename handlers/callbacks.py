@@ -135,9 +135,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parts = data.split(":")
             resolution, request_id = parts[1], parts[2]
 
-        from database.operations import check_ad_verified_status
+        # 🌟 استيراد التحقق من حالة الإعلانات الموقوفة مؤقتاً
+        from database.operations import check_ad_verified_status, get_setting
+        ads_status = get_setting("ads_status", "1")
         
-        if is_admin(uid) or check_ad_verified_status(uid):
+        # إذا كان المدير هو من يطلب، أو إذا قام المدير بإيقاف الإعلانات مؤقتاً (ads_status == "0")، أو إذا كان المستخدم قد تخطى بالفعل
+        if is_admin(uid) or ads_status == "0" or check_ad_verified_status(uid):
             if data.startswith("v_ad:"):
                 await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
             else:
@@ -170,31 +173,27 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer()
                 context.user_data[f"ad_start_{request_id}"] = time.time()
                 
-                # --------------------------------------------------------
-                # التوجيه الجديد: استخدام رابط Adsterra الذكي المباشر بنظام النقرة
-                # --------------------------------------------------------
                 ad_direct_url = f"{ADSTERRA_SMARTLINK}&sub={uid}"
                 
                 btn_watch = "📺 مشاهدة الإعلان " if lang == "ar" else "📺 Watch Ad"
                 btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
                 
                 ad_keyboard = InlineKeyboardMarkup([
-                    # تم تحويل الزر من نظام web_app إلى نظام الـ url المباشر للرابط الخاص بك
                     [InlineKeyboardButton(btn_watch, url=ad_direct_url)],
                     [InlineKeyboardButton(btn_verify, callback_data=f"v_ad:{mode}:{resolution}:{request_id}")]
                 ])
                 
                 msg_text = (
-    "📥 <b>لفك قفل التحميل:</b>\n\n"
-    "1️⃣ اضغط على زر الإعلان.\n"
-    "2️⃣ افتح الرابط ثم أغلقه.\n"
-    "3️⃣ اضغط على زر التحقق، وسيبدأ التحميل مباشرة. ❤️"
-    if lang == "ar" else
-    "📥 <b>To unlock your download:</b>\n\n"
-    "1️⃣ Tap the ad button.\n"
-    "2️⃣ Open the link, then close it.\n"
-    "3️⃣ Tap Verify to start your download instantly. ❤️"
-)
+                    "📥 <b>لفك قفل التحميل:</b>\n\n"
+                    "1️⃣ اضغط على زر الإعلان.\n"
+                    "2️⃣ افتح الرابط ثم أغلقه.\n"
+                    "3️⃣ اضغط على زر التحقق، وسيبدأ التحميل مباشرة. ❤️"
+                    if lang == "ar" else
+                    "📥 <b>To unlock your download:</b>\n\n"
+                    "1️⃣ Tap the ad button.\n"
+                    "2️⃣ Open the link, then close it.\n"
+                    "3️⃣ Tap Verify to start your download instantly. ❤️"
+                )
                 await edit_message_smart(query.message, msg_text, reply_markup=ad_keyboard)
         return
 
