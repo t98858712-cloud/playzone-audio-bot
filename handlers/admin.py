@@ -31,7 +31,6 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ar")
     await update.message.reply_text(_t("msg_adm_panel", lang), reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
 
-# --- الدالة الجديدة للاستعلام عن المستخدمين برمجياً (تعمل بواسطة الزر) ---
 async def process_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, uid: int):
     try:
         doc_ref = db.collection('users').document(str(uid))
@@ -46,7 +45,6 @@ async def process_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     except Exception as e:
         logger.error(f"Error checking user info on Firebase: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء الاستعلام.")
-# -----------------------------------------------------------------
 
 async def safe_delete(message):
     try: await message.delete()
@@ -121,7 +119,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("awaiting_user_id", None)
         return await edit_message_smart(query.message, _t("msg_adm_panel", lang), reply_markup=admin_main_keyboard(lang))
         
-    # --- قسم الإلغاء الموحد للعمليات المعلقة ---
     elif data == "adm_cancel_bc" or data == "adm_cancel_action":
         context.user_data.pop("bc_active", None)
         context.user_data.pop("awaiting_user_id", None)
@@ -142,7 +139,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return await edit_message_smart(query.message, "👥 <b>قسم إدارة المستخدمين:</b>", reply_markup=admin_users_menu(lang))
         
-    # --- زر الاستعلام عن المستخدم الجديد ---
     elif data == "adm_user_info_prompt":
         context.user_data["awaiting_user_id"] = True
         await query.answer()
@@ -170,20 +166,18 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         new_val = "0" if current == "1" else "1"
         set_setting("maintenance", new_val)
         await query.answer("✅ تم تحديث حالة الصيانة")
-        
         try:
             return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
         except BadRequest as e:
             if "Message is not modified" in str(e): return
             raise e
 
-    # 🌟 الكود الجديد: معالجة نقرة تشغيل/إيقاف الإعلانات مؤقتاً في السيرفر والقاعدة
+    # معالجة حدث الضغط على زر تشغيل/إلغاء تفعيل الإعلانات مؤقتاً
     elif data == "adm_toggle_ads":
         current = get_setting("ads_status", "1")
         new_val = "0" if current == "1" else "1"
         set_setting("ads_status", new_val)
         await query.answer("✅ تم تحديث حالة الإعلانات")
-        
         try:
             return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
         except BadRequest as e:
