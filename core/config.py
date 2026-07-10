@@ -36,5 +36,5 @@ INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpoc
 THREADS_PLAYZONE = "https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ=="
 TELEGRAM_BOT_PLAYZONE = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
 
-# AdsGram Monetization Config
-ADSTERRA_SMARTLINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
+# 🌟 الرابط المباشر الفعلي المعتمد بعد التفعيل من منصة HilltopAds
+HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z"
