@@ -166,12 +166,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await start_download_from_callback(query, context, request, mode, resolution, lang)
                 else:
                     return await query.answer("❌ لم تنتهِ من مشاهدة الإعلان بالكامل. يرجى الانتظار والمحاولة.", show_alert=True)
-            else:
+                        else:
                 await query.answer()
                 context.user_data[f"ad_start_{request_id}"] = time.time()
                 
-                # 🌟 ربط توجيه زر الإعلان بالمتغير الجديد الحامل للرابط الفعلي الحصري للشركة
-                ad_direct_url = HILLTOPADS_LINK
+                # 🌟 المداورة التلقائية بنسبة 50% بين المنصتين لتعظيم الأرباح
+                ad_direct_url = random.choice([HILLTOPADS_LINK, ADSTERRA_LINK])
                 
                 btn_watch = "📺 مشاهدة الإعلان " if lang == "ar" else "📺 Watch Ad"
                 btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
