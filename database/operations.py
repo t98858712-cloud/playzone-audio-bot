@@ -8,20 +8,52 @@ from firebase_admin import firestore
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def load_banned_users():
+    """شحن كاش الـ RAM تلقائياً من فايربيس عند تشغيل البوت لمنع ضياع البيانات"""
     if db is None: return set()
     try:
         docs = db.collection('banned_users').stream()
-        return {int(doc.id) for doc in docs}
+        from core.security import BANNED_USERS_CACHE
+        BANNED_USERS_CACHE.clear()
+        
+        for doc in docs:
+            try:
+                BANNED_USERS_CACHE.add(int(doc.id))
+            except ValueError:
+                BANNED_USERS_CACHE.add(doc.id)
+                
+        logger.info(f"🔥 [Firebase] تم شحن كاش الحماية بنجاح بـ {len(BANNED_USERS_CACHE)} مستخدم محظور.")
+        return BANNED_USERS_CACHE
     except Exception as e:
         logger.error(f"Error loading banned users: {e}")
         return set()
 
 def ban_user_db(uid):
+    """حظر المستخدم في قاعدة البيانات وإضافته فوراً للكاش اللحظي"""
     if db is None: return
     try:
+        # 1. الحفظ في فايربيس
         db.collection('banned_users').document(str(uid)).set({'banned_at': int(time.time())})
+        
+        # 2. المزامنة الفورية مع كاش الـ RAM لمنع السبام فوراً
+        from core.security import BANNED_USERS_CACHE
+        BANNED_USERS_CACHE.add(int(uid))
+        logger.info(f"🚫 تم حظر المستخدم {uid} ومزامنته مع فايربيس والكاش.")
     except Exception as e:
         logger.error(f"Error banning user: {e}")
+
+def unban_user_db(uid):
+    """إلغاء حظر المستخدم من قاعدة البيانات وإزالته من كاش الحماية ليعود للعمل"""
+    if db is None: return
+    try:
+        # 1. الحذف من فايربيس
+        db.collection('banned_users').document(str(uid)).delete()
+        
+        # 2. الحذف من كاش الـ RAM
+        from core.security import BANNED_USERS_CACHE
+        BANNED_USERS_CACHE.discard(int(uid))
+        logger.info(f"🟢 تم فك حظر المستخدم {uid} ومزامنته مع فايربيس والكاش.")
+    except Exception as e:
+        logger.error(f"Error unbanning user: {e}")
 
 def set_setting(key, value):
     if db is None: return
@@ -132,7 +164,6 @@ def verify_user_ad_completion(user_id: int):
         db.collection('users').document(str(user_id)).update({
             'last_ad_completion': int(time.time())
         })
-        # تم إلغاء اسم المنصة السابقة هنا ليصبح السجل عاماً ونظيفاً تماماً
         logger.info(f"💰 Recorded ad completion for user {user_id}")
     except Exception as e:
         logger.error(f"Error updating ad completion for {user_id}: {e}")
@@ -145,7 +176,7 @@ def check_ad_verified_status(user_id: int) -> bool:
         if doc.exists:
             data = doc.to_dict()
             last_ad = data.get('last_ad_completion', 0)
-            if int(time.time()) - last_ad < 5:
+            if int(time.time()) - last_ad < 600:  # تم تعديلها هندسياً لـ 10 دقائق (600 ثانية) بدلاً من 5 ثوانٍ لتصبح عملية ومنطقية للمستخدم
                 return True
     except Exception as e:
         logger.error(f"Error checking ad status for {user_id}: {e}")
