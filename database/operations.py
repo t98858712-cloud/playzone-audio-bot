@@ -176,7 +176,7 @@ def check_ad_verified_status(user_id: int) -> bool:
         if doc.exists:
             data = doc.to_dict()
             last_ad = data.get('last_ad_completion', 0)
-            if int(time.time()) - last_ad < 10:  # تم تعديلها هندسياً لـ 10 دقائق (600 ثانية) بدلاً من 5 ثوانٍ لتصبح عملية ومنطقية للمستخدم
+            if int(time.time()) - last_ad < 5:  # تم تعديلها هندسياً لـ 10 دقائق (600 ثانية) بدلاً من 5 ثوانٍ لتصبح عملية ومنطقية للمستخدم
                 return True
     except Exception as e:
         logger.error(f"Error checking ad status for {user_id}: {e}")
