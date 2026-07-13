@@ -1,3 +1,4 @@
+import random # ✅ 1. تم إضافة استيراد مكتبة العشوائية هنا
 import uuid
 import time
 import asyncio
@@ -10,8 +11,8 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppI
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
-# 🌟 تم استيراد HILLTOPADS_LINK هنا مباشرة
-from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK
+# ✅ 2. تم إضافة استيراد متغير ADSTERRA_LINK هنا ليعمل برمجياً مع السيرفر
+from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK, ADSTERRA_LINK
 from core.security import ACTIVE_USERS
 from database.operations import stat_inc_sync
 from locales.language import _t
@@ -166,7 +167,8 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await start_download_from_callback(query, context, request, mode, resolution, lang)
                 else:
                     return await query.answer("❌ لم تنتهِ من مشاهدة الإعلان بالكامل. يرجى الانتظار والمحاولة.", show_alert=True)
-                        else:
+            else:
+                # ✅ 3. تم تصحيح مسافات الـ else ومحاذاتها بشكل سليم هندسياً لمنع الـ Crash
                 await query.answer()
                 context.user_data[f"ad_start_{request_id}"] = time.time()
                 
