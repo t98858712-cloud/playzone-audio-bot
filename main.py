@@ -9,7 +9,8 @@ from core.config import TOKEN, LOCAL_API_URL, COOKIES_FILE
 import core.security as sec
 
 from database.connection import init_db
-from database.operations import load_banned_users, load_settings_to_cache
+# 🌟 تم تنظيف الاستيراد وإزالة الدالة الملغاة ليتوافق مع الأساس
+from database.operations import load_banned_users
 
 from utils.helpers import _cleanup_old_downloads_sync, parse_admin_ids, alert_admins_live, esc
 
@@ -94,7 +95,7 @@ def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     init_db()
-    load_settings_to_cache()
+    # 🌟 تم إزالة استدعاء دالة كاش الإعدادات الملغاة نهائياً لمنع الـ Crash
 
     # استعادة ملف الكوكيز تلقائياً من فايربيس فور إقلاع الحاوية الجديدة لضمان الاستمرارية
     try:
