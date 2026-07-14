@@ -157,7 +157,8 @@ async def youtube_health_monitor(app: Application):
                 }
             }
             with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
+                # 🌟 تم استبدال الرابط المحذوف BaW_jenozKc برابط مستقر ونشط دائماً على يوتيوب لتجنب أخطاء السجلات
+                ydl.extract_info("https://www.youtube.com/watch?v=dQw4w9WgXcQ", download=False)
         except Exception as e:
             if "Sign in" in str(e) or "cookie" in str(e).lower():
                 await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور.")
