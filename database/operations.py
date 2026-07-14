@@ -7,6 +7,22 @@ from firebase_admin import firestore
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+# 🌟 كاش الإعدادات اللحظي لضمان سرعة استجابة فائقة (0ms)
+SETTINGS_CACHE = {}
+
+def load_settings_to_cache():
+    """شحن إعدادات البوت بالكامل في كاش الـ RAM عند الإقلاع لتجنب قراءة Firebase المتكررة"""
+    if db is None: return
+    try:
+        doc = db.collection('settings').document('config').get()
+        if doc.exists:
+            data = doc.to_dict()
+            for k, v in data.items():
+                SETTINGS_CACHE[k] = str(v)
+            logger.info(f"⚡ [Firebase] تم شحن {len(SETTINGS_CACHE)} إعداد بنجاح في كاش الـ RAM اللحظي.")
+    except Exception as e:
+        logger.error(f"Error loading settings to cache: {e}")
+
 def load_banned_users():
     """شحن كاش الـ RAM تلقائياً من فايربيس عند تشغيل البوت لمنع ضياع البيانات"""
     if db is None: return set()
@@ -31,10 +47,7 @@ def ban_user_db(uid):
     """حظر المستخدم في قاعدة البيانات وإضافته فوراً للكاش اللحظي"""
     if db is None: return
     try:
-        # 1. الحفظ في فايربيس
         db.collection('banned_users').document(str(uid)).set({'banned_at': int(time.time())})
-        
-        # 2. المزامنة الفورية مع كاش الـ RAM لمنع السبام فوراً
         from core.security import BANNED_USERS_CACHE
         BANNED_USERS_CACHE.add(int(uid))
         logger.info(f"🚫 تم حظر المستخدم {uid} ومزامنته مع فايربيس والكاش.")
@@ -45,10 +58,7 @@ def unban_user_db(uid):
     """إلغاء حظر المستخدم من قاعدة البيانات وإزالته من كاش الحماية ليعود للعمل"""
     if db is None: return
     try:
-        # 1. الحذف من فايربيس
         db.collection('banned_users').document(str(uid)).delete()
-        
-        # 2. الحذف من كاش الـ RAM
         from core.security import BANNED_USERS_CACHE
         BANNED_USERS_CACHE.discard(int(uid))
         logger.info(f"🟢 تم فك حظر المستخدم {uid} ومزامنته مع فايربيس والكاش.")
@@ -59,18 +69,14 @@ def set_setting(key, value):
     if db is None: return
     try:
         db.collection('settings').document('config').set({key: str(value)}, merge=True)
+        # تحديث الكاش اللحظي فوراً لضمان التطابق الفوري للتغييرات
+        SETTINGS_CACHE[key] = str(value)
     except Exception as e:
         logger.error(f"Error setting config: {e}")
 
 def get_setting(key, default="0"):
-    if db is None: return default
-    try:
-        doc = db.collection('settings').document('config').get()
-        if doc.exists:
-            return doc.to_dict().get(key, default)
-    except Exception as e:
-        logger.error(f"Error getting setting {key}: {e}")
-    return default
+    # قراءة فائقة السرعة من كاش الـ RAM مباشرة دون الاتصال بـ Firebase في كل رسالة
+    return SETTINGS_CACHE.get(key, default)
 
 def register_user_sync(user):
     if not user or db is None: return
@@ -151,10 +157,6 @@ def get_latest_users(limit: int = 10) -> list:
         return []
 
 def optimize_db():
-    """
-    قاعدة بيانات Firebase السحابية لا تتطلب عملية ضغط (Vacuum) كالسابق،
-    لذا تبقى هذه الدالة لتلبية طلب زر (تحسين الـ Database) في لوحة التحكم دون التسبب بأخطاء.
-    """
     pass
 
 def verify_user_ad_completion(user_id: int):
@@ -176,8 +178,8 @@ def check_ad_verified_status(user_id: int) -> bool:
         if doc.exists:
             data = doc.to_dict()
             last_ad = data.get('last_ad_completion', 0)
-            if int(time.time()) - last_ad < 5:  # تم تعديلها هندسياً لـ 10 دقائق (600 ثانية) بدلاً من 5 ثوانٍ لتصبح عملية ومنطقية للمستخدم
+            if int(time.time()) - last_ad < 600:
                 return True
-    except Exception as e:
-        logger.error(f"Error checking ad status for {user_id}: {e}")
-    return False
+        except Exception as e:
+            logger.error(f"Error checking ad status for {user_id}: {e}")
+        return False
