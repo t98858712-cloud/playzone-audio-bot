@@ -1,4 +1,4 @@
-import random # ✅ تم تصحيح الاستيراد البرمجي هنا
+import random
 import uuid
 import time
 import asyncio
@@ -11,10 +11,9 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppI
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
-# تم جلب روابط المنصات الإعلانية المعتمدة من الإعدادات
 from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK, ADSTERRA_LINK
 from core.security import ACTIVE_USERS
-from database.operations import stat_inc_sync
+from database.operations import stat_inc_sync, is_user_vip_sync
 from locales.language import _t
 
 from utils.helpers import (
@@ -27,7 +26,7 @@ from utils.keyboards import build_preview_keyboard, build_resolution_keyboard
 from services.downloader import (
     download_thumbnail_safely, execute_download, run_progress_updates, extract_metadata
 )
-from services.media import convert_to_mp3_local
+from services.media import convert_to_mp3_local, normalize_audio_local, split_audio_vocals_local
 
 from handlers.admin import handle_admin_callbacks, safe_delete, edit_message_smart
 from handlers.user import render_search_page
@@ -124,12 +123,17 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(_t("msg_select_res", lang))
         return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id, lang))
 
-    if data.startswith("aud:") or data.startswith("res:") or data.startswith("v_ad:"):
+    # 🌟 [مطور] دعم أزرار الهندسة الصوتية والـ Vocal Splitter بشكل مدمج
+    if data.startswith("aud:") or data.startswith("res:") or data.startswith("v_ad:") or data.startswith("split:") or data.startswith("norm:"):
         if data.startswith("v_ad:"):
             parts = data.split(":")
             mode, resolution, request_id = parts[1], parts[2], parts[3]
         elif data.startswith("aud:"):
             mode, resolution, request_id = "audio", "720", data.split(":")[1]
+        elif data.startswith("split:"):
+            mode, resolution, request_id = "split", "720", data.split(":")[1]
+        elif data.startswith("norm:"):
+            mode, resolution, request_id = "norm", "720", data.split(":")[1]
         else:
             mode = "video"
             parts = data.split(":")
@@ -138,19 +142,22 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from database.operations import check_ad_verified_status, get_setting
         ads_status = get_setting("ads_status", "1")
         
-        # 🌟 جلب إعدادات المنصات بشكل حي من قاعدة البيانات
+        # جلب حالة المنصات الإعلانية وحالة عضوية الـ VIP للمستخدم
         hilltop_active = get_setting("hilltop_status", "1") == "1"
         adsterra_active = get_setting("adsterra_status", "1") == "1"
-        
-        # إذا تم تعطيل الإعلانات تماماً أو تعطيل كلا المنصتين معاً، نتخطى الإعلانات فوراً
         ads_effectively_disabled = (ads_status == "0") or (not hilltop_active and not adsterra_active)
         
-        if is_admin(uid) or ads_effectively_disabled or check_ad_verified_status(uid):
+        # فحص وجود عضوية VIP نشطة للمستخدم
+        is_vip = is_user_vip_sync(uid)
+        
+        if is_admin(uid) or ads_effectively_disabled or is_vip or check_ad_verified_status(uid):
             if data.startswith("v_ad:"):
-                await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
+                await query.answer("✅ تم التحقق بنجاح! جاري بدء المعالجة...", show_alert=True)
             else:
-                if mode == "audio": await query.answer(_t("msg_prep_audio", lang))
-                else: await query.answer(_t("msg_prep_video", lang))
+                if is_vip:
+                    await query.answer("👑 عضوية VIP نشطة! تم تخطي الإعلانات بنجاح.", show_alert=True)
+                else:
+                    await query.answer("⏳ جاري تحضير المقطع في السيرفر...")
 
             request = ensure_pending_requests(context).pop(request_id, None)
             trim_old_pending_requests(context)
@@ -178,14 +185,10 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer()
                 context.user_data[f"ad_start_{request_id}"] = time.time()
                 
-                # 🌟 فرز المنصات المفعلة برمجياً لتوجيه المستخدم إليها
+                # فرز وتوجيه المنصات المتاحة
                 available_links = []
-                if hilltop_active:
-                    available_links.append(HILLTOPADS_LINK)
-                if adsterra_active:
-                    available_links.append(ADSTERRA_LINK)
-                
-                # في حال تفعيل المنصتين يتم المداورة العشوائية، وإذا تعطلت واحدة يتم تثبيت النشطة تلقائياً
+                if hilltop_active: available_links.append(HILLTOPADS_LINK)
+                if adsterra_active: available_links.append(ADSTERRA_LINK)
                 ad_direct_url = random.choice(available_links) if available_links else HILLTOPADS_LINK
                 
                 btn_watch = "📺 مشاهدة الإعلان " if lang == "ar" else "📺 Watch Ad"
@@ -232,69 +235,110 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
             
-            info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data, resolution))
+            # دمج أوضاع الصوت المختلفة لاستخدام محرك الصوت الأساسي لـ yt-dlp
+            download_mode = "audio" if mode in ["audio", "split", "norm"] else "video"
+            info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, download_mode, job_dir, progress_data, resolution))
             
             files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
             if not files: raise RuntimeError("محرك الميديا فشل في حفظ الملف النهائي على القرص")
             
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
-            if mode == "audio":
-                with progress_lock: progress_data["text"] = _t("msg_converting", lang)
-                final_mp3_path = job_dir / "playzone_final_audio.mp3"
-                success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
-                target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
-            else:
-                target_file = raw_downloaded_file
-
-            file_size = target_file.stat().st_size
-            if file_size > MAX_TELEGRAM_SIZE:
-                stop_event.set()
-                return await edit_message_smart(query.message, _t("msg_too_large", lang, size=format_size(file_size, lang), limit=format_size(MAX_TELEGRAM_SIZE, lang)), reply_markup=None)
-
-            stop_event.set()
-            await edit_message_smart(query.message, _t("msg_uploading", lang), reply_markup=None)
-
-            native_width = info_dict.get("width")
-            native_height = info_dict.get("height")
-            
-            try: native_width = int(native_width) if native_width else None
-            except Exception: native_width = None
-            
-            try: native_height = int(native_height) if native_height else None
-            except Exception: native_height = None
-
-            title, duration = clean_title(request.get("title", _t("txt_media_file", lang)), 80, lang), int(request.get("duration") or 0)
-            caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration, lang))}"            
-            
+            title = clean_title(request.get("title", _t("txt_media_file", lang)), 80, lang)
+            duration = int(request.get("duration") or 0)
             share_link = f"https://t.me/share/url?url={quote('https://t.me/MusicPlayZoneBot')}&text={quote(_t('share_text', lang))}"
             media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(_t("btn_share", lang), url=share_link)]])
 
-            with open(target_file, "rb") as f:
-                if mode == "audio":
-                    t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
-                    try:
+            # 🌟 معالجة الوضع الأول: عزل الصوت والموسيقى (Vocal Splitter)
+            if mode == "split":
+                with progress_lock: progress_data["text"] = "🎙 جاري معالجة وفصل قنوات الصوت البشري عن الموسيقى بالـ AI..." if lang == "ar" else "🎙 Splitting vocals from instrumental..."
+                vocals_path = job_dir / "playzone_vocals.mp3"
+                inst_path = job_dir / "playzone_instrumental.mp3"
+                
+                split_success = await loop.run_in_executor(EXECUTOR, lambda: split_audio_vocals_local(raw_downloaded_file, vocals_path, inst_path))
+                
+                if split_success and vocals_path.exists() and inst_path.exists():
+                    stop_event.set()
+                    await edit_message_smart(query.message, "📤 اكتمل الفصل بنجاح! جاري إرسال الملفات المعزولة...", reply_markup=None)
+                    
+                    caption_vocals = f"🎙 <b>صوت المغني فقط (Vocals)</b>\n- {esc(BOT_USERNAME)}"
+                    caption_inst = f"🎵 <b>الموسيقى والألحان فقط (Instrumental)</b>\n- {esc(BOT_USERNAME)}"
+                    
+                    # إرسال صوت المغني
+                    with open(vocals_path, "rb") as f_voc:
                         await context.bot.send_audio(
-                            chat_id=query.message.chat_id, audio=f, title=title, 
-                            performer=request.get("artist", _t("txt_unknown", lang)), 
-                            duration=duration, caption=caption, thumbnail=t_file, 
+                            chat_id=query.message.chat_id, audio=f_voc, title=f"{title} (Vocals)", 
+                            performer="PlayZone AI", duration=duration, caption=caption_vocals, 
+                            reply_markup=media_keyboard, parse_mode="HTML"
+                        )
+                    # إرسال الموسيقى
+                    with open(inst_path, "rb") as f_inst:
+                        await context.bot.send_audio(
+                            chat_id=query.message.chat_id, audio=f_inst, title=f"{title} (Instrumental)", 
+                            performer="PlayZone AI", duration=duration, caption=caption_inst, 
+                            reply_markup=media_keyboard, parse_mode="HTML"
+                        )
+                else:
+                    raise RuntimeError("فشل معالج العزل الترددي للملف.")
+
+            # 🌟 معالجة الوضع الثاني: الهندسة الصوتية الاحترافية والرفع المعياري (HQ Normalization)
+            else:
+                if mode == "norm":
+                    with progress_lock: progress_data["text"] = "🎚 جاري معالجة الصوت وهندسة الماستر بمقياس EBU R128..." if lang == "ar" else "🎚 Master normalizing audio..."
+                    norm_path = job_dir / "playzone_normalized.mp3"
+                    norm_success = await loop.run_in_executor(EXECUTOR, lambda: normalize_audio_local(raw_downloaded_file, norm_path))
+                    raw_downloaded_file = norm_path if norm_success and norm_path.exists() else raw_downloaded_file
+
+                if mode in ["audio", "norm"]:
+                    with progress_lock: progress_data["text"] = _t("msg_converting", lang)
+                    final_mp3_path = job_dir / "playzone_final_audio.mp3"
+                    success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
+                    target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
+                else:
+                    target_file = raw_downloaded_file
+
+                file_size = target_file.stat().st_size
+                if file_size > MAX_TELEGRAM_SIZE:
+                    stop_event.set()
+                    return await edit_message_smart(query.message, _t("msg_too_large", lang, size=format_size(file_size, lang), limit=format_size(MAX_TELEGRAM_SIZE, lang)), reply_markup=None)
+
+                stop_event.set()
+                await edit_message_smart(query.message, _t("msg_uploading", lang), reply_markup=None)
+
+                native_width = info_dict.get("width")
+                native_height = info_dict.get("height")
+                try: native_width = int(native_width) if native_width else None
+                except Exception: native_width = None
+                try: native_height = int(native_height) if native_height else None
+                except Exception: native_height = None
+
+                caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration, lang))}"
+
+                with open(target_file, "rb") as f:
+                    if mode in ["audio", "norm"]:
+                        t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
+                        try:
+                            perf_tag = request.get("artist", _t("txt_unknown", lang))
+                            if mode == "norm": perf_tag += " (Master HQ)"
+                            await context.bot.send_audio(
+                                chat_id=query.message.chat_id, audio=f, title=title, 
+                                performer=perf_tag, duration=duration, caption=caption, 
+                                thumbnail=t_file, reply_markup=media_keyboard, parse_mode="HTML", 
+                                read_timeout=120, write_timeout=120
+                            )
+                        finally:
+                            if t_file: t_file.close()
+                    else:
+                        await context.bot.send_video(
+                            chat_id=query.message.chat_id, video=f, caption=caption, 
+                            supports_streaming=True, duration=duration, 
+                            width=native_width, height=native_height,
                             reply_markup=media_keyboard, parse_mode="HTML", 
                             read_timeout=120, write_timeout=120
                         )
-                    finally:
-                        if t_file: t_file.close()
-                else:
-                    await context.bot.send_video(
-                        chat_id=query.message.chat_id, video=f, caption=caption, 
-                        supports_streaming=True, duration=duration, 
-                        width=native_width,
-                        height=native_height,
-                        reply_markup=media_keyboard, parse_mode="HTML", 
-                        read_timeout=120, write_timeout=120
-                    )
 
             stat_inc_sync("success")
-            stat_inc_sync("bytes", file_size)
+            stat_inc_sync("bytes", target_file.stat().st_size if mode != "split" else vocals_path.stat().st_size + inst_path.stat().st_size)
             await safe_delete(query.message)
 
     except (TimedOut, NetworkError) as e:
@@ -303,7 +347,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception: pass
     except Exception as e:
         stat_inc_sync("failed")
-        await alert_admins_live(context.bot, f"🚨 <b>فشل تحميل مقطع:</b>\nالرابط: {url}\nالخطأ:\n<code>{str(e)[:300]}</code>")
+        await alert_admins_live(context.bot, f"🚨 <b>فشل معالجة مقطع:</b>\nالرابط: {url}\nالخطأ:\n<code>{str(e)[:300]}</code>")
         try: await edit_message_smart(query.message, _t("msg_dl_failed", lang))
         except Exception: pass
     finally:
