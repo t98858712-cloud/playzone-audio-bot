@@ -16,7 +16,7 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     
-    # التقاط الروابط الإحالية برمجياً
+    # التقاط الروابط الإحالية برمجياً للنمو الفيروسي
     ref_id = None
     if context.args and len(context.args) > 0:
         arg = context.args[0]
@@ -26,20 +26,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except ValueError:
                 pass
                 
-    # تسجيل المستخدم والمحيل سحابياً في مهمة خلفية مستقلة
+    # تسجيل المستخدم والمحيل سحابياً في مهمة خلفية مستقلة لسرعة الاستجابة
     asyncio.create_task(asyncio.to_thread(register_user_with_ref_sync, update.effective_user, ref_id))
     
     lang = context.user_data.get("lang", "ar")
     bot_username = context.bot.username or "PlayZoneEnterpriseBot"
     ref_link = f"https://t.me/{bot_username}?start=ref_{uid}"
     
-    # رسالة الترحيب الأصلية
-    original_start = _t("msg_start", lang, first_name=esc(update.effective_user.first_name or ""))
-    
-    # النص المختصر والجذاب للمستخدم
+    # 🌟 إعادة صياغة النص ليتطابق 100% مع أساس رسالتك القديمة المعتمدة مع تبسيط الجزء الإحالي
     if lang == "ar":
         start_text = (
-            f"{original_start}\n\n"
+            f"👋 أهلاً {esc(update.effective_user.first_name or '')}\n\n"
+            f"💚 <b>دعمك يصنع الفرق</b>\n\n"
+            f"تابع روابط PlayZone الرسمية وشاركها مع أصدقائك،\n"
+            f"كل متابعة تساعدنا نكبر ونقدّم تجربة أفضل.\n\n"
+            f"📥 أرسل رابط أي فيديو، أو اكتب اسم أغنية للبحث عنها.\n\n"
+            f"ثم اختر:\n"
+            f"🎬 تحميل فيديو\n"
+            f"🎵 تحميل صوت\n\n"
             f"🎁 <b>بدون إعلانات؟ احصل على VIP مجاناً!</b>\n"
             f"شارك البوت مع 3 أصدقاء فقط، واستمتع بتحميل مباشر (بدون إعلانات) لمدة 24 ساعة! ❤️\n\n"
             f"👇 رابطك الخاص:\n"
@@ -49,7 +53,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         btn_share_text = "↗️ مشاركة مع الأصدقاء"
     else:
         start_text = (
-            f"{original_start}\n\n"
+            f"👋 Hello {esc(update.effective_user.first_name or '')}\n\n"
+            f"💚 <b>Your support makes a difference</b>\n\n"
+            f"Follow PlayZone's official links and share them with friends,\n"
+            f"every follow helps us grow and provide a better experience.\n\n"
+            f"📥 Send any video link, or type a song name to search.\n\n"
+            f"Then choose:\n"
+            f"🎬 Download Video\n"
+            f"🎵 Download Audio\n\n"
             f"🎁 <b>Hate Ads? Get Free VIP!</b>\n"
             f"Share the bot with just 3 friends to enjoy 24 hours of instant, ad-free downloads! ❤️\n\n"
             f"👇 Your unique link:\n"
@@ -58,23 +69,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         share_msg = "Try this awesome bot to download music and videos in top quality! 🎵🎬"
         btn_share_text = "↗️ Share with Friends"
 
-    # تجهيز زر المشاركة التلقائي
+    # تجهيز رابط المشاركة الفيروسي التلقائي للأصدقاء
     from urllib.parse import quote
     share_url = f"https://t.me/share/url?url={quote(ref_link)}&text={quote(share_msg)}"
     
-    # بناء الأزرار: زر المشاركة أولاً، ثم استدعاء كافة الأزرار الأصلية (بما فيها الدعم)
-    from utils.keyboards import user_main_keyboard
-    base_markup = user_main_keyboard(lang)
+    # جلب كيبورد روابط الدعم والمنصات القديم المعتمد لديك
+    links_markup = build_playzone_links_keyboard()
     
-    # إنشاء قائمة جديدة للأزرار تبدأ بزر المشاركة
+    # دمج زر المشاركة ليكون أول زر يظهر فوق منصات الدعم مباشرة
     new_keyboard = [[InlineKeyboardButton(btn_share_text, url=share_url)]]
-    
-    # إضافة الأزرار الأساسية الأصلية تحت زر المشاركة
-    if hasattr(base_markup, 'inline_keyboard'):
-        new_keyboard.extend(base_markup.inline_keyboard)
-    
+    if hasattr(links_markup, 'inline_keyboard'):
+        new_keyboard.extend(links_markup.inline_keyboard)
+        
     reply_markup = InlineKeyboardMarkup(new_keyboard)
         
+    # إرسال الرسالة المتكاملة والجميلة للمستخدم
     await update.message.reply_text(
         start_text, 
         reply_markup=reply_markup, 
