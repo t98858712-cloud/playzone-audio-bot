@@ -64,17 +64,12 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
-    # 🌟 [تحديث ذكي] التقاط ملف الكوكيز، حفظه محلياً ومزامنته سحابياً مع قاعدة البيانات فوراً
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
             from core.config import COOKIES_FILE
             from database.connection import db
-            
-            # 1. تحميل الملف محلياً إلى القرص لتشغيل المحرك الحالي
             new_file = await context.bot.get_file(update.message.document.file_id)
             await new_file.download_to_drive(COOKIES_FILE)
-            
-            # 2. قراءة محتوى الكوكيز وحفظه سحابياً لحمايته عند تدمير الحاوية للتحديث
             try:
                 cookie_content = COOKIES_FILE.read_text(encoding="utf-8", errors="ignore")
                 db.collection('settings').document('cookies').set({'content': cookie_content})
@@ -83,7 +78,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             except Exception as e:
                 logger.error(f"فشل مزامنة الكوكيز سحابياً: {e}")
                 msg = "✅ تم تحديث الملف محلياً، ولكن فشل حفظه سحابياً في قاعدة البيانات."
-                
             return await update.message.reply_text(msg)
 
     if uid in BANNED_USERS_CACHE: return
@@ -99,7 +93,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
     
-    # --- التقاط ID المستخدم بعد الضغط على زر "الاستعلام عن مستخدم" ---
     if is_admin(uid) and context.user_data.get("awaiting_user_id"):
         context.user_data.pop("awaiting_user_id", None)
         try:
@@ -108,7 +101,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             return await process_user_info(update, context, target_uid)
         except ValueError:
             return await update.message.reply_text("❌ يرجى إرسال أرقام فقط (ID صالح).")
-    # ------------------------------------------------------------------
         
     if not is_admin(uid):
         now = time.time()
