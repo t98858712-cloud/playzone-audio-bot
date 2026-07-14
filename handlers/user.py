@@ -62,14 +62,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from urllib.parse import quote
     share_url = f"https://t.me/share/url?url={quote(ref_link)}&text={quote(share_msg)}"
     
-    # استدعاء أزرار البوت الأساسية وإضافة زر المشاركة في الأعلى
+    # بناء الأزرار: زر المشاركة أولاً، ثم استدعاء كافة الأزرار الأصلية (بما فيها الدعم)
     from utils.keyboards import user_main_keyboard
-    main_kb = user_main_keyboard(lang)
-    new_keyboard = list(main_kb.inline_keyboard)
-    new_keyboard.insert(0, [InlineKeyboardButton(btn_share_text, url=share_url)])
+    base_markup = user_main_keyboard(lang)
+    
+    # إنشاء قائمة جديدة للأزرار تبدأ بزر المشاركة
+    new_keyboard = [[InlineKeyboardButton(btn_share_text, url=share_url)]]
+    
+    # إضافة الأزرار الأساسية الأصلية تحت زر المشاركة
+    if hasattr(base_markup, 'inline_keyboard'):
+        new_keyboard.extend(base_markup.inline_keyboard)
+    
     reply_markup = InlineKeyboardMarkup(new_keyboard)
         
-    await update.message.reply_text(start_text, reply_markup=reply_markup, parse_mode="HTML", disable_web_page_preview=True)
+    await update.message.reply_text(
+        start_text, 
+        reply_markup=reply_markup, 
+        parse_mode="HTML", 
+        disable_web_page_preview=True
+    )
 
 async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_lang = context.user_data.get("lang", "ar")
