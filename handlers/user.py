@@ -46,8 +46,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🎵 تحميل صوت\n\n"
             f"🎁 <b>بدون إعلانات؟ احصل على VIP مجاناً!</b>\n"
             f"شارك البوت مع 3 أصدقاء فقط، واستمتع بتحميل مباشر (بدون إعلانات) لمدة 24 ساعة! ❤️\n\n"
-            f"👇 رابطك الخاص:\n"
-            f"<code>{ref_link}</code>"
+            f"👇 رابطك الخاص:"
         )
         # الرسالة المخصصة والجديدة لزر المشاركة
         share_msg = (
