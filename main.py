@@ -9,7 +9,7 @@ from core.config import TOKEN, LOCAL_API_URL, COOKIES_FILE
 import core.security as sec
 
 from database.connection import init_db
-from database.operations import load_banned_users
+from database.operations import load_banned_users, load_settings_to_cache
 
 from utils.helpers import _cleanup_old_downloads_sync, parse_admin_ids, alert_admins_live, esc
 
@@ -44,9 +44,11 @@ async def start_health_check_server():
     """سيرفر ويب مدمج خفيف لتلبية فحص الجاهزية (Health Check) لمنصة Railway لضمان استقرار البوت 24 ساعة"""
     import os
     port = int(os.environ.get("PORT", 8080))
+    
     async def handle_client(reader, writer):
         try:
             data = await reader.read(1024)
+            # الرد المباشر بـ نجاح الفحص للحفاظ على استقرار الحاوية في السيرفر
             response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"status\":\"healthy\"}"
             writer.write(response.encode('utf-8'))
             await writer.drain()
@@ -55,6 +57,7 @@ async def start_health_check_server():
         finally:
             writer.close()
             await writer.wait_closed()
+
     try:
         server = await asyncio.start_server(handle_client, "0.0.0.0", port)
         logger.info(f"🌐 تم تشغيل سيرفر فحص الجاهزية بنجاح على البورت {port}")
@@ -70,6 +73,7 @@ async def post_init(app: Application):
         BotCommand("links", "الروابط / Links")
     ]
     admin_commands = user_commands + [BotCommand("admin", "لوحة التحكم / Admin Panel")]
+
     try:
         await app.bot.set_my_commands(user_commands)
         for admin_id in parse_admin_ids():
@@ -77,15 +81,22 @@ async def post_init(app: Application):
                 await app.bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(admin_id))
             except Exception as e:
                 pass
+
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
         asyncio.create_task(youtube_health_monitor(app))
+        
+        # تشغيل سيرفر فحص الجاهزية النظيف للسيرفر بدلاً من سيرفر الإعلانات القديم
         asyncio.create_task(start_health_check_server())
     except Exception as e:
         logger.warning(f"فشل تهيئة الأوامر: {e}")
 
 def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
+
     init_db()
+    load_settings_to_cache()
+
+    # استعادة ملف الكوكيز تلقائياً من فايربيس فور إقلاع الحاوية الجديدة لضمان الاستمرارية
     try:
         from database.connection import db
         if db is not None:
@@ -93,25 +104,28 @@ def main():
             if cookie_doc.exists:
                 content = cookie_doc.to_dict().get('content', '')
                 if content.strip():
-                    with open(COOKIES_FILE, "w", encoding="utf-8") as f:
-                        f.write(content)
+                    COOKIES_FILE.write_text(content, encoding="utf-8")
                     logger.info("🍪 تم استعادة ملف الكوكيز السحابي المعتمد بنجاح وفك ارتباطه بالتحديثات.")
     except Exception as e:
         logger.error(f"⚠️ فشل استعادة ملف الكوكيز السحابي عند الإقلاع: {e}")
 
     sec.BANNED_USERS_CACHE = load_banned_users()
     _cleanup_old_downloads_sync()
+
     builder = Application.builder().token(TOKEN)
     if LOCAL_API_URL:
         builder.base_url(LOCAL_API_URL)
+
     app = builder.post_init(post_init).connect_timeout(30).read_timeout(120).write_timeout(120).pool_timeout(30).concurrent_updates(True).build()
     app.add_error_handler(error_handler)
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
+
     logger.info("🚀 تم تشغيل البوت بنظام الإدارة المؤسسية (Enterprise Control Center) بنجاح.")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
