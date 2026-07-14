@@ -7,11 +7,11 @@ from firebase_admin import firestore
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# كاش الإعدادات اللحظي لضمان سرعة استجابة فائقة (0ms)[span_5](start_span)[span_5](end_span)
+# كاش الإعدادات اللحظي لضمان سرعة استجابة فائقة (0ms)[span_11](start_span)[span_11](end_span)
 SETTINGS_CACHE = {}
 
 def load_settings_to_cache():
-    """شحن إعدادات البوت بالكامل في كاش الـ RAM عند الإقلاع لتجنب قراءة Firebase المتكررة""[span_6](start_span)"[span_6](end_span)
+    """شحن إعدادات البوت بالكامل في كاش الـ RAM عند الإقلاع لتجنب قراءة Firebase المتكررة""[span_12](start_span)"[span_12](end_span)
     if db is None: return
     try:
         doc = db.collection('settings').document('config').get()
@@ -24,7 +24,7 @@ def load_settings_to_cache():
         logger.error(f"Error loading settings to cache: {e}")
 
 def load_banned_users():
-    """شحن كاش الـ RAM تلقائياً من فايربيس عند تشغيل البوت لمنع ضياع البيانات""[span_7](start_span)"[span_7](end_span)
+    """شحن كاش الـ RAM تلقائياً من فايربيس عند تشغيل البوت لمنع ضياع البيانات""[span_13](start_span)"[span_13](end_span)
     if db is None: return set()
     try:
         docs = db.collection('banned_users').stream()
@@ -44,7 +44,7 @@ def load_banned_users():
         return set()
 
 def ban_user_db(uid):
-    """حظر المستخدم في قاعدة البيانات وإضافته فوراً للكاش اللحظي""[span_8](start_span)"[span_8](end_span)
+    """حظر المستخدم في قاعدة البيانات وإضافته فوراً للكاش اللحظي""[span_14](start_span)"[span_14](end_span)
     if db is None: return
     try:
         db.collection('banned_users').document(str(uid)).set({'banned_at': int(time.time())})
@@ -55,7 +55,7 @@ def ban_user_db(uid):
         logger.error(f"Error banning user: {e}")
 
 def unban_user_db(uid):
-    """إلغاء حظر المستخدم من قاعدة البيانات وإزالته من كاش الحماية ليعود للعمل""[span_9](start_span)"[span_9](end_span)
+    """إلغاء حظر المستخدم من قاعدة البيانات وإزالته من كاش الحماية ليعود للعمل""[span_15](start_span)"[span_15](end_span)
     if db is None: return
     try:
         db.collection('banned_users').document(str(uid)).delete()
@@ -69,30 +69,39 @@ def set_setting(key, value):
     if db is None: return
     try:
         db.collection('settings').document('config').set({key: str(value)}, merge=True)
-        # تحديث الكاش اللحظي فوراً لضمان التطابق الفوري للتغييرات[span_10](start_span)[span_10](end_span)
         SETTINGS_CACHE[key] = str(value)
     except Exception as e:
         logger.error(f"Error setting config: {e}")
 
 def get_setting(key, default="0"):
-    # قراءة فائقة السرعة من كاش الـ RAM مباشرة دون الاتصال بـ Firebase في كل رسالة[span_11](start_span)[span_11](end_span)
     return SETTINGS_CACHE.get(key, default)
 
-def register_user_sync(user):
+# 🌟 [مطور] نظام تسجيل المستخدمين السحابي مع دعم الإحالات الفيروسية
+def register_user_with_ref_sync(user, referrer_id=None):
     if not user or db is None: return
     now = int(time.time())
     try:
         doc_ref = db.collection('users').document(str(user.id))
         doc = doc_ref.get()
-        if not doc.exists:
-            doc_ref.set({
+        is_new = not doc.exists
+        
+        if is_new:
+            user_data = {
                 'id': user.id,
                 'username': user.username or "",
                 'first_name': user.first_name or "",
                 'last_name': user.last_name or "",
                 'first_seen': now,
-                'last_seen': now
-            })
+                'last_seen': now,
+                'referrals_count': 0,
+                'vip_until': 0
+            }
+            # التحقق أن المستخدم الجديد لا يضيف نفسه كمحيل
+            if referrer_id and str(referrer_id) != str(user.id):
+                user_data['referred_by'] = str(referrer_id)
+                reward_referrer_sync(referrer_id)
+                
+            doc_ref.set(user_data)
         else:
             doc_ref.update({
                 'username': user.username or "",
@@ -101,7 +110,49 @@ def register_user_sync(user):
                 'last_seen': now
             })
     except Exception as e:
-        logger.error(f"Error registering user {user.id}: {e}")
+        logger.error(f"Error registering user with ref {user.id}: {e}")
+
+# 🌟 [مطور] دالة مكافأة المستخدم المحيل بعضوية VIP عند اكتمال 3 دعوات
+def reward_referrer_sync(referrer_id):
+    if db is None: return
+    try:
+        ref_doc_ref = db.collection('users').document(str(referrer_id))
+        ref_doc = ref_doc_ref.get()
+        if ref_doc.exists:
+            data = ref_doc.to_dict()
+            current_count = data.get('referrals_count', 0) + 1
+            vip_until = data.get('vip_until', 0)
+            now = int(time.time())
+            
+            # كل 3 إحالات ناجحة تمنحه 24 ساعة تخطي إعلانات VIP مجاناً
+            if current_count % 3 == 0:
+                base_time = max(vip_until, now)
+                vip_until = base_time + 86400
+                logger.info(f"🎉 User {referrer_id} rewarded with 24h VIP! Total referrals: {current_count}")
+            
+            ref_doc_ref.update({
+                'referrals_count': current_count,
+                'vip_until': vip_until
+            })
+    except Exception as e:
+        logger.error(f"Error rewarding referrer {referrer_id}: {e}")
+
+# 🌟 [مطور] دالة فحص العضوية الذهبية النشطة لتخطي الإعلانات
+def is_user_vip_sync(user_id: int) -> bool:
+    """التحقق هل يملك المستخدم عضوية VIP سحابية نشطة لتخطي الإعلانات""[span_16](start_span)"[span_16](end_span)
+    if db is None: return False
+    try:
+        doc = db.collection('users').document(str(user_id)).get()
+        if doc.exists:
+            vip_until = doc.to_dict().get('vip_until', 0)
+            if vip_until > int(time.time()):
+                return True
+    except Exception as e:
+        logger.error(f"Error checking VIP status for {user_id}: {e}")
+    return False
+
+def register_user_sync(user):
+    register_user_with_ref_sync(user, None)
 
 def stat_inc_sync(key: str, value: int = 1):
     if db is None: return
@@ -160,7 +211,6 @@ def optimize_db():
     pass
 
 def verify_user_ad_completion(user_id: int):
-    """تسجيل وقت اكتمال مشاهدة الإعلان للمخدم بداخل الفايرستور للتأكيد""[span_12](start_span)"[span_12](end_span)
     if db is None: return
     try:
         db.collection('users').document(str(user_id)).update({
@@ -171,7 +221,6 @@ def verify_user_ad_completion(user_id: int):
         logger.error(f"Error updating ad completion for {user_id}: {e}")
 
 def check_ad_verified_status(user_id: int) -> bool:
-    """التحقق هل أكمل المستخدم الإعلان خلال آخر 10 دقائق لتخطي حجب التنزيل""[span_13](start_span)"[span_13](end_span)
     if db is None: return False
     try:
         doc = db.collection('users').document(str(user_id)).get()
