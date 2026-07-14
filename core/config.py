@@ -36,17 +36,17 @@ if "t.me/" in raw_username:
 else:
     clean_user = raw_username.replace("@", "").strip()
 
-BOT_USERNAME = f"@{clean_user}[span_1](start_span)"[span_1](end_span)
-TELEGRAM_BOT_PLAYZONE = f"https://t.me/{clean_user}[span_2](start_span)"[span_2](end_span)
+BOT_USERNAME = f"@{clean_user}"
+TELEGRAM_BOT_PLAYZONE = f"https://t.me/{clean_user}"
 # --------------------------------------------------------------------------
 
-WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?[span_3](start_span)"[span_3](end_span)
-FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr[span_4](start_span)"[span_4](end_span)
-INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr[span_5](start_span)"[span_5](end_span)
-THREADS_PLAYZONE = "https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ==[span_6](start_span)"[span_6](end_span)
+WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
+FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
+INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
+THREADS_PLAYZONE = "https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ=="
 
-# 🌟 الرابط المباشر الفعلي المعتمد بعد التفعيل من منصة HilltopAds
-HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z[span_7](start_span)"[span_7](end_span)
+# الرابط المباشر الفعلي المعتمد بعد التفعيل من منصة HilltopAds
+HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z"
 
-# 🌟 الرابط المباشر الفعلي المستخرج من منصة Adsterra (تم تحديثه برابطك الفعلي)
-ADSTERRA_LINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646[span_8](start_span)"[span_8](end_span)
+# الرابط المباشر الفعلي المستخرج من منصة Adsterra (تم تحديثه برابطك الفعلي)
+ADSTERRA_LINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
