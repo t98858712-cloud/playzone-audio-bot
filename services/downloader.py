@@ -19,6 +19,19 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        
+        # 🚀 [إضافة خارقة للتسريع] تفعيل التنزيل الخارجي المتعدد عبر أداة aria2c المثبتة في نظامك
+        "external_downloader": "aria2c",
+        "external_downloader_args": {
+            "default": [
+                "--min-split-size=1M",
+                "--max-connection-per-server=16",
+                "--split=16",
+                "--max-concurrent-downloads=8",
+                "--max-overall-download-limit=0"
+            ]
+        },
+        
         # 🛡️ إجبار المحرك على تخطي متصفحات الويب لكي لا يطلب يوتيوب تسجيل الدخول
         "extractor_args": {
             "youtube": {
@@ -143,7 +156,7 @@ async def youtube_health_monitor(app: Application):
         await asyncio.sleep(6 * 3600)
         try:
             if not cookie_file_is_usable(COOKIES_FILE):
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر إرساله تليجرام لمنع توقف التحميل.")
                 continue
             opts = {
                 "quiet": True, 
@@ -157,7 +170,7 @@ async def youtube_health_monitor(app: Application):
                 }
             }
             with yt_dlp.YoutubeDL(opts) as ydl:
-                # 🌟 تم استبدال الرابط المحذوف BaW_jenozKc برابط مستقر ونشط دائماً على يوتيوب لتجنب أخطاء السجلات
+                # 🌟 تم استبدال الفيديو المعطل بفيديو مستقر دائم لمنع ظهور الأخطاء في السجلات
                 ydl.extract_info("https://www.youtube.com/watch?v=dQw4w9WgXcQ", download=False)
         except Exception as e:
             if "Sign in" in str(e) or "cookie" in str(e).lower():
