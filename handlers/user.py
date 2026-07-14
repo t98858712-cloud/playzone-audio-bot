@@ -16,7 +16,7 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     
-    # التقاط الروابط الإحالية برمجياً للنمو الفيروسي
+    # التقاط الروابط الإحالية برمجياً
     ref_id = None
     if context.args and len(context.args) > 0:
         arg = context.args[0]
@@ -26,35 +26,50 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except ValueError:
                 pass
                 
-    # تسجيل المستخدم والمحيل سحابياً في مهمة خلفية مستقلة لتسريع الاستجابة
+    # تسجيل المستخدم والمحيل سحابياً في مهمة خلفية مستقلة
     asyncio.create_task(asyncio.to_thread(register_user_with_ref_sync, update.effective_user, ref_id))
     
     lang = context.user_data.get("lang", "ar")
     bot_username = context.bot.username or "PlayZoneEnterpriseBot"
     ref_link = f"https://t.me/{bot_username}?start=ref_{uid}"
     
-    # 🌟 أولاً: استدعاء وجلب رسالة الترحيب الأصلية كاملة كما هي بدون أي تغيير
+    # رسالة الترحيب الأصلية
     original_start = _t("msg_start", lang, first_name=esc(update.effective_user.first_name or ""))
     
-    # ثانياً: إرفاق نص نظام الإحالات والـ VIP الجديد أسفل الرسالة الأصلية مباشرة
+    # النص المختصر والجذاب للمستخدم
     if lang == "ar":
         start_text = (
             f"{original_start}\n\n"
-            f"🎁 <b>نظام مشاركة الأرباح والـ VIP المجاني:</b>\n"
-            f"شارك البوت مع أصدقائك عبر رابطك الحصري:\n"
-            f"<code>{ref_link}</code>\n\n"
-            f"👥 عند دخول <b>3 أصدقاء</b> جدد للبوت ستحصل تلقائياً على <b>عضوية VIP ذهبية (24 ساعة)</b> لتخطي كافة الإعلانات فوراً! ❤️"
+            f"🎁 <b>بدون إعلانات؟ احصل على VIP مجاناً!</b>\n"
+            f"شارك البوت مع 3 أصدقاء فقط، واستمتع بتحميل مباشر (بدون إعلانات) لمدة 24 ساعة! ❤️\n\n"
+            f"👇 رابطك الخاص:\n"
+            f"<code>{ref_link}</code>"
         )
+        share_msg = "جرب هذا البوت الخرافي لتحميل الأغاني والفيديوهات من أي مكان بأعلى جودة! 🎵🎬"
+        btn_share_text = "↗️ مشاركة مع الأصدقاء"
     else:
         start_text = (
             f"{original_start}\n\n"
-            f"🎁 <b>Viral Referral & Free VIP System:</b>\n"
-            f"Share the bot with your friends using your unique link:\n"
-            f"<code>{ref_link}</code>\n\n"
-            f"👥 When <b>3 new friends</b> join via your link, you instantly unlock <b>Premium VIP (24 Hours)</b> with zero ads! ❤️"
+            f"🎁 <b>Hate Ads? Get Free VIP!</b>\n"
+            f"Share the bot with just 3 friends to enjoy 24 hours of instant, ad-free downloads! ❤️\n\n"
+            f"👇 Your unique link:\n"
+            f"<code>{ref_link}</code>"
         )
+        share_msg = "Try this awesome bot to download music and videos in top quality! 🎵🎬"
+        btn_share_text = "↗️ Share with Friends"
+
+    # تجهيز زر المشاركة التلقائي
+    from urllib.parse import quote
+    share_url = f"https://t.me/share/url?url={quote(ref_link)}&text={quote(share_msg)}"
+    
+    # استدعاء أزرار البوت الأساسية وإضافة زر المشاركة في الأعلى
+    from utils.keyboards import user_main_keyboard
+    main_kb = user_main_keyboard(lang)
+    new_keyboard = list(main_kb.inline_keyboard)
+    new_keyboard.insert(0, [InlineKeyboardButton(btn_share_text, url=share_url)])
+    reply_markup = InlineKeyboardMarkup(new_keyboard)
         
-    await update.message.reply_text(start_text, reply_markup=user_main_keyboard(lang), parse_mode="HTML", disable_web_page_preview=True)
+    await update.message.reply_text(start_text, reply_markup=reply_markup, parse_mode="HTML", disable_web_page_preview=True)
 
 async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_lang = context.user_data.get("lang", "ar")
