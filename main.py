@@ -1,7 +1,9 @@
 import logging
 import asyncio
+import traceback # 🌟 استيراد لتتبع تفاصيل الأخطاء غير المتوقعة
 from telegram import Update, BotCommand, BotCommandScopeChat, MenuButtonCommands
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.error import NetworkError, TimedOut # 🌟 استيراد أخطاء الاتصال الشائعة لتيليجرام
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 from core.config import TOKEN, LOCAL_API_URL
 import core.security as sec
@@ -9,7 +11,7 @@ import core.security as sec
 from database.connection import init_db
 from database.operations import load_banned_users
 
-from utils.helpers import _cleanup_old_downloads_sync, parse_admin_ids
+from utils.helpers import _cleanup_old_downloads_sync, parse_admin_ids, alert_admins_live, esc # 🌟 استيراد دوال التنبيه للأدمنز
 
 from handlers.user import start, toggle_lang_command, show_playzone_links, handle_incoming_text
 from handlers.admin import admin_panel
@@ -22,6 +24,30 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
     logging.getLogger(noisy_logger).setLevel(logging.WARNING)
+
+# 🌟 معالج الأخطاء الذكي الجديد لتيليجرام لمنع تلوث السجلات بالـ Tracebacks الطويلة
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """معالج الأخطاء العام لتفادي ملء السجلات بالأخطاء المؤقتة وتنبيه الإدارة بالأخطاء الحقيقية"""
+    error = context.error
+    
+    # إذا كان الخطأ مجرد مشكلة شبكة مؤقتة مع خوادم تيليجرام (لا داعي للقلق)
+    if isinstance(error, (NetworkError, TimedOut)):
+        logger.warning(f"📡 خطأ شبكة مؤقت مع سيرفرات تيليجرام (سيتم إعادة المحاولة تلقائياً): {error}")
+        return
+        
+    # في حال حدوث خطأ برمجي غير متوقع في الكود
+    logger.error(f"❌ حدث خطأ غير متوقع في البوت: {error}")
+    
+    # طباعة التتبع الكامل للخطأ في سجلات السيرفر لمساعدتك في صيانته لاحقاً
+    tb_list = traceback.format_exception(None, error, error.__traceback__)
+    tb_string = "".join(tb_list)
+    logger.error(f"Traceback:\n{tb_string}")
+    
+    # إرسال تنبيه حي للأدمنز عن الخطأ البرمجي غير المتوقع
+    try:
+        await alert_admins_live(context.bot, f"🚨 <b>خطأ برمجي غير متوقع في البوت:</b>\n\n<code>{esc(str(error)[:1000])}</code>")
+    except Exception:
+        pass
 
 async def start_health_check_server():
     """سيرفر ويب مدمج خفيف لتلبية فحص الجاهزية (Health Check) لمنصة Railway لضمان استقرار البوت 24 ساعة"""
@@ -85,6 +111,9 @@ def main():
         builder.base_url(LOCAL_API_URL)
 
     app = builder.post_init(post_init).connect_timeout(30).read_timeout(120).write_timeout(120).pool_timeout(30).concurrent_updates(True).build()
+
+    # 🌟 تسجيل معالج الأخطاء العام ليعمل بشكل تلقائي على كامل التطبيق
+    app.add_error_handler(error_handler)
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("language", toggle_lang_command))
