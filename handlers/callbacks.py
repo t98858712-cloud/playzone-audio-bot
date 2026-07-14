@@ -1,4 +1,4 @@
-import random # ✅ 1. تم إضافة استيراد مكتبة العشوائية هنا
+import random # ✅ تم تصحيح الاستيراد البرمجي هنا
 import uuid
 import time
 import asyncio
@@ -11,7 +11,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, WebAppI
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
-# ✅ 2. تم إضافة استيراد متغير ADSTERRA_LINK هنا ليعمل برمجياً مع السيرفر
+# تم جلب روابط المنصات الإعلانية المعتمدة من الإعدادات
 from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK, ADSTERRA_LINK
 from core.security import ACTIVE_USERS
 from database.operations import stat_inc_sync
@@ -138,7 +138,14 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from database.operations import check_ad_verified_status, get_setting
         ads_status = get_setting("ads_status", "1")
         
-        if is_admin(uid) or ads_status == "0" or check_ad_verified_status(uid):
+        # 🌟 جلب إعدادات المنصات بشكل حي من قاعدة البيانات
+        hilltop_active = get_setting("hilltop_status", "1") == "1"
+        adsterra_active = get_setting("adsterra_status", "1") == "1"
+        
+        # إذا تم تعطيل الإعلانات تماماً أو تعطيل كلا المنصتين معاً، نتخطى الإعلانات فوراً
+        ads_effectively_disabled = (ads_status == "0") or (not hilltop_active and not adsterra_active)
+        
+        if is_admin(uid) or ads_effectively_disabled or check_ad_verified_status(uid):
             if data.startswith("v_ad:"):
                 await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
             else:
@@ -168,12 +175,18 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     return await query.answer("❌ لم تنتهِ من مشاهدة الإعلان بالكامل. يرجى الانتظار والمحاولة.", show_alert=True)
             else:
-                # ✅ 3. تم تصحيح مسافات الـ else ومحاذاتها بشكل سليم هندسياً لمنع الـ Crash
                 await query.answer()
                 context.user_data[f"ad_start_{request_id}"] = time.time()
                 
-                # 🌟 المداورة التلقائية بنسبة 50% بين المنصتين لتعظيم الأرباح
-                ad_direct_url = random.choice([HILLTOPADS_LINK, ADSTERRA_LINK])
+                # 🌟 فرز المنصات المفعلة برمجياً لتوجيه المستخدم إليها
+                available_links = []
+                if hilltop_active:
+                    available_links.append(HILLTOPADS_LINK)
+                if adsterra_active:
+                    available_links.append(ADSTERRA_LINK)
+                
+                # في حال تفعيل المنصتين يتم المداورة العشوائية، وإذا تعطلت واحدة يتم تثبيت النشطة تلقائياً
+                ad_direct_url = random.choice(available_links) if available_links else HILLTOPADS_LINK
                 
                 btn_watch = "📺 مشاهدة الإعلان " if lang == "ar" else "📺 Watch Ad"
                 btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
