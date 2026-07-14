@@ -3,7 +3,7 @@ import time
 import asyncio
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from database.operations import register_user_sync, get_setting, ban_user_db, stat_inc_sync
+from database.operations import register_user_with_ref_sync, get_setting, ban_user_db, stat_inc_sync
 from utils.helpers import is_admin, is_valid_url, esc, clean_title, get_artist, format_size, get_thumbnail, get_largest_estimated_size, format_duration, ensure_pending_requests, trim_old_pending_requests, send_preview, alert_admins_live
 from utils.keyboards import user_main_keyboard, build_playzone_links_keyboard, build_preview_keyboard
 from services.downloader import search_youtube, extract_metadata, EXECUTOR
@@ -14,10 +14,44 @@ import logging
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # تشغيل عملية التسجيل في الخلفية دون تعطيل واجهة المستخدم
-    asyncio.create_task(asyncio.to_thread(register_user_sync, update.effective_user))
+    uid = update.effective_user.id
+    
+    # 🌟 [جديد] تتبع الروابط الإحالية للنمو الفيروسي للبوت
+    ref_id = None
+    if context.args and len(context.args) > 0:
+        arg = context.args[0]
+        if arg.startswith("ref_"):
+            try:
+                ref_id = int(arg.replace("ref_", ""))
+            except ValueError:
+                pass
+                
+    # تسجيل المستخدم والمحيل في مهمة خلفية دون تعطيل واجهة المستخدم
+    asyncio.create_task(asyncio.to_thread(register_user_with_ref_sync, update.effective_user, ref_id))
+    
     lang = context.user_data.get("lang", "ar")
-    await update.message.reply_text(_t("msg_start", lang, first_name=esc(update.effective_user.first_name or "")), reply_markup=user_main_keyboard(lang), parse_mode="HTML", disable_web_page_preview=True)
+    bot_username = context.bot.username or "PlayZoneEnterpriseBot"
+    ref_link = f"https://t.me/{bot_username}?start=ref_{uid}"
+    
+    # صياغة النص الترحيبي ورابط الإحالة الحصري للمستخدم
+    start_text = _t("msg_start", lang, first_name=esc(update.effective_user.first_name or ""))
+    
+    if lang == "ar":
+        start_text += (
+            f"\n\n🎁 <b>نظام مشاركة الأرباح والـ VIP المجاني:</b>\n"
+            f"شارك البوت مع أصدقائك عبر رابطك الحصري:\n"
+            f"<code>{ref_link}</code>\n\n"
+            f"👥 عند دخول <b>3 أصدقاء</b> جدد للبوت ستحصل تلقائياً على <b>عضوية VIP ذهبية (24 ساعة)</b> لتخطي كافة الإعلانات فوراً! ❤️"
+        )
+    else:
+        start_text += (
+            f"\n\n🎁 <b>Viral Referral & Free VIP System:</b>\n"
+            f"Share the bot with your friends using your unique link:\n"
+            f"<code>{ref_link}</code>\n\n"
+            f"👥 When <b>3 new friends</b> join via your link, you instantly unlock <b>Premium VIP (24 Hours)</b> with zero ads! ❤️"
+        )
+        
+    await update.message.reply_text(start_text, reply_markup=user_main_keyboard(lang), parse_mode="HTML", disable_web_page_preview=True)
 
 async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_lang = context.user_data.get("lang", "ar")
@@ -65,7 +99,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
-    # التقاط ملف الكوكيز، حفظه محلياً ومزامنته سحابياً مع قاعدة البيانات فوراً
+    # التقاط ملف الكوكيز وحفظه سحابياً ومحلياً
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
             from core.config import COOKIES_FILE
@@ -93,11 +127,11 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             
     if not update.message or not update.message.text: return
     
-    # تحديث وتسجيل المستخدم في الخلفية لضمان سرعة رد فائقة لجميع الأدوات
-    asyncio.create_task(asyncio.to_thread(register_user_sync, update.effective_user))
+    # تسجيل المستخدم في الخلفية لضمان سرعة فائقة
+    asyncio.create_task(asyncio.to_thread(register_user_with_ref_sync, update.effective_user, None))
     text = update.message.text.strip()
     
-    # --- التقاط ID المستخدم بعد الضغط على زر "الاستعلام عن مستخدم" ---
+    # التقاط ID المستخدم لـ "الاستعلام عن مستخدم"
     if is_admin(uid) and context.user_data.get("awaiting_user_id"):
         context.user_data.pop("awaiting_user_id", None)
         try:
@@ -106,7 +140,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             return await process_user_info(update, context, target_uid)
         except ValueError:
             return await update.message.reply_text("❌ يرجى إرسال أرقام فقط (ID صالح).")
-    # ------------------------------------------------------------------
         
     if not is_admin(uid):
         now = time.time()
@@ -165,7 +198,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         await safe_delete(status)
         await send_preview(update, thumb, caption, build_preview_keyboard(request_id, lang))
         
-        # تسجيل الإحصائية في الخلفية لضمان سرعة رد فائقة لجميع الطلبات
         asyncio.create_task(asyncio.to_thread(stat_inc_sync, "requests"))
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
