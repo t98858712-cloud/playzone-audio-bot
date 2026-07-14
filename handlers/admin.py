@@ -184,6 +184,30 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             if "Message is not modified" in str(e): return
             raise e
 
+    # معالجة حدث الضغط على زر تفعيل/تعطيل منصة HilltopAds
+    elif data == "adm_toggle_hilltop":
+        current = get_setting("hilltop_status", "1")
+        new_val = "0" if current == "1" else "1"
+        set_setting("hilltop_status", new_val)
+        await query.answer("✅ تم تحديث حالة HilltopAds")
+        try:
+            return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+        except BadRequest as e:
+            if "Message is not modified" in str(e): return
+            raise e
+
+    # معالجة حدث الضغط على زر تفعيل/تعطيل منصة Adsterra
+    elif data == "adm_toggle_adsterra":
+        current = get_setting("adsterra_status", "1")
+        new_val = "0" if current == "1" else "1"
+        set_setting("adsterra_status", new_val)
+        await query.answer("✅ تم تحديث حالة Adsterra")
+        try:
+            return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+        except BadRequest as e:
+            if "Message is not modified" in str(e): return
+            raise e
+
     elif data == "adm_update_dlp":
         await query.answer("جاري تحديث محرك التحميل... قد يستغرق الأمر ثواني ⏳")
         try:
