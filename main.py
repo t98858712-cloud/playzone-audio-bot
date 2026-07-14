@@ -103,6 +103,21 @@ def main():
     if not TOKEN: raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     init_db()
+    
+    # 🌟 [إضافة ذكية] استعادة ملف الكوكيز تلقائياً من فايربيس فور إقلاع الحاوية الجديدة
+    try:
+        from database.connection import db
+        from core.config import COOKIES_FILE
+        if db is not None:
+            cookie_doc = db.collection('settings').document('cookies').get()
+            if cookie_doc.exists:
+                content = cookie_doc.to_dict().get('content', '')
+                if content.strip():
+                    COOKIES_FILE.write_text(content, encoding="utf-8")
+                    logger.info("🍪 تم استعادة ملف الكوكيز السحابي المعتمد بنجاح وفك ارتباطه بالتحديثات.")
+    except Exception as e:
+        logger.error(f"⚠️ فشل استعادة ملف الكوكيز السحابي عند الإقلاع: {e}")
+
     sec.BANNED_USERS_CACHE = load_banned_users()
     _cleanup_old_downloads_sync()
 
@@ -112,7 +127,7 @@ def main():
 
     app = builder.post_init(post_init).connect_timeout(30).read_timeout(120).write_timeout(120).pool_timeout(30).concurrent_updates(True).build()
 
-    # 🌟 تسجيل معالج الأخطاء العام ليعمل بشكل تلقائي على كامل التطبيق
+    # تسجيل معالج الأخطاء العام ليعمل بشكل تلقائي على كامل التطبيق
     app.add_error_handler(error_handler)
 
     app.add_handler(CommandHandler("start", start))
@@ -124,6 +139,3 @@ def main():
 
     logger.info("🚀 تم تشغيل البوت بنظام الإدارة المؤسسية (Enterprise Control Center) بنجاح.")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
-
-if __name__ == "__main__":
-    main()
