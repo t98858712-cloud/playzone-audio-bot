@@ -33,7 +33,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = context.bot.username or "PlayZoneEnterpriseBot"
     ref_link = f"https://t.me/{bot_username}?start=ref_{uid}"
     
-    # 🌟 إعادة صياغة النص ليتطابق 100% مع أساس رسالتك القديمة المعتمدة مع تبسيط الجزء الإحالي
+    # رسالة الترحيب الأصلية المعتمدة لديك كاملة
     if lang == "ar":
         start_text = (
             f"👋 أهلاً {esc(update.effective_user.first_name or '')}\n\n"
@@ -49,7 +49,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👇 رابطك الخاص:\n"
             f"<code>{ref_link}</code>"
         )
-        share_msg = "جرب هذا البوت الخرافي لتحميل الأغاني والفيديوهات من أي مكان بأعلى جودة! 🎵🎬"
+        # الرسالة المخصصة والجديدة لزر المشاركة
+        share_msg = (
+            "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n"
+            "⚡ بوت سريع، مجاني وبأعلى جودة.\n"
+            "👇 جرّبه الآن:"
+        )
         btn_share_text = "↗️ مشاركة مع الأصدقاء"
     else:
         start_text = (
@@ -66,22 +71,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👇 Your unique link:\n"
             f"<code>{ref_link}</code>"
         )
-        share_msg = "Try this awesome bot to download music and videos in top quality! 🎵🎬"
+        share_msg = (
+            "📥 Download any video or MP3 song in seconds!\n"
+            "⚡ Fast, free, and in top quality.\n"
+            "👇 Try it now:"
+        )
         btn_share_text = "↗️ Share with Friends"
 
-    # تجهيز رابط المشاركة الفيروسي التلقائي للأصدقاء
+    # تجهيز رابط المشاركة مع رسالتك الجديدة المطلوبة تلقائياً
     from urllib.parse import quote
     share_url = f"https://t.me/share/url?url={quote(ref_link)}&text={quote(share_msg)}"
     
-    # جلب كيبورد روابط الدعم والمنصات القديم المعتمد لديك
-    links_markup = build_playzone_links_keyboard()
-    
-    # دمج زر المشاركة ليكون أول زر يظهر فوق منصات الدعم مباشرة
-    new_keyboard = [[InlineKeyboardButton(btn_share_text, url=share_url)]]
-    if hasattr(links_markup, 'inline_keyboard'):
-        new_keyboard.extend(links_markup.inline_keyboard)
+    # تم إزالة أزرار روابط الدعم بالكامل لجعل الرسالة مريحة وبسيطة، والإبقاء فقط على زر المشاركة السريع
+    reply_markup = InlineKeyboardMarkup([[
+        InlineKeyboardButton(btn_share_text, url=share_url)
+    ]])
         
-    reply_markup = InlineKeyboardMarkup(new_keyboard)
+    await update.message.reply_text(
+        start_text, 
+        reply_markup=reply_markup, 
+        parse_mode="HTML", 
+        disable_web_page_preview=True
+    )
         
     # إرسال الرسالة المتكاملة والجميلة للمستخدم
     await update.message.reply_text(
