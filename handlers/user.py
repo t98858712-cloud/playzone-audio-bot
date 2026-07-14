@@ -64,12 +64,27 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
+    # 🌟 [تحديث ذكي] التقاط ملف الكوكيز، حفظه محلياً ومزامنته سحابياً مع قاعدة البيانات فوراً
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
             from core.config import COOKIES_FILE
+            from database.connection import db
+            
+            # 1. تحميل الملف محلياً إلى القرص لتشغيل المحرك الحالي
             new_file = await context.bot.get_file(update.message.document.file_id)
             await new_file.download_to_drive(COOKIES_FILE)
-            return await update.message.reply_text("✅ تم استلام وتحديث ملف الكوكيز (cookies.txt) بنجاح.")
+            
+            # 2. قراءة محتوى الكوكيز وحفظه سحابياً لحمايته عند تدمير الحاوية للتحديث
+            try:
+                cookie_content = COOKIES_FILE.read_text(encoding="utf-8", errors="ignore")
+                db.collection('settings').document('cookies').set({'content': cookie_content})
+                logger.info("🍪 تم مزامنة وحفظ نسخة احتياطية من ملف الكوكيز في فايرستور بنجاح.")
+                msg = "✅ تم استلام وتحديث ملف الكوكيز (cookies.txt) ومزامنته سحابياً بنجاح! لن يضيع عند التحديث مستقبلاً."
+            except Exception as e:
+                logger.error(f"فشل مزامنة الكوكيز سحابياً: {e}")
+                msg = "✅ تم تحديث الملف محلياً، ولكن فشل حفظه سحابياً في قاعدة البيانات."
+                
+            return await update.message.reply_text(msg)
 
     if uid in BANNED_USERS_CACHE: return
     maintenance = get_setting("maintenance", "0")
