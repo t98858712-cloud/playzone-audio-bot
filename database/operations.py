@@ -7,11 +7,11 @@ from firebase_admin import firestore
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# 🌟 كاش الإعدادات اللحظي لضمان سرعة استجابة فائقة (0ms)
+# كاش الإعدادات اللحظي لضمان سرعة استجابة فائقة (0ms)[span_5](start_span)[span_5](end_span)
 SETTINGS_CACHE = {}
 
 def load_settings_to_cache():
-    """شحن إعدادات البوت بالكامل في كاش الـ RAM عند الإقلاع لتجنب قراءة Firebase المتكررة"""
+    """شحن إعدادات البوت بالكامل في كاش الـ RAM عند الإقلاع لتجنب قراءة Firebase المتكررة""[span_6](start_span)"[span_6](end_span)
     if db is None: return
     try:
         doc = db.collection('settings').document('config').get()
@@ -24,7 +24,7 @@ def load_settings_to_cache():
         logger.error(f"Error loading settings to cache: {e}")
 
 def load_banned_users():
-    """شحن كاش الـ RAM تلقائياً من فايربيس عند تشغيل البوت لمنع ضياع البيانات"""
+    """شحن كاش الـ RAM تلقائياً من فايربيس عند تشغيل البوت لمنع ضياع البيانات""[span_7](start_span)"[span_7](end_span)
     if db is None: return set()
     try:
         docs = db.collection('banned_users').stream()
@@ -44,7 +44,7 @@ def load_banned_users():
         return set()
 
 def ban_user_db(uid):
-    """حظر المستخدم في قاعدة البيانات وإضافته فوراً للكاش اللحظي"""
+    """حظر المستخدم في قاعدة البيانات وإضافته فوراً للكاش اللحظي""[span_8](start_span)"[span_8](end_span)
     if db is None: return
     try:
         db.collection('banned_users').document(str(uid)).set({'banned_at': int(time.time())})
@@ -55,7 +55,7 @@ def ban_user_db(uid):
         logger.error(f"Error banning user: {e}")
 
 def unban_user_db(uid):
-    """إلغاء حظر المستخدم من قاعدة البيانات وإزالته من كاش الحماية ليعود للعمل"""
+    """إلغاء حظر المستخدم من قاعدة البيانات وإزالته من كاش الحماية ليعود للعمل""[span_9](start_span)"[span_9](end_span)
     if db is None: return
     try:
         db.collection('banned_users').document(str(uid)).delete()
@@ -69,13 +69,13 @@ def set_setting(key, value):
     if db is None: return
     try:
         db.collection('settings').document('config').set({key: str(value)}, merge=True)
-        # تحديث الكاش اللحظي فوراً لضمان التطابق الفوري للتغييرات
+        # تحديث الكاش اللحظي فوراً لضمان التطابق الفوري للتغييرات[span_10](start_span)[span_10](end_span)
         SETTINGS_CACHE[key] = str(value)
     except Exception as e:
         logger.error(f"Error setting config: {e}")
 
 def get_setting(key, default="0"):
-    # قراءة فائقة السرعة من كاش الـ RAM مباشرة دون الاتصال بـ Firebase في كل رسالة
+    # قراءة فائقة السرعة من كاش الـ RAM مباشرة دون الاتصال بـ Firebase في كل رسالة[span_11](start_span)[span_11](end_span)
     return SETTINGS_CACHE.get(key, default)
 
 def register_user_sync(user):
@@ -160,7 +160,7 @@ def optimize_db():
     pass
 
 def verify_user_ad_completion(user_id: int):
-    """تسجيل وقت اكتمال مشاهدة الإعلان للمخدم بداخل الفايرستور للتأكيد"""
+    """تسجيل وقت اكتمال مشاهدة الإعلان للمخدم بداخل الفايرستور للتأكيد""[span_12](start_span)"[span_12](end_span)
     if db is None: return
     try:
         db.collection('users').document(str(user_id)).update({
@@ -171,7 +171,7 @@ def verify_user_ad_completion(user_id: int):
         logger.error(f"Error updating ad completion for {user_id}: {e}")
 
 def check_ad_verified_status(user_id: int) -> bool:
-    """التحقق هل أكمل المستخدم الإعلان خلال آخر 10 دقائق لتخطي حجب التنزيل"""
+    """التحقق هل أكمل المستخدم الإعلان خلال آخر 10 دقائق لتخطي حجب التنزيل""[span_13](start_span)"[span_13](end_span)
     if db is None: return False
     try:
         doc = db.collection('users').document(str(user_id)).get()
@@ -180,6 +180,6 @@ def check_ad_verified_status(user_id: int) -> bool:
             last_ad = data.get('last_ad_completion', 0)
             if int(time.time()) - last_ad < 600:
                 return True
-        except Exception as e:
-            logger.error(f"Error checking ad status for {user_id}: {e}")
-        return False
+    except Exception as e:
+        logger.error(f"Error checking ad status for {user_id}: {e}")
+    return False
