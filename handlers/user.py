@@ -14,7 +14,8 @@ import logging
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    register_user_sync(update.effective_user)
+    # تشغيل عملية التسجيل في الخلفية دون تعطيل واجهة المستخدم
+    asyncio.create_task(asyncio.to_thread(register_user_sync, update.effective_user))
     lang = context.user_data.get("lang", "ar")
     await update.message.reply_text(_t("msg_start", lang, first_name=esc(update.effective_user.first_name or "")), reply_markup=user_main_keyboard(lang), parse_mode="HTML", disable_web_page_preview=True)
 
@@ -64,6 +65,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
+    # التقاط ملف الكوكيز، حفظه محلياً ومزامنته سحابياً مع قاعدة البيانات فوراً
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
             from core.config import COOKIES_FILE
@@ -90,9 +92,12 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             return await handle_broadcast_media(update, context)
             
     if not update.message or not update.message.text: return
-    register_user_sync(update.effective_user)
+    
+    # تحديث وتسجيل المستخدم في الخلفية لضمان سرعة رد فائقة لجميع الأدوات
+    asyncio.create_task(asyncio.to_thread(register_user_sync, update.effective_user))
     text = update.message.text.strip()
     
+    # --- التقاط ID المستخدم بعد الضغط على زر "الاستعلام عن مستخدم" ---
     if is_admin(uid) and context.user_data.get("awaiting_user_id"):
         context.user_data.pop("awaiting_user_id", None)
         try:
@@ -101,6 +106,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             return await process_user_info(update, context, target_uid)
         except ValueError:
             return await update.message.reply_text("❌ يرجى إرسال أرقام فقط (ID صالح).")
+    # ------------------------------------------------------------------
         
     if not is_admin(uid):
         now = time.time()
@@ -158,7 +164,9 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         from handlers.admin import safe_delete
         await safe_delete(status)
         await send_preview(update, thumb, caption, build_preview_keyboard(request_id, lang))
-        stat_inc_sync("requests")
+        
+        # تسجيل الإحصائية في الخلفية لضمان سرعة رد فائقة لجميع الطلبات
+        asyncio.create_task(asyncio.to_thread(stat_inc_sync, "requests"))
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
         await status.edit_text(_t("msg_link_error", lang))
