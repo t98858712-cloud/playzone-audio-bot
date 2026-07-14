@@ -16,7 +16,7 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     
-    # 🌟 [جديد] تتبع الروابط الإحالية للنمو الفيروسي للبوت
+    # التقاط الروابط الإحالية برمجياً للنمو الفيروسي
     ref_id = None
     if context.args and len(context.args) > 0:
         arg = context.args[0]
@@ -26,26 +26,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except ValueError:
                 pass
                 
-    # تسجيل المستخدم والمحيل في مهمة خلفية دون تعطيل واجهة المستخدم
+    # تسجيل المستخدم والمحيل سحابياً في مهمة خلفية مستقلة لتسريع الاستجابة
     asyncio.create_task(asyncio.to_thread(register_user_with_ref_sync, update.effective_user, ref_id))
     
     lang = context.user_data.get("lang", "ar")
     bot_username = context.bot.username or "PlayZoneEnterpriseBot"
     ref_link = f"https://t.me/{bot_username}?start=ref_{uid}"
     
-    # صياغة النص الترحيبي ورابط الإحالة الحصري للمستخدم
-    start_text = _t("msg_start", lang, first_name=esc(update.effective_user.first_name or ""))
+    # 🌟 أولاً: استدعاء وجلب رسالة الترحيب الأصلية كاملة كما هي بدون أي تغيير
+    original_start = _t("msg_start", lang, first_name=esc(update.effective_user.first_name or ""))
     
+    # ثانياً: إرفاق نص نظام الإحالات والـ VIP الجديد أسفل الرسالة الأصلية مباشرة
     if lang == "ar":
-        start_text += (
-            f"\n\n🎁 <b>نظام مشاركة الأرباح والـ VIP المجاني:</b>\n"
+        start_text = (
+            f"{original_start}\n\n"
+            f"🎁 <b>نظام مشاركة الأرباح والـ VIP المجاني:</b>\n"
             f"شارك البوت مع أصدقائك عبر رابطك الحصري:\n"
             f"<code>{ref_link}</code>\n\n"
             f"👥 عند دخول <b>3 أصدقاء</b> جدد للبوت ستحصل تلقائياً على <b>عضوية VIP ذهبية (24 ساعة)</b> لتخطي كافة الإعلانات فوراً! ❤️"
         )
     else:
-        start_text += (
-            f"\n\n🎁 <b>Viral Referral & Free VIP System:</b>\n"
+        start_text = (
+            f"{original_start}\n\n"
+            f"🎁 <b>Viral Referral & Free VIP System:</b>\n"
             f"Share the bot with your friends using your unique link:\n"
             f"<code>{ref_link}</code>\n\n"
             f"👥 When <b>3 new friends</b> join via your link, you instantly unlock <b>Premium VIP (24 Hours)</b> with zero ads! ❤️"
@@ -99,7 +102,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
-    # التقاط ملف الكوكيز وحفظه سحابياً ومحلياً
+    # التقاط ملف الكوكيز وتحديثه سحابياً ومحلياً
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
             from core.config import COOKIES_FILE
@@ -127,11 +130,11 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             
     if not update.message or not update.message.text: return
     
-    # تسجيل المستخدم في الخلفية لضمان سرعة فائقة
+    # تسجيل بيانات المستخدم اللحظية في الخلفية دون تعطيل الـ Event Loop
     asyncio.create_task(asyncio.to_thread(register_user_with_ref_sync, update.effective_user, None))
     text = update.message.text.strip()
     
-    # التقاط ID المستخدم لـ "الاستعلام عن مستخدم"
+    # معالجة التقاط معرف المستخدم عند الاستعلام السريع من لوحة المدير
     if is_admin(uid) and context.user_data.get("awaiting_user_id"):
         context.user_data.pop("awaiting_user_id", None)
         try:
