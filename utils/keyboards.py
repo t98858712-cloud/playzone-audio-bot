@@ -73,13 +73,22 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     maint = get_setting("maintenance", "0")
     maint_btn = InlineKeyboardButton("🔴 إيقاف وضع الصيانة" if maint == "1" else "🟢 تفعيل وضع الصيانة", callback_data="adm_toggle_maint")
     
-    # فحص حي لحالة مفتاح الإعلانات من قاعدة البيانات
+    # فحص حي لحالة مفتاح الإعلانات العام من قاعدة البيانات
     ads_status = get_setting("ads_status", "1")
     ads_btn = InlineKeyboardButton("🔴 إيقاف الإعلانات مؤقتاً" if ads_status == "1" else "🟢 تفعيل الإعلانات", callback_data="adm_toggle_ads")
     
+    # 🌟 جلب حالة المنصات الإعلانية المحددة من قاعدة البيانات
+    hilltop_status = get_setting("hilltop_status", "1")
+    adsterra_status = get_setting("adsterra_status", "1")
+    
+    # إنشاء الأزرار بشكل تفاعلي وربطها بالـ Callbacks
+    hilltop_btn = InlineKeyboardButton("HilltopAds: 🟢" if hilltop_status == "1" else "HilltopAds: 🔴", callback_data="adm_toggle_hilltop")
+    adsterra_btn = InlineKeyboardButton("Adsterra: 🟢" if adsterra_status == "1" else "Adsterra: 🔴", callback_data="adm_toggle_adsterra")
+    
     return InlineKeyboardMarkup([
         [maint_btn], 
-        [ads_btn], # إضافة زر التحكم بالإعلانات هنا مباشرة
+        [ads_btn], # زر التحكم العام بالإعلانات
+        [hilltop_btn, adsterra_btn], # 🌟 الصف الجديد للتحكم بالمنصات بشكل منفصل
         [InlineKeyboardButton("🔄 تحديث مكتبة المحرك", callback_data="adm_update_dlp"), 
          InlineKeyboardButton("🍪 إرشادات الكوكيز", callback_data="adm_cookie_guide")],
         [InlineKeyboardButton("🗜️ تحسين القاعدة", callback_data="adm_vacuum_db"), 
