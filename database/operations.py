@@ -7,11 +7,11 @@ from firebase_admin import firestore
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# كاش الإعدادات اللحظي لضمان سرعة استجابة فائقة (0ms)[span_11](start_span)[span_11](end_span)
+# كاش الإعدادات اللحظي لضمان سرعة استجابة فائقة (0ms)[span_4](start_span)[span_4](end_span)
 SETTINGS_CACHE = {}
 
 def load_settings_to_cache():
-    """شحن إعدادات البوت بالكامل في كاش الـ RAM عند الإقلاع لتجنب قراءة Firebase المتكررة""[span_12](start_span)"[span_12](end_span)
+    """شحن إعدادات البوت بالكامل في كاش الـ RAM عند الإقلاع لتجنب قراءة Firebase المتكررة""[span_5](start_span)"[span_5](end_span)
     if db is None: return
     try:
         doc = db.collection('settings').document('config').get()
@@ -19,12 +19,12 @@ def load_settings_to_cache():
             data = doc.to_dict()
             for k, v in data.items():
                 SETTINGS_CACHE[k] = str(v)
-            logger.info(f"⚡ [Firebase] تم شحن {len(SETTINGS_CACHE)} إعداد بنجاح في كاش الـ RAM اللحظي.")
+            logger.info(f"⚡ [Firebase] تم شحن {len(SETTINGS_CACHE)} إعداد بنجاح in كاش الـ RAM اللحظي.")
     except Exception as e:
         logger.error(f"Error loading settings to cache: {e}")
 
 def load_banned_users():
-    """شحن كاش الـ RAM تلقائياً من فايربيس عند تشغيل البوت لمنع ضياع البيانات""[span_13](start_span)"[span_13](end_span)
+    """شحن كاش الـ RAM تلقائياً من فايربيس عند تشغيل البوت لمنع ضياع البيانات""[span_6](start_span)"[span_6](end_span)
     if db is None: return set()
     try:
         docs = db.collection('banned_users').stream()
@@ -44,7 +44,7 @@ def load_banned_users():
         return set()
 
 def ban_user_db(uid):
-    """حظر المستخدم في قاعدة البيانات وإضافته فوراً للكاش اللحظي""[span_14](start_span)"[span_14](end_span)
+    """حظر المستخدم في قاعدة البيانات وإضافته فوراً للكاش اللحظي""[span_7](start_span)"[span_7](end_span)
     if db is None: return
     try:
         db.collection('banned_users').document(str(uid)).set({'banned_at': int(time.time())})
@@ -55,7 +55,7 @@ def ban_user_db(uid):
         logger.error(f"Error banning user: {e}")
 
 def unban_user_db(uid):
-    """إلغاء حظر المستخدم من قاعدة البيانات وإزالته من كاش الحماية ليعود للعمل""[span_15](start_span)"[span_15](end_span)
+    """إلغاء حظر المستخدم من قاعدة البيانات وإزالته من كاش الحماية ليعود للعمل""[span_8](start_span)[span_9](start_span)"[span_8](end_span)[span_9](end_span)
     if db is None: return
     try:
         db.collection('banned_users').document(str(uid)).delete()
@@ -76,7 +76,6 @@ def set_setting(key, value):
 def get_setting(key, default="0"):
     return SETTINGS_CACHE.get(key, default)
 
-# 🌟 [مطور] نظام تسجيل المستخدمين السحابي مع دعم الإحالات الفيروسية
 def register_user_with_ref_sync(user, referrer_id=None):
     if not user or db is None: return
     now = int(time.time())
@@ -96,7 +95,6 @@ def register_user_with_ref_sync(user, referrer_id=None):
                 'referrals_count': 0,
                 'vip_until': 0
             }
-            # التحقق أن المستخدم الجديد لا يضيف نفسه كمحيل
             if referrer_id and str(referrer_id) != str(user.id):
                 user_data['referred_by'] = str(referrer_id)
                 reward_referrer_sync(referrer_id)
@@ -112,7 +110,6 @@ def register_user_with_ref_sync(user, referrer_id=None):
     except Exception as e:
         logger.error(f"Error registering user with ref {user.id}: {e}")
 
-# 🌟 [مطور] دالة مكافأة المستخدم المحيل بعضوية VIP عند اكتمال 3 دعوات
 def reward_referrer_sync(referrer_id):
     if db is None: return
     try:
@@ -124,7 +121,6 @@ def reward_referrer_sync(referrer_id):
             vip_until = data.get('vip_until', 0)
             now = int(time.time())
             
-            # كل 3 إحالات ناجحة تمنحه 24 ساعة تخطي إعلانات VIP مجاناً
             if current_count % 3 == 0:
                 base_time = max(vip_until, now)
                 vip_until = base_time + 86400
@@ -137,9 +133,8 @@ def reward_referrer_sync(referrer_id):
     except Exception as e:
         logger.error(f"Error rewarding referrer {referrer_id}: {e}")
 
-# 🌟 [مطور] دالة فحص العضوية الذهبية النشطة لتخطي الإعلانات
 def is_user_vip_sync(user_id: int) -> bool:
-    """التحقق هل يملك المستخدم عضوية VIP سحابية نشطة لتخطي الإعلانات""[span_16](start_span)"[span_16](end_span)
+    """التحقق هل يملك المستخدم عضوية VIP سحابية نشطة لتخطي الإعلانات""[span_10](start_span)"[span_10](end_span)
     if db is None: return False
     try:
         doc = db.collection('users').document(str(user_id)).get()
