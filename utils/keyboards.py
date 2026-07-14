@@ -22,7 +22,7 @@ def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardM
             InlineKeyboardButton("🎙 عزل قنوات الصوت والموسيقى (AI)" if lang == "ar" else "🎙 Vocal Splitter (AI)", callback_data=f"split:{request_id}")
         ],
         [
-            InlineKeyboardButton("🎚 هندسة صوتية احترافية (HQ)" if lang == "ar" else "🎚 Audio Normalization (HQ)", callback_data=f"norm:{request_id}")
+            InlineKeyboardButton("🎚 هندسة صوتية (HQ)" if lang == "ar" else "🎚 Audio Normalization (HQ)", callback_data=f"norm:{request_id}")
         ],
         [InlineKeyboardButton(_t("btn_cancel", lang), callback_data=f"cancel:{request_id}")]
     ])
