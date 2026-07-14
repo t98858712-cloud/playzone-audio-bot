@@ -4,6 +4,8 @@ import time
 import shutil
 import logging
 import asyncio
+import json # 🌟 تم استيراد مكتبة الـ JSON لدعم النسخ الاحتياطي الحقيقي
+import subprocess
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.error import RetryAfter, BadRequest
@@ -11,21 +13,43 @@ from database.connection import db, firebase_init_error
 from database.operations import (
     all_user_ids, get_active_users_48h, stat_inc_sync, load_stats_sync, 
     get_latest_users, get_setting, get_all_users_data, optimize_db, 
-    set_setting, register_user_sync, ban_user_db
+    set_setting, register_user_sync, ban_user_db, load_banned_users, load_settings_to_cache
 )
 from utils.helpers import is_admin, _cleanup_old_downloads_sync, _force_cleanup_all_sync, format_size, esc, clean_title, alert_admins_live
 from utils.keyboards import admin_main_keyboard, admin_broadcast_menu, admin_cancel_action_keyboard, admin_users_menu, admin_security_menu
 from locales.language import _t
 from core.config import BASE_DOWNLOAD_DIR, COOKIES_FILE, DB_FILE, EXECUTOR
 from core.security import BANNED_USERS_CACHE
-import os
-import subprocess
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+# 🌟 دالة مبتكرة لإنشاء نسخة احتياطية سحابية حقيقية ومتكاملة من Firestore
+def export_firestore_backup() -> str:
+    """تصدير كافة مجموعات Firestore الحية إلى ملف JSON منسق"""
+    if db is None: return ""
+    try:
+        backup_data = {}
+        # 1. نسخ المستخدمين
+        users_ref = db.collection('users').stream()
+        backup_data['users'] = [doc.to_dict() for doc in users_ref]
+        
+        # 2. نسخ الإعدادات
+        settings_ref = db.collection('settings').stream()
+        backup_data['settings'] = {doc.id: doc.to_dict() for doc in settings_ref}
+        
+        # 3. نسخ قائمة الحظر
+        banned_ref = db.collection('banned_users').stream()
+        backup_data['banned_users'] = {doc.id: doc.to_dict() for doc in banned_ref}
+        
+        return json.dumps(backup_data, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"فشل إنشاء النسخة الاحتياطية السحابية: {e}")
+        return ""
+
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id): return
-    register_user_sync(update.effective_user)
+    # تسجيل المشرف في الخلفية لسرعة فائقة
+    asyncio.create_task(asyncio.to_thread(register_user_sync, update.effective_user))
     context.user_data.pop("bc_active", None)
     context.user_data.pop("awaiting_user_id", None)
     lang = context.user_data.get("lang", "ar")
@@ -65,7 +89,14 @@ async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["bc_active"] = False
     lang = context.user_data.get("lang", "ar")
     target = context.user_data.get("bc_target", "all")
-    users = all_user_ids() if target == "all" else get_active_users_48h()
+    
+    # جلب المستخدمين في خيط منفصل لمنع تجميد البوت أثناء البحث
+    loop = asyncio.get_running_loop()
+    if target == "all":
+        users = await loop.run_in_executor(None, all_user_ids)
+    else:
+        users = await loop.run_in_executor(None, get_active_users_48h)
+        
     if not users: return await update.message.reply_text(_t("msg_adm_no_users", lang))
     status = await update.message.reply_text(_t("msg_adm_bc_start", lang))
     sent, fail = 0, 0
@@ -85,7 +116,9 @@ async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_T
         if i % 20 == 0 and i > 0:
             try: await status.edit_text(f"⏳ <b>جاري تقدم الإذاعة:</b> {i} / {total}\n✅ نجاح: {sent} | ❌ فشل: {fail}", parse_mode="HTML")
             except Exception: pass
-    stat_inc_sync("broadcasts")
+            
+    # تحديث الإحصائيات في الخلفية
+    asyncio.create_task(asyncio.to_thread(stat_inc_sync, "broadcasts"))
     await status.edit_text(_t("msg_adm_bc_done", lang, sent=sent, fail=fail), parse_mode="HTML")
 
 def build_admin_stats_text(lang: str = "ar") -> str:
@@ -114,6 +147,8 @@ def build_server_status_text(lang: str = "ar") -> str:
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     lang = context.user_data.get("lang", "ar")
+    loop = asyncio.get_running_loop()
+    
     if data == "adm_main_back":
         await query.answer()
         context.user_data.pop("awaiting_user_id", None)
@@ -128,6 +163,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_bc_menu":
         await query.answer()
         return await edit_message_smart(query.message, "📢 <b>خيارات الإذاعة الشاملة:</b>\nاختر الشريحة المستهدفة:", reply_markup=admin_broadcast_menu(lang))
+        
     elif data.startswith("adm_bc_start:"):
         target = data.split(":")[1]
         context.user_data["bc_active"] = True
@@ -145,8 +181,9 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         return await edit_message_smart(query.message, "✍️ <b>الاستعلام السريع:</b>\n\nالرجاء إرسال ID المستخدم (أرقام فقط) للاستعلام عن حالته وبياناته:", reply_markup=admin_cancel_action_keyboard(lang))
 
     elif data == "adm_export_db":
-        await query.answer("جاري سحب البيانات... 📥")
-        users = get_all_users_data()
+        await query.answer("جاري جلب البيانات وتوليد التقرير... 📥")
+        # تشغيل الجلب السحابي في خيط منفصل لمنع التجميد تماماً
+        users = await loop.run_in_executor(None, get_all_users_data)
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(["ID", "Username", "First Name", "Last Name", "First Seen", "Last Seen"])
@@ -161,6 +198,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_sec_menu":
         await query.answer()
         return await edit_message_smart(query.message, "🛡️ <b>قسم الصيانة والحماية:</b>", reply_markup=admin_security_menu(lang))
+        
     elif data == "adm_toggle_maint":
         current = get_setting("maintenance", "0")
         new_val = "0" if current == "1" else "1"
@@ -172,7 +210,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             if "Message is not modified" in str(e): return
             raise e
 
-    # معالجة حدث الضغط على زر تشغيل/إلغاء تفعيل الإعلانات مؤقتاً
     elif data == "adm_toggle_ads":
         current = get_setting("ads_status", "1")
         new_val = "0" if current == "1" else "1"
@@ -209,19 +246,32 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             raise e
 
     elif data == "adm_update_dlp":
-        await query.answer("جاري تحديث محرك التحميل... قد يستغرق الأمر ثواني ⏳")
+        await query.answer("جاري تحديث محرك التحميل... قد يستغرق ثواني ⏳")
         try:
-            subprocess.run(["pip", "install", "-U", "yt-dlp"], check=True)
+            # تشغيل عملية الترقية في خيط خلفي لمنع تجمد البوت تماماً أثناء التثبيت
+            await loop.run_in_executor(None, lambda: subprocess.run(["pip", "install", "--no-cache-dir", "-U", "yt-dlp"], check=True, capture_output=True))
             return await edit_message_smart(query.message, "✅ <b>تم تحديث محرك التحميل (yt-dlp) لآخر إصدار بنجاح!</b>", reply_markup=admin_security_menu(lang))
         except Exception as e:
             return await edit_message_smart(query.message, f"❌ <b>حدث خطأ أثناء التحديث:</b>\n<code>{e}</code>", reply_markup=admin_security_menu(lang))
 
+    # 🌟 [تحسين حقيقي] زر النسخة الاحتياطية يقوم الآن بتوليد نسخة سحابية شاملة بصيغة JSON حقيقية بدلاً من ملف sqlite تالف
     elif data == "adm_backup_db":
-        await query.answer("جاري سحب وتجهيز النسخة الاحتياطية... 💾")
-        if DB_FILE.exists():
-            with open(DB_FILE, 'rb') as f:
-                await context.bot.send_document(chat_id=query.message.chat_id, document=f, filename="bot_database.db", caption="✅ النسخة الاحتياطية المحدثة لقاعدة البيانات.")
-        return await edit_message_smart(query.message, "✅ تم إرسال النسخة الاحتياطية بنجاح.", reply_markup=admin_security_menu(lang))
+        await query.answer("جاري سحب وتجهيز النسخة الاحتياطية السحابية... 💾")
+        try:
+            backup_json = await loop.run_in_executor(None, export_firestore_backup)
+            if backup_json:
+                file_bytes = io.BytesIO(backup_json.encode('utf-8'))
+                file_bytes.name = f"Firestore_Backup_{int(time.time())}.json"
+                await context.bot.send_document(
+                    chat_id=query.message.chat_id, 
+                    document=file_bytes, 
+                    caption="✅ النسخة الاحتياطية السحابية الشاملة لبيانات البوت والمستخدمين (Firestore JSON Backup)."
+                )
+                return await edit_message_smart(query.message, "✅ تم استخراج وإرسال النسخة الاحتياطية السحابية بنجاح.", reply_markup=admin_security_menu(lang))
+            else:
+                return await edit_message_smart(query.message, "❌ فشل سحب البيانات السحابية الاحتياطية.", reply_markup=admin_security_menu(lang))
+        except Exception as e:
+            return await edit_message_smart(query.message, f"❌ حدث خطأ غير متوقع أثناء النسخ:\n<code>{e}</code>", reply_markup=admin_security_menu(lang))
 
     elif data == "adm_cookie_guide":
         await query.answer()
@@ -231,22 +281,27 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         )
         return await edit_message_smart(query.message, guide_text, reply_markup=admin_security_menu(lang))
         
+    # 🌟 [تحسين حقيقي] زر تحسين القاعدة يقوم الآن بإعادة شحن الكاش وبناء الـ RAM اللحظي وتصفير السجلات التالفة
     elif data == "adm_vacuum_db":
-        await query.answer("جاري تحسين القاعدة... 🗜️")
-        optimize_db()
-        return await edit_message_smart(query.message, "✅ <b>تم ضغط وتحسين قاعدة البيانات بنجاح!</b>", reply_markup=admin_main_keyboard(lang))
+        await query.answer("جاري تصفير وتحسين الكاش اللحظي... 🗜️")
+        await loop.run_in_executor(None, load_banned_users)
+        await loop.run_in_executor(None, load_settings_to_cache)
+        await loop.run_in_executor(None, _cleanup_old_downloads_sync)
+        return await edit_message_smart(query.message, "✅ <b>تم تصفير كاش الحماية، تحديث كاش الإعدادات، وتنظيف الملفات المؤقتة بنجاح!</b>", reply_markup=admin_main_keyboard(lang))
         
     elif data == "adm_close":
         await query.answer("تم الإغلاق ✖️")
         return await safe_delete(query.message)
         
     elif data == "adm_stats":
-        await query.answer()
-        return await edit_message_smart(query.message, build_admin_stats_text(lang), reply_markup=admin_users_menu(lang))
+        await query.answer("جاري حساب وحساب الإحصائيات... 📊")
+        stats_text = await loop.run_in_executor(None, lambda: build_admin_stats_text(lang))
+        return await edit_message_smart(query.message, stats_text, reply_markup=admin_users_menu(lang))
         
     elif data == "adm_users":
-        await query.answer()
-        return await edit_message_smart(query.message, build_admin_users_text(10, lang), reply_markup=admin_users_menu(lang))
+        await query.answer("جاري استدعاء قائمة المستخدمين... 📋")
+        users_text = await loop.run_in_executor(None, lambda: build_admin_users_text(10, lang))
+        return await edit_message_smart(query.message, users_text, reply_markup=admin_users_menu(lang))
         
     elif data == "adm_server":
         await query.answer()
@@ -254,5 +309,5 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         
     elif data == "adm_clean":
         await query.answer("جاري تنظيف الملفات المؤقتة... 🧹")
-        removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
+        removed = await loop.run_in_executor(None, _force_cleanup_all_sync)
         return await edit_message_smart(query.message, f"✅ <b>تم التنظيف!</b>\nتم إزالة {removed} ملف مؤقت.", reply_markup=admin_security_menu(lang))
