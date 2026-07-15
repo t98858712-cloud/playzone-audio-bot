@@ -16,6 +16,8 @@ def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
 def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(_t("btn_audio", lang), callback_data=f"aud:{request_id}")],
+        # إضافة الزر السحري الجديد هنا
+        [InlineKeyboardButton("🎛️ هندسة صوتية" if lang == "ar" else "🎛️ Sound Engineering", callback_data=f"aud_pro:{request_id}")],
         [InlineKeyboardButton(_t("btn_video", lang), callback_data=f"vid:{request_id}")],
         [InlineKeyboardButton(_t("btn_cancel", lang), callback_data=f"cancel:{request_id}")],
     ])
