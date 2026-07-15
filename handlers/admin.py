@@ -206,10 +206,26 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "adm_backup_db":
         await query.answer("جاري سحب وتجهيز النسخة الاحتياطية... 💾")
-        if DB_FILE.exists():
-            with open(DB_FILE, 'rb') as f:
-                await context.bot.send_document(chat_id=query.message.chat_id, document=f, filename="bot_database.db", caption="✅ النسخة الاحتياطية المحدثة لقاعدة البيانات.")
-        return await edit_message_smart(query.message, "✅ تم إرسال النسخة الاحتياطية بنجاح.", reply_markup=admin_security_menu(lang))
+        from database.operations import export_firebase_backup_json
+        backup_json = export_firebase_backup_json()
+        if backup_json:
+            file_bytes = io.BytesIO(backup_json.encode('utf-8'))
+            file_bytes.name = f"Firebase_Backup_{int(time.time())}.json"
+            await context.bot.send_document(
+                chat_id=query.message.chat_id, 
+                document=file_bytes, 
+                filename=file_bytes.name,
+                caption="✅ نسخة احتياطية كاملة من قاعدة بيانات Firebase Firestore (صيغة JSON)."
+            )
+            return await edit_message_smart(query.message, "✅ تم إرسال النسخة الاحتياطية بنجاح.", reply_markup=admin_security_menu(lang))
+        else:
+            # خيار احتياطي في حال وجود قاعدة محلية قديمة بالقرص
+            if DB_FILE.exists():
+                with open(DB_FILE, 'rb') as f:
+                    await context.bot.send_document(chat_id=query.message.chat_id, document=f, filename="bot_database.db", caption="✅ النسخة الاحتياطية المحلية المحدثة (SQLite).")
+                return await edit_message_smart(query.message, "✅ تم إرسال النسخة الاحتياطية المحلية بنجاح.", reply_markup=admin_security_menu(lang))
+            else:
+                return await edit_message_smart(query.message, "❌ فشل سحب نسخة احتياطية، قاعدة البيانات السحابية والمحلية غير متوفرة.", reply_markup=admin_security_menu(lang))
 
     elif data == "adm_cookie_guide":
         await query.answer()
@@ -222,7 +238,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_vacuum_db":
         await query.answer("جاري تحسين القاعدة... 🗜️")
         optimize_db()
-        return await edit_message_smart(query.message, "✅ <b>تم ضغط وتحسين قاعدة البيانات بنجاح!</b>", reply_markup=admin_main_keyboard(lang))
+        return await edit_message_smart(query.message, "✅ <b>تم تحسين قاعدة البيانات وضغطها بنجاح!</b>\n\n💡 <i>بما أن قاعدة بيانات البوت سحابية (Firebase Firestore)، فإن عمليات الفهرسة وضغط الملفات تتم آلياً في السيرفر ومستمرة بالكامل لتوفير أعلى سرعة.</i>", reply_markup=admin_security_menu(lang))
         
     elif data == "adm_close":
         await query.answer("تم الإغلاق ✖️")
