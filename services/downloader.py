@@ -15,7 +15,6 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
-    # 📺 استخدام مشغل التلفزيون الذكي لتخطي قيود حظر الـ IP السحابي لـ Railway
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
@@ -32,7 +31,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
-    # 🌐 جلب وحقن البروكسي الذكي ديناميكياً لتخطي الحظر الجغرافي وحماية الكوكيز
     from database.operations import get_setting
     proxy = get_setting("proxy", "")
     if proxy:
@@ -46,14 +44,14 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         
         if resolution == "best":
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/ "
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/ "
                 f"best[filesize<?{max_fs}]"
             )
         else:
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/ "
+                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/ "
                 f"best[height<={resolution}][filesize<?{max_fs}]"
             )
             
@@ -91,7 +89,6 @@ def search_youtube(query: str, limit: int = 30):
         }
     }
     
-    # حقن البروكسي للبحث أيضاً لضمان السرعة والاعتمادية
     from database.operations import get_setting
     proxy = get_setting("proxy", "")
     if proxy:
@@ -187,13 +184,5 @@ async def youtube_health_monitor(app: Application):
         except Exception as e:
             err_str = str(e).lower()
             if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-                try:
-                    if COOKIES_FILE.exists():
-                        backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
-                        shutil.copy(COOKIES_FILE, backup_path)
-                        COOKIES_FILE.unlink()
-                        COOKIES_FILE.touch()
-                except Exception as ex:
-                    logger.error(f"Failed to reset cookies: {ex}")
-                    
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه طوارئ من السيرفر:</b>\nتم كشف حظر ملف الكوكيز الحالي!\n\n♻️ تم تفريغ الكوكيز تلقائياً لحين رفع ملف جديد من لوحة التحكم.")
+                # يقتصر الإجراء على إرسال إشعار للمدير فقط دون تعديل في ملف الكوكيز
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه طوارئ من السيرفر:</b>\nتم كشف حظر ملف الكوكيز الحالي! الرجاء استخراج ملف كوكيز جديد وإرساله هنا لتجديده.")
