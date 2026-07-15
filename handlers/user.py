@@ -130,16 +130,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     if not update.message or not update.message.text: return
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
-    
-    if is_admin(uid) and context.user_data.get("awaiting_proxy"):
-        context.user_data.pop("awaiting_proxy", None)
-        proxy_text = text.strip()
-        if proxy_text.lower() in ["حذف", "delete"]:
-            set_setting("proxy", "")
-            return await update.message.reply_text("🌐 تم تعطيل وحذف البروكسي بنجاح. سيعود البوت لاستخدام IP السيرفر الرئيسي.")
-        else:
-            set_setting("proxy", proxy_text)
-            return await update.message.reply_text(f"🌐 تم حفظ وتفعيل البروكسي الجديد بنجاح!\n\n<code>{esc(proxy_text)}</code>", parse_mode="HTML")
 
     if is_admin(uid) and context.user_data.get("awaiting_user_id"):
         context.user_data.pop("awaiting_user_id", None)
