@@ -33,7 +33,11 @@ from handlers.user import render_search_page
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+# ⏱️ مؤقت منع تكرار تنبيهات الكوكيز في الكولباك
+LAST_COOKIE_ALERT_TIME = 0
+
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global LAST_COOKIE_ALERT_TIME
     query = update.callback_query
     if not query: return
     
@@ -105,7 +109,10 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"فشل جلب المعاينة من البحث: {e}")
             err_str = str(e).lower()
             if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-                await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء جلب المعاينة:</b>\nالرابط: {url}\n\nالرجاء إرسال ملف `cookies.txt` جديد فوراً.")
+                now = time.time()
+                if now - LAST_COOKIE_ALERT_TIME > 1800:
+                    LAST_COOKIE_ALERT_TIME = now
+                    await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء جلب المعاينة:</b>\nالرابط: {url}\n\nالرجاء إرسال ملف `cookies.txt` جديد فوراً.")
             
             await context.bot.send_message(chat_id=uid, text=_t("msg_link_error", lang))
         finally:
@@ -211,6 +218,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str, lang: str):
+    global LAST_COOKIE_ALERT_TIME
     uid = query.from_user.id
     url = request.get("url")
     ACTIVE_USERS.add(uid)
@@ -241,7 +249,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
             if mode in ["audio", "audio_pro"]:
                 if mode == "audio_pro":
-                    progress_data["text"] = "🎛️ جاري عمل هندسة صوتية..." if lang == "ar" else "🎛️ Running professional audio ..."
+                    progress_data["text"] = "🎛️ جاري عمل هندسة صوتية احترافية (Studio Mastering)..." if lang == "ar" else "🎛️ Running professional audio mastering..."
                 else:
                     progress_data["text"] = _t("msg_converting", lang)
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
@@ -309,8 +317,10 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         err_str = str(e).lower()
         
         if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-            # يقتصر الإجراء على الإنذار فقط دون تعديل أو حذف للملفات محلياً
-            await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء التحميل:</b>\nالرابط: {url}\n\nالرجاء تجديد ملف الكوكيز عبر إرساله هنا في أقرب وقت.")
+            now = time.time()
+            if now - LAST_COOKIE_ALERT_TIME > 1800:
+                LAST_COOKIE_ALERT_TIME = now
+                await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء التحميل:</b>\nالرابط: {url}\n\nالرجاء إرسال ملف `cookies.txt` جديد فوراً.")
             try: await edit_message_smart(query.message, "❌ فشل التحميل بسبب قيود حماية يوتيوب للمقطع. يرجى الانتظار لحين تجديد الكوكيز من قبل الإدارة.", reply_markup=None)
             except Exception: pass
         else:
