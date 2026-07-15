@@ -1,6 +1,7 @@
 import logging
 import time
 import json
+from google.cloud.firestore import FieldFilter, Increment
 from database.connection import db
 from core.security import BANNED_USERS_CACHE
 
@@ -25,7 +26,8 @@ def load_banned_users():
     if db is None: return
     try:
         BANNED_USERS_CACHE.clear()
-        docs = db.collection('users').where('banned', '==', True).stream()
+        # تحديث: استخدام FieldFilter بدلاً من الطريقة القديمة
+        docs = db.collection('users').where(filter=FieldFilter('banned', '==', True)).stream()
         for doc in docs:
             BANNED_USERS_CACHE.add(int(doc.id))
         logger.info(f"🔥 [Firebase] تم شحن كاش الحماية بنجاح بـ {len(BANNED_USERS_CACHE)} مستخدم محظور.")
@@ -68,9 +70,8 @@ def load_stats_sync() -> dict:
 def stat_inc_sync(key: str, value: int = 1):
     if db is None: return
     try:
-        from google.cloud import firestore
         db.collection('stats').document('global').update({
-            key: firestore.Increment(value)
+            key: Increment(value)
         })
     except Exception:
         try:
@@ -90,7 +91,8 @@ def get_active_users_48h() -> list:
     if db is None: return []
     try:
         cutoff = int(time.time()) - (48 * 3600)
-        users = db.collection('users').where('last_seen', '>=', cutoff).stream()
+        # تحديث: استخدام FieldFilter بدلاً من الطريقة القديمة
+        users = db.collection('users').where(filter=FieldFilter('last_seen', '>=', cutoff)).stream()
         return [int(u.id) for u in users]
     except Exception:
         return all_user_ids()
