@@ -5,7 +5,6 @@ import time
 import shutil
 import logging
 import ipaddress
-import threading
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -19,7 +18,6 @@ from core.config import (
 from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
-progress_lock = threading.Lock()
 
 def parse_admin_ids():
     admin_ids_raw = os.getenv("ADMIN_IDS", "")
@@ -133,7 +131,7 @@ def cookie_file_is_usable(path: Path) -> bool:
                 domain, _, _, _, expires, name, value = parts[:7]
                 try: exp = int(expires)
                 except Exception: exp = 0
-                if value.strip() and (exp == 0 or exp > now): 
+                if value.strip() and (exp == 0 or exp > now):
                     has_valid_cookie = True
                     break
         return has_valid_cookie
@@ -162,22 +160,19 @@ def _force_cleanup_all_sync() -> int:
     return removed
 
 async def send_preview(update: Update, thumb: str, caption: str, keyboard: InlineKeyboardMarkup):
-    """
-    دالة إرسال معاينة الروابط والبحث مع دعم الصور المصغرة
-    """
     if thumb and (thumb.startswith("http://") or thumb.startswith("https://")):
         try:
             return await update.message.reply_photo(
-                photo=thumb, 
-                caption=caption, 
-                reply_markup=keyboard, 
+                photo=thumb,
+                caption=caption,
+                reply_markup=keyboard,
                 parse_mode="HTML"
             )
         except Exception: pass
         
     return await update.message.reply_text(
-        text=caption, 
-        reply_markup=keyboard, 
-        parse_mode="HTML", 
+        text=caption,
+        reply_markup=keyboard,
+        parse_mode="HTML",
         disable_web_page_preview=True
     )
