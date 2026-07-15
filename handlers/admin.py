@@ -22,26 +22,34 @@ from core.security import BANNED_USERS_CACHE
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_dashboard_text(lang: str = "ar") -> str:
+    """توليد نص لوحة القيادة المترجم حياً بناءً على إحصائيات النظام الحالية"""
     stats = load_stats_sync()
     total_users = len(all_user_ids())
     maint = get_setting("maintenance", "0")
     status_text = _t("txt_maintenance", lang) if maint == "1" else _t("txt_online", lang)
 
-    return _t("msg_dashboard", lang, status=status_text, users=total_users, success=stats.get('success', 0), failed=stats.get('failed', 0))
+    return _t(
+        "msg_dashboard", lang, 
+        status=status_text, 
+        users=total_users, 
+        success=stats.get('success', 0), 
+        failed=stats.get('failed', 0)
+    )
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """فتح وإقلاع لوحة تحكم الإدارة الرئيسية للمشرفين"""
     uid = update.effective_user.id
     if not is_admin(uid): return
     register_user_sync(update.effective_user)
     context.user_data.pop("bc_active", None)
     context.user_data.pop("awaiting_user_id", None)
     
-    lang = get_user_lang(uid, context) # تحديث: سحب اللغة من الـ Helpers
-    
+    lang = get_user_lang(uid, context)
     dashboard_text = get_dashboard_text(lang)
     await update.message.reply_text(dashboard_text, reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
 
 async def process_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, uid: int):
+    """الاستعلام المباشر والسحابي عن بيانات وحالة مستخدم معين عبر معرّفه"""
     lang = get_user_lang(update.effective_user.id, context)
     try:
         doc_ref = db.collection('users').document(str(uid))
@@ -59,10 +67,12 @@ async def process_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await update.message.reply_text(_t("msg_query_error", lang))
 
 async def safe_delete(message):
+    """مسح الرسائل القديمة من الشات لضمان نظافة واجهة الإدارة"""
     try: await message.delete()
     except Exception: pass
 
 async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: str = "HTML"):
+    """تحديث محتوى الرسائل واللوحات الإدارية بمرونة وذكاء دون إحداث تعارض"""
     try:
         if getattr(message, "photo", None) or getattr(message, "video", None) or getattr(message, "document", None):
             await message.edit_caption(caption=text, reply_markup=reply_markup, parse_mode=parse_mode)
@@ -71,17 +81,21 @@ async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: 
     except BadRequest as e:
         if "not modified" not in str(e).lower(): raise
     except Exception as e:
-        logger.debug(f"تخطي تحديث الرسالة: {e}")
+        logger.debug(f"تخطي تحديث الرسالة الإدارية: {e}")
 
 async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """إرسال إذاعة ونشرة جماعية فائقة السرعة مع معالجة حماية تليجرام من الحظر"""
     context.user_data["bc_active"] = False
     lang = get_user_lang(update.effective_user.id, context)
     target = context.user_data.get("bc_target", "all")
     users = all_user_ids() if target == "all" else get_active_users_48h()
-    if not users: return update.message.reply_text(_t("msg_adm_no_users", lang))
+    
+    if not users: 
+        return update.message.reply_text(_t("msg_adm_no_users", lang))
+        
     status = await update.message.reply_text(_t("msg_adm_bc_start", lang))
-    sent, fail = 0, 0
-    total = len(users)
+    sent, fail, total = 0, 0, len(users)
+    
     for i, user_id in enumerate(users):
         try:
             await update.message.copy(chat_id=user_id)
@@ -94,21 +108,35 @@ async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_T
                 sent += 1
             except Exception: fail += 1
         except Exception: fail += 1
+        
         if i % 20 == 0 and i > 0:
             try: await status.edit_text(f"⏳ <b>جاري تقدم الإذاعة:</b> {i} / {total}\n✅ نجاح: {sent} | ❌ فشل: {fail}", parse_mode="HTML")
             except Exception: pass
+            
     stat_inc_sync("broadcasts")
     await status.edit_text(_t("msg_adm_bc_done", lang, sent=sent, fail=fail), parse_mode="HTML")
 
 def build_admin_stats_text(lang: str = "ar") -> str:
+    """بناء وعرض تقرير الإحصائيات الشامل للبوت بشكل منسق ومترجم"""
     if db is None: return f"⚠️ <b>خطأ في الاتصال بـ Firebase:</b>\n<code>{firebase_init_error}</code>"
     stats = load_stats_sync()
     total_users = len(all_user_ids())
     active_users = len(get_active_users_48h())
     downloaded = format_size(stats.get('bytes', 0), lang)
-    return f"📊 <b>إحصائيات البوت التفصيلية:</b>\n\n👥 إجمالي الأعضاء: <code>{total_users}</code>\n⚡ النشطين (آخر 48 ساعة): <code>{active_users}</code>\n\n📥 إجمالي الطلبات: <code>{stats.get('requests', 0)}</code>\n✅ الطلبات الناجحة: <code>{stats.get('success', 0)}</code>\n❌ الطلبات الفاشلة: <code>{stats.get('failed', 0)}</code>\n💾 حجم الداتا المحملة: <code>{downloaded}</code>\n📢 عدد الإذاعات المُرسلة: <code>{stats.get('broadcasts', 0)}</code>"
+    
+    return (
+        f"📊 <b>إحصائيات البوت التفصيلية:</b>\n\n"
+        f"👥 إجمالي الأعضاء: <code>{total_users}</code>\n"
+        f"⚡ النشطين (آخر 48 ساعة): <code>{active_users}</code>\n\n"
+        f"📥 إجمالي الطلبات: <code>{stats.get('requests', 0)}</code>\n"
+        f"✅ الطلبات الناجحة: <code>{stats.get('success', 0)}</code>\n"
+        f"❌ الطلبات الفاشلة: <code>{stats.get('failed', 0)}</code>\n"
+        f"💾 حجم الداتا المحملة: <code>{downloaded}</code>\n"
+        f"📢 عدد الإذاعات المُرسلة: <code>{stats.get('broadcasts', 0)}</code>"
+    )
 
 def build_admin_users_text(limit: int, lang: str = "ar") -> str:
+    """عرض قائمة سريعة لأحدث المنضمين للبوت لتفقد جودة وحالة الإقلاع حياً"""
     if db is None: return "⚠️ قاعدة البيانات غير متصلة."
     users = get_latest_users(limit)
     if not users: return "📋 لا يوجد مستخدمين بعد."
@@ -120,12 +148,19 @@ def build_admin_users_text(limit: int, lang: str = "ar") -> str:
     return text
 
 def build_server_status_text(lang: str = "ar") -> str:
+    """بناء تقرير استهلاك وصحة مساحة تخزين الميديا لخادم السيرفر"""
     total, used, free = shutil.disk_usage(BASE_DOWNLOAD_DIR)
-    return f"💽 <b>حالة مساحة التخزين لخادم الميديا:</b>\n\n📁 المساحة الكلية: <code>{format_size(total, lang)}</code>\n🟢 المساحة المستخدمة: <code>{format_size(used, lang)}</code>\n⚪ المساحة الحرة: <code>{format_size(free, lang)}</code>"
+    return (
+        f"💽 <b>حالة مساحة التخزين لخادم الميديا:</b>\n\n"
+        f"📁 المساحة الكلية: <code>{format_size(total, lang)}</code>\n"
+        f"🟢 المساحة المستخدمة: <code>{format_size(used, lang)}</code>\n"
+        f"⚪ المساحة الحرة: <code>{format_size(free, lang)}</code>"
+    )
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
+    """المعالج الموحد والمصفى لكافة تفاعلات، ضغطات، وعمليات لوحة تحكم الإدارة"""
     data = query.data
-    lang = get_user_lang(query.from_user.id, context) # تحديث
+    lang = get_user_lang(query.from_user.id, context)
     
     if data == "adm_main_back":
         await query.answer()
@@ -133,7 +168,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         dashboard_text = get_dashboard_text(lang)
         return await edit_message_smart(query.message, dashboard_text, reply_markup=admin_main_keyboard(lang))
         
-    elif data == "adm_cancel_bc" or data == "adm_cancel_action":
+    elif data in ["adm_cancel_bc", "adm_cancel_action"]:
         context.user_data.pop("bc_active", None)
         context.user_data.pop("awaiting_user_id", None)
         await query.answer(_t("msg_action_canceled", lang))
@@ -145,9 +180,8 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         return await edit_message_smart(query.message, _t("msg_bc_menu", lang), reply_markup=admin_broadcast_menu(lang))
     
     elif data.startswith("adm_bc_start:"):
-        target = data.split(":")[1]
         context.user_data["bc_active"] = True
-        context.user_data["bc_target"] = target
+        context.user_data["bc_target"] = data.split(":")[1]
         await query.answer()
         return await edit_message_smart(query.message, _t("msg_adm_bc_ask", lang), reply_markup=admin_cancel_action_keyboard(lang))
         
@@ -179,24 +213,21 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         return await edit_message_smart(query.message, _t("msg_security_menu", lang), reply_markup=admin_security_menu(lang))
 
     elif data == "adm_toggle_maint":
-        current = get_setting("maintenance", "0")
-        new_val = "0" if current == "1" else "1"
+        new_val = "0" if get_setting("maintenance", "0") == "1" else "1"
         set_setting("maintenance", new_val)
         await query.answer(_t("msg_maint_updated", lang))
         try: return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
         except BadRequest: pass
 
     elif data == "adm_toggle_hilltop":
-        current = get_setting("hilltop_status", "1")
-        new_val = "0" if current == "1" else "1"
+        new_val = "0" if get_setting("hilltop_status", "1") == "1" else "1"
         set_setting("hilltop_status", new_val)
         await query.answer(_t("msg_ad_updated", lang))
         try: return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
         except BadRequest: pass
 
     elif data == "adm_toggle_adsterra":
-        current = get_setting("adsterra_status", "1")
-        new_val = "0" if current == "1" else "1"
+        new_val = "0" if get_setting("adsterra_status", "1") == "1" else "1"
         set_setting("adsterra_status", new_val)
         await query.answer(_t("msg_ad_updated", lang))
         try: return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
@@ -207,14 +238,12 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         try:
             process = await asyncio.create_subprocess_exec(
                 "pip", "install", "-U", "yt-dlp",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await process.communicate()
             if process.returncode == 0:
                 return await edit_message_smart(query.message, _t("msg_engine_updated", lang), reply_markup=admin_security_menu(lang))
-            else:
-                raise RuntimeError(stderr.decode().strip())
+            else: raise RuntimeError(stderr.decode().strip())
         except Exception as e:
             return await edit_message_smart(query.message, _t("msg_engine_failed", lang, error=e), reply_markup=admin_security_menu(lang))
 
