@@ -24,7 +24,6 @@ import subprocess
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_dashboard_text(lang: str = "ar") -> str:
-    """توليد لوحة القيادة الحية بتنسيق حديث واحترافي"""
     stats = load_stats_sync()
     total_users = len(all_user_ids())
     maint = get_setting("maintenance", "0")
@@ -46,6 +45,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
     context.user_data.pop("bc_active", None)
     context.user_data.pop("awaiting_user_id", None)
+    context.user_data.pop("awaiting_proxy", None)
     lang = context.user_data.get("lang", "ar")
     
     dashboard_text = get_dashboard_text(lang)
@@ -138,12 +138,14 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     if data == "adm_main_back":
         await query.answer()
         context.user_data.pop("awaiting_user_id", None)
+        context.user_data.pop("awaiting_proxy", None)
         dashboard_text = get_dashboard_text(lang)
         return await edit_message_smart(query.message, dashboard_text, reply_markup=admin_main_keyboard(lang))
         
     elif data == "adm_cancel_bc" or data == "adm_cancel_action":
         context.user_data.pop("bc_active", None)
         context.user_data.pop("awaiting_user_id", None)
+        context.user_data.pop("awaiting_proxy", None)
         await query.answer("تم الإلغاء ❌")
         dashboard_text = get_dashboard_text(lang)
         return await edit_message_smart(query.message, dashboard_text, reply_markup=admin_main_keyboard(lang))
@@ -186,6 +188,19 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return await edit_message_smart(query.message, "🛡️ <b>لوحة الحماية، الإعلانات وإعدادات النظام:</b>", reply_markup=admin_security_menu(lang))
     
+    # 🌐 استدعاء واجهة إعداد البروكسي
+    elif data == "adm_proxy_prompt":
+        context.user_data["awaiting_proxy"] = True
+        await query.answer()
+        prompt_text = (
+            "🌐 <b>إعداد البروكسي الذكي لتجاوز حظر يوتيوب:</b>\n\n"
+            "يرجى إرسال بيانات البروكسي بالتنسيق التالي:\n"
+            "<code>http://username:password@ip:port</code>\n"
+            "أو <code>http://ip:port</code> (إذا كان بدون حماية)\n\n"
+            "💡 <i>لحذف البروكسي والرجوع لـ IP السيرفر الأصلي، أرسل كلمة: <b>حذف</b> أو <b>delete</b></i>"
+        )
+        return await edit_message_smart(query.message, prompt_text, reply_markup=admin_cancel_action_keyboard(lang))
+
     elif data == "adm_toggle_maint":
         current = get_setting("maintenance", "0")
         new_val = "0" if current == "1" else "1"
