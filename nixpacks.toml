@@ -1,5 +1,0 @@
-[phases.setup]
-nixPkgs = ["python313", "ffmpeg", "aria2"]
-
-[start]
-cmd = "python main.py"
