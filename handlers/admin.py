@@ -22,7 +22,6 @@ from core.security import BANNED_USERS_CACHE
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_dashboard_text(lang: str = "ar") -> str:
-    """توليد نص لوحة القيادة المترجم حياً بناءً على إحصائيات النظام الحالية"""
     stats = load_stats_sync()
     total_users = len(all_user_ids())
     maint = get_setting("maintenance", "0")
@@ -37,7 +36,6 @@ def get_dashboard_text(lang: str = "ar") -> str:
     )
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """فتح وإقلاع لوحة تحكم الإدارة الرئيسية للمشرفين"""
     uid = update.effective_user.id
     if not is_admin(uid): return
     register_user_sync(update.effective_user)
@@ -49,7 +47,6 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(dashboard_text, reply_markup=admin_main_keyboard(lang), parse_mode="HTML")
 
 async def process_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, uid: int):
-    """الاستعلام المباشر والسحابي عن بيانات وحالة مستخدم معين عبر معرّفه"""
     lang = get_user_lang(update.effective_user.id, context)
     try:
         doc_ref = db.collection('users').document(str(uid))
@@ -67,12 +64,10 @@ async def process_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await update.message.reply_text(_t("msg_query_error", lang))
 
 async def safe_delete(message):
-    """مسح الرسائل القديمة من الشات لضمان نظافة واجهة الإدارة"""
     try: await message.delete()
     except Exception: pass
 
 async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: str = "HTML"):
-    """تحديث محتوى الرسائل واللوحات الإدارية بمرونة وذكاء دون إحداث تعارض"""
     try:
         if getattr(message, "photo", None) or getattr(message, "video", None) or getattr(message, "document", None):
             await message.edit_caption(caption=text, reply_markup=reply_markup, parse_mode=parse_mode)
@@ -84,7 +79,6 @@ async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: 
         logger.debug(f"تخطي تحديث الرسالة الإدارية: {e}")
 
 async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """إرسال إذاعة ونشرة جماعية فائقة السرعة مع معالجة حماية تليجرام من الحظر"""
     context.user_data["bc_active"] = False
     lang = get_user_lang(update.effective_user.id, context)
     target = context.user_data.get("bc_target", "all")
@@ -117,7 +111,6 @@ async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_T
     await status.edit_text(_t("msg_adm_bc_done", lang, sent=sent, fail=fail), parse_mode="HTML")
 
 def build_admin_stats_text(lang: str = "ar") -> str:
-    """بناء وعرض تقرير الإحصائيات الشامل للبوت بشكل منسق ومترجم"""
     if db is None: return f"⚠️ <b>خطأ في الاتصال بـ Firebase:</b>\n<code>{firebase_init_error}</code>"
     stats = load_stats_sync()
     total_users = len(all_user_ids())
@@ -136,7 +129,6 @@ def build_admin_stats_text(lang: str = "ar") -> str:
     )
 
 def build_admin_users_text(limit: int, lang: str = "ar") -> str:
-    """عرض قائمة سريعة لأحدث المنضمين للبوت لتفقد جودة وحالة الإقلاع حياً"""
     if db is None: return "⚠️ قاعدة البيانات غير متصلة."
     users = get_latest_users(limit)
     if not users: return "📋 لا يوجد مستخدمين بعد."
@@ -148,7 +140,6 @@ def build_admin_users_text(limit: int, lang: str = "ar") -> str:
     return text
 
 def build_server_status_text(lang: str = "ar") -> str:
-    """بناء تقرير استهلاك وصحة مساحة تخزين الميديا لخادم السيرفر"""
     total, used, free = shutil.disk_usage(BASE_DOWNLOAD_DIR)
     return (
         f"💽 <b>حالة مساحة التخزين لخادم الميديا:</b>\n\n"
@@ -158,11 +149,10 @@ def build_server_status_text(lang: str = "ar") -> str:
     )
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
-    """المعالج الموحد والمحمّي بالكامل لكافة تفاعلات لوحة تحكم الإدارة"""
     data = query.data
     lang = get_user_lang(query.from_user.id, context)
     
-    try: # 🛡️ طوق الحماية الشامل لحل مشكلة عطل الإعلانات وتجمد الأزرار
+    try:
         if data == "adm_main_back":
             await query.answer()
             context.user_data.pop("awaiting_user_id", None)
@@ -290,7 +280,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
             return await edit_message_smart(query.message, _t("msg_cache_cleaned", lang, count=removed), reply_markup=admin_security_menu(lang))
 
-    except Exception as e: # 🚨 لحماية الأزرار من التجمد وعرض سبب المشكلة فوراً لو حدث خطأ سحابي
+    except Exception as e:
         logger.error(f"Error in admin callback {data}: {e}", exc_info=True)
         try: await query.answer(f"❌ خطأ في النظام: {e}", show_alert=True)
         except Exception: pass
