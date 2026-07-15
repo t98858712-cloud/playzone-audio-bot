@@ -30,17 +30,25 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
-    # تم تعديل الشرط هنا ليدعم جلب الصوت فقط في وضع الصوت العادي والهندسة الاحترافية
     if mode in ["audio", "audio_pro"]:
         opts["format"] = "bestaudio/best"
     else:
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
+        # ⚡ ترقية ذكية ومحترفة لفلترة جودة الفيديو الحقيقية لمنع التشوش
         if resolution == "best":
-            opts["format"] = f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio/bestvideo+bestaudio/best"
+            opts["format"] = (
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"best[filesize<?{max_fs}]"
+            )
         else:
-            opts["format"] = f"bestvideo[ext=mp4][height<={resolution}][filesize<?{max_fs}]+bestaudio/bestvideo[height<={resolution}]+bestaudio/best"
+            opts["format"] = (
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
+                f"best[height<={resolution}][filesize<?{max_fs}]"
+            )
             
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
