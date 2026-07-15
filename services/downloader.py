@@ -5,7 +5,7 @@ import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
 from telegram.ext import Application
-from core.config import COOKIES_FILE, LOCAL_API_URL, PROGRESS_UPDATE_SECONDS, EXECUTOR
+from core.config import COOKIES_FILE, LOCAL_API_URL, PROGRESS_UPDATE_SECONDS
 from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progress_bar, format_size
 from locales.language import _t
 
