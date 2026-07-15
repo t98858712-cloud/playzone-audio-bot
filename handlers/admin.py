@@ -11,9 +11,9 @@ from database.connection import db, firebase_init_error
 from database.operations import (
     all_user_ids, get_active_users_48h, stat_inc_sync, load_stats_sync, 
     get_latest_users, get_setting, get_all_users_data, 
-    set_setting, register_user_sync, ban_user_db
+    set_setting, register_user_sync
 )
-from utils.helpers import is_admin, _force_cleanup_all_sync, format_size, esc, alert_admins_live
+from utils.helpers import is_admin, _force_cleanup_all_sync, format_size, esc
 from utils.keyboards import admin_main_keyboard, admin_broadcast_menu, admin_cancel_action_keyboard, admin_users_menu, admin_security_menu
 from locales.language import _t
 from core.config import BASE_DOWNLOAD_DIR, DB_FILE
