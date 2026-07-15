@@ -41,28 +41,52 @@ def ban_user_db(uid: int):
         logger.error(f"Error banning user {uid}: {e}")
 
 def get_setting(key: str, default: str = "") -> str:
-    """جلب الإعدادات بنظام هجين يضمن القراءة سواء كانت وثيقة منفصلة أو حقل داخل config لمنع تعليق الأزرار"""
+    """جلب الإعدادات بنظام هجين ذكي يكتشف نوع البيانات (نص/منطقي) ويفحص مسارات Firestore بدقة"""
     if db is None: return default
     try:
-        # 1. التجربة كوثيقة منفصلة
-        doc = db.collection('settings').document(key).get()
-        if doc.exists and "value" in doc.to_dict():
-            return str(doc.to_dict().get("value", default))
-        
-        # 2. التجربة كحقل داخل وثيقة config
+        # 1. الفحص أولاً داخل الوثيقة الموحدة 'config' (التنسيق الافتراضي للبوت)
         config_doc = db.collection('settings').document('config').get()
-        if config_doc.exists and key in config_doc.to_dict():
-            return str(config_doc.to_dict().get(key, default))
+        if config_doc.exists:
+            data = config_doc.to_dict()
+            if key in data:
+                val = data.get(key)
+                if val is True or val == 1 or str(val).lower() in ["true", "1"]:
+                    return "1"
+                if val is False or val == 0 or str(val).lower() in ["false", "0"]:
+                    return "0"
+                return str(val)
+        
+        # 2. الفحص ثانياً كوثيقة منفصلة باسم الإعداد (للتوافقية الاحتياطية المباشرة)
+        doc = db.collection('settings').document(key).get()
+        if doc.exists:
+            data = doc.to_dict()
+            val = data.get("value") if "value" in data else data.get(key)
+            if val is not None:
+                if val is True or val == 1 or str(val).lower() in ["true", "1"]:
+                    return "1"
+                if val is False or val == 0 or str(val).lower() in ["false", "0"]:
+                    return "0"
+                return str(val)
     except Exception:
         pass
     return default
 
 def set_setting(key: str, value: str):
-    """حفظ الإعداد في المسارين معاً سحابياً لضمان التوافق التام ومنع أي عطل مستقبلي"""
+    """حفظ الإعدادات بالصيغتين النصية والمنطقية في المسارين معاً سحابياً لضمان الاستقرار المطلق"""
     if db is None: return
     try:
-        db.collection('settings').document(key).set({"value": value}, merge=True)
-        db.collection('settings').document('config').set({key: value}, merge=True)
+        bool_val = True if value == "1" else False
+        
+        # التحديث داخل الوثيقة الموحدة 'config'
+        db.collection('settings').document('config').set({
+            key: value
+        }, merge=True)
+        
+        # التحديث داخل الوثيقة المنفصلة لضمان توافقية قراءة الأزرار
+        db.collection('settings').document(key).set({
+            "value": value,
+            "status": bool_val
+        }, merge=True)
     except Exception as e:
         logger.error(f"Error setting {key} to {value}: {e}")
 
