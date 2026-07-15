@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-import threading
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
@@ -14,7 +13,6 @@ DATA_DIR = Path(os.getenv("DATA_DIR", "./data"))
 DATA_DIR.mkdir(exist_ok=True)
 
 DB_FILE = DATA_DIR / "bot_database.db"
-DB_LOCK = threading.Lock()
 
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
@@ -34,9 +32,6 @@ WEBSITE_PLAYZONE = "http://tasmg1.github.io/tasmg/?"
 FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
 INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
 THREADS_PLAYZONE = "https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ=="
-TELEGRAM_BOT_PLAYZONE = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
-# 🌟 الرابط المباشر الفعلي المعتمد بعد التفعيل من منصة HilltopAds
-HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z"
 
-# 🌟 الرابط المباشر الفعلي المستخرج من منصة Adsterra (تم تحديثه برابطك الفعلي)
+HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z"
 ADSTERRA_LINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
