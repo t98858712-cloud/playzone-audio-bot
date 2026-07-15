@@ -30,7 +30,8 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
-    if mode == "audio":
+    # تم تعديل الشرط هنا ليدعم جلب الصوت فقط في وضع الصوت العادي والهندسة الاحترافية
+    if mode in ["audio", "audio_pro"]:
         opts["format"] = "bestaudio/best"
     else:
         from core.config import LOCAL_API_URL
