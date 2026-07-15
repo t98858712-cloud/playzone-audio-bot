@@ -1,4 +1,3 @@
-import time
 import logging
 import asyncio
 import urllib.request
@@ -162,4 +161,3 @@ async def youtube_health_monitor(app: Application):
         except Exception as e:
             if "Sign in" in str(e) or "cookie" in str(e).lower():
                 await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي انتهت صلاحيته أو تم حظره.")
-
