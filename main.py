@@ -6,7 +6,6 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from telegram.error import Conflict
 
-# إعداد الـ Logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -14,7 +13,6 @@ logging.basicConfig(
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# استيراد التوكن الآمن
 try:
     from core.config import TOKEN
 except ImportError:
