@@ -11,9 +11,7 @@ from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from core.config import (
-    BASE_DOWNLOAD_DIR, REQUEST_EXPIRE_SECONDS
-)
+from core.config import BASE_DOWNLOAD_DIR, REQUEST_EXPIRE_SECONDS
 from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
