@@ -26,7 +26,6 @@ def load_banned_users():
     if db is None: return
     try:
         BANNED_USERS_CACHE.clear()
-        # تحديث: استخدام FieldFilter بدلاً من الطريقة القديمة
         docs = db.collection('users').where(filter=FieldFilter('banned', '==', True)).stream()
         for doc in docs:
             BANNED_USERS_CACHE.add(int(doc.id))
@@ -42,19 +41,28 @@ def ban_user_db(uid: int):
         logger.error(f"Error banning user {uid}: {e}")
 
 def get_setting(key: str, default: str = "") -> str:
+    """جلب الإعدادات بنظام هجين يضمن القراءة سواء كانت وثيقة منفصلة أو حقل داخل config لمنع تعليق الأزرار"""
     if db is None: return default
     try:
+        # 1. التجربة كوثيقة منفصلة
         doc = db.collection('settings').document(key).get()
-        if doc.exists:
+        if doc.exists and "value" in doc.to_dict():
             return str(doc.to_dict().get("value", default))
+        
+        # 2. التجربة كحقل داخل وثيقة config
+        config_doc = db.collection('settings').document('config').get()
+        if config_doc.exists and key in config_doc.to_dict():
+            return str(config_doc.to_dict().get(key, default))
     except Exception:
         pass
     return default
 
 def set_setting(key: str, value: str):
+    """حفظ الإعداد في المسارين معاً سحابياً لضمان التوافق التام ومنع أي عطل مستقبلي"""
     if db is None: return
     try:
         db.collection('settings').document(key).set({"value": value}, merge=True)
+        db.collection('settings').document('config').set({key: value}, merge=True)
     except Exception as e:
         logger.error(f"Error setting {key} to {value}: {e}")
 
@@ -91,7 +99,6 @@ def get_active_users_48h() -> list:
     if db is None: return []
     try:
         cutoff = int(time.time()) - (48 * 3600)
-        # تحديث: استخدام FieldFilter بدلاً من الطريقة القديمة
         users = db.collection('users').where(filter=FieldFilter('last_seen', '>=', cutoff)).stream()
         return [int(u.id) for u in users]
     except Exception:
