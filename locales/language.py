@@ -1,10 +1,11 @@
 LANG_DICT = {
     "ar": {
-        # ... (نفس النصوص السابقة للمستخدم) ...
         "btn_guide": "📘 دليل الاستخدام",
         "btn_links": "🔗 روابط PlayZone",
         "btn_add_group": "➕ إضافة البوت للمجموعة",
+        "btn_lang": "🌐 English",  # زر تغيير اللغة للإنجليزية
         "btn_audio": "🎵 تحميل صوت",
+        "btn_audio_pro": "🎛️ هندسة صوتية",
         "btn_video": "🎬 تحميل فيديو",
         "btn_cancel": "❌ إلغاء",
         "btn_best_quality": "أفضل جودة",
@@ -29,12 +30,14 @@ LANG_DICT = {
         "msg_session_expired": "انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.",
         "msg_dl_started": "🚀 بدأ التحميل... يرجى الانتظار ⏬",
         "msg_converting": "🎵 جاري تجهيز الملف الصوتي المدمج...",
+        "msg_converting_pro": "🎛️ جاري عمل هندسة صوتية...",
         "msg_too_large": "❌ حجم الملف يتجاوز الحد المسموح.\n\nالحجم: {size}\nالحد: {limit}",
         "msg_uploading": "📤 تم تجهيز الملف، جاري الإرسال...",
         "msg_dl_failed": "❌ فشل تحميل المقطع.\n\nقد يكون الرابط غير متاح أو يتجاوز الحد المسموح به.",
         "msg_network_error": "❌ تعذر إرسال الملف بسبب ضعف الاتصال أو ضغط مؤقت.\n\nحاول مرة أخرى بعد قليل.",
         "msg_cancel_done": "تم إلغاء العملية",
         "msg_back": "رجوع",
+        "msg_lang_changed": "✅ تم تغيير لغة البوت إلى العربية بنجاح.",
         "txt_unknown": "غير معروف",
         "txt_media_file": "ملف ميديا",
         "txt_placeholder": "أرسل الرابط هنا أو اكتب للبحث...",
@@ -45,7 +48,6 @@ LANG_DICT = {
         "share_text": "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:",
         "btn_share": "🌟 أعجبك البوت؟ شاركه",
         
-        # --- نصوص جديدة للإدارة والأزرار والإعلانات ---
         "msg_admin_only": "⛔ هذا الزر مخصص للمدراء فقط.",
         "msg_loading_preview_already": "⏳ جاري فحص خيارات الرابط بالفعل، يرجى الانتظار...",
         "msg_ad_verified": "✅ تم التحقق بنجاح! جاري بدء التحميل...",
@@ -79,7 +81,6 @@ LANG_DICT = {
         "msg_logged_out": "تم تسجيل الخروج بنجاح ✖️",
         "msg_cleaning_cache": "جاري تنظيف الملفات المؤقتة... 🧹",
         "msg_cache_cleaned": "✅ <b>تم تفريغ مساحة التخزين المؤقتة بنجاح!</b>\nتم مسح {count} ملف ميديا معلق بنجاح.",
-        # أزرار الإدارة
         "btn_adm_stats": "📊 الإحصائيات",
         "btn_adm_server": "💽 السيرفر",
         "btn_adm_bc": "📢 الإذاعة",
@@ -100,11 +101,61 @@ LANG_DICT = {
         "btn_adm_sec_cookie": "🍪 تجديد الكوكيز",
         "btn_adm_sec_clean": "🧹 تنظيف الكاش",
         "btn_adm_sec_backup": "💾 نسخة سحابية",
-        "btn_adm_cancel_action": "❌ إلغاء الإجراء الحالي"
+        "btn_adm_cancel_action": "❌ إلغاء الإجراء الحالي",
+        "msg_adm_no_users": "❌ لا يوجد مستخدمين لإرسال الإذاعة لهم.",
+        "msg_adm_bc_start": "🚀 جاري بدء الإذاعة... يرجى متابعة التحديث:",
+        "msg_adm_bc_done": "✅ <b>اكتملت الإذاعة بنجاح!</b>\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}",
+        "msg_adm_bc_ask": "📢 <b>أرسل الآن محتوى الإذاعة:</b>\n(يمكنك إرسال نص، صورة، فيديو، أو ملف وسيقوم البوت بتوزيعه بدقة)."
     },
     "en": {
-        # ... (نفس النصوص السابقة) ...
-        # (يمكنك لاحقاً ترجمة القسم الإنجليزي الجديد بشكل كامل، سأضع المفاتيح كمسودات إنجليزية هنا للتشغيل السليم)
+        "btn_guide": "📘 User Guide",
+        "btn_links": "🔗 PlayZone Links",
+        "btn_add_group": "➕ Add Bot to Group",
+        "btn_lang": "🌐 العربية",  # زر العودة للعربية
+        "btn_audio": "🎵 Download Audio",
+        "btn_audio_pro": "🎛️ Sound Engineering",
+        "btn_video": "🎬 Download Video",
+        "btn_cancel": "❌ Cancel",
+        "btn_best_quality": "Best Quality",
+        "btn_back": "🔙 Back",
+        "btn_next": "Next ➡️",
+        "btn_prev": "⬅️ Prev",
+        "msg_start": "👋 Hello {first_name}\n\n💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.\n\n📥 Send any video link, or type a song name to search.\n\nThen choose:\n🎬 Download Video\n🎵 Download Audio",
+        "msg_guide": "📘 User Guide\n\nYou can download using one of the following methods:\n\n🔗 1. Via Link\nSend the media link, then choose to download it as video or audio.\n\n🔎 2. Via Search\nType the song name, artist name, or part of the lyrics, then choose the desired result and download type (video or audio).",
+        "msg_add_group": "🤖 To add the bot to your group and enjoy downloading, click the button below:",
+        "btn_add_group_url": "➕ Click here to add the bot",
+        "msg_links": "💚 Your support makes a difference\n\nFollow official PlayZone links and share them with friends,\nEvery follow helps us grow and provide a better experience.",
+        "msg_check_link": "🔍 Checking link and preparing preview...",
+        "msg_invalid_link": "❌ Invalid link.\n\nSend a link starting with:\nhttp:// or https://",
+        "msg_searching": "🔍 Searching for: <b>{query}</b>...",
+        "msg_search_results": "🔎 Search results for: <b>{query}</b>\n\nChoose the appropriate media below:",
+        "msg_no_results": "❌ No results found for: <b>{query}</b>",
+        "msg_wait_current": "⏳ You have an ongoing download.\n\nWait until it finishes, then send a new link.",
+        "msg_link_error": "❌ Could not read the link.\n\nMake sure the media is public and not deleted, then try again.",
+        "msg_select_res": "Please select resolution",
+        "msg_prep_audio": "Preparing audio...",
+        "msg_prep_video": "Preparing...",
+        "msg_session_expired": "Session for this request expired, please send the link again.",
+        "msg_dl_started": "🚀 Download started... Please wait ⏬",
+        "msg_converting": "🎵 Preparing audio file...",
+        "msg_converting_pro": "🎛️ Running professional audio...",
+        "msg_too_large": "❌ File size exceeds the limit.\n\nSize: {size}\nLimit: {limit}",
+        "msg_uploading": "📤 File is ready, uploading...",
+        "msg_dl_failed": "❌ Failed to download the media.\n\nLink might be unavailable or exceeds limits.",
+        "msg_network_error": "❌ Could not send file due to connection issues.\n\nTry again in a bit.",
+        "msg_cancel_done": "Operation canceled",
+        "msg_back": "Back",
+        "msg_lang_changed": "✅ Bot language has been changed to English successfully.",
+        "txt_unknown": "Unknown",
+        "txt_media_file": "Media file",
+        "txt_placeholder": "Send link or type to search...",
+        "msg_wait_progress": "⏳ Please wait...",
+        "msg_dl_progress": "📥 <b>Downloading file...</b>\n\n{bar}  {percent}%\n📦 Size: {downloaded} / {total}\n🚀 Speed: {speed}/s",
+        "msg_dl_progress_no_total": "📥 Downloading...\n📦 Downloaded: {downloaded}",
+        "msg_dl_finished": "⚙️ Download complete, preparing and compressing...",
+        "share_text": "📥 Download any video or MP3 in seconds!\n⚡ Fast, free, and highest quality.\n👇 Try it now:",
+        "btn_share": "🌟 Like the bot? Share it",
+
         "msg_admin_only": "⛔ This button is for admins only.",
         "msg_loading_preview_already": "⏳ Checking link options, please wait...",
         "msg_ad_verified": "✅ Verified successfully! Download starting...",
@@ -158,7 +209,11 @@ LANG_DICT = {
         "btn_adm_sec_cookie": "🍪 Renew Cookies",
         "btn_adm_sec_clean": "🧹 Clean Cache",
         "btn_adm_sec_backup": "💾 Cloud Backup",
-        "btn_adm_cancel_action": "❌ Cancel Action"
+        "btn_adm_cancel_action": "❌ Cancel Action",
+        "msg_adm_no_users": "❌ No users found for broadcast.",
+        "msg_adm_bc_start": "🚀 Broadcast starting... Monitor progress:",
+        "msg_adm_bc_done": "✅ <b>Broadcast Complete!</b>\n\n• Sent: {sent}\n• Failed: {fail}",
+        "msg_adm_bc_ask": "📢 <b>Send broadcast content now:</b>\n(Text, photo, video, or document supported)."
     }
 }
 
