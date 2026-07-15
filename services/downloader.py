@@ -1,5 +1,5 @@
 import uuid
-import time # تم إضافة time لدعم تسمية النسخ الاحتياطية
+import time
 import shutil
 import logging
 import asyncio
@@ -15,14 +15,15 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
+    # 📺 استخدام مشغل التلفزيون الذكي لتخطي قيود حظر الـ IP السحابي لـ Railway
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["tvhtml5", "tv"],
+                "player_skip": ["web", "mweb", "android", "ios"]
             }
         },
         "http_headers": {
@@ -30,6 +31,12 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
+    
+    # 🌐 جلب وحقن البروكسي الذكي ديناميكياً لتخطي الحظر الجغرافي وحماية الكوكيز
+    from database.operations import get_setting
+    proxy = get_setting("proxy", "")
+    if proxy:
+        opts["proxy"] = proxy
     
     if mode in ["audio", "audio_pro"]:
         opts["format"] = "bestaudio/best"
@@ -78,11 +85,18 @@ def search_youtube(query: str, limit: int = 30):
         "ignoreerrors": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["tvhtml5", "tv"],
+                "player_skip": ["web", "mweb", "android", "ios"]
             }
         }
     }
+    
+    # حقن البروكسي للبحث أيضاً لضمان السرعة والاعتمادية
+    from database.operations import get_setting
+    proxy = get_setting("proxy", "")
+    if proxy:
+        opts["proxy"] = proxy
+        
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
     combined_entries = []
@@ -157,24 +171,29 @@ async def youtube_health_monitor(app: Application):
                 "cookiefile": str(COOKIES_FILE),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios", "tv"],
-                        "player_skip": ["web", "mweb"]
+                        "player_client": ["tvhtml5", "tv"],
+                        "player_skip": ["web", "mweb", "android", "ios"]
                     }
                 }
             }
+            
+            from database.operations import get_setting
+            proxy = get_setting("proxy", "")
+            if proxy:
+                opts["proxy"] = proxy
+
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
         except Exception as e:
             err_str = str(e).lower()
             if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-                # ♻️ آلية الصيانة الذاتية التلقائية للكوكيز
                 try:
                     if COOKIES_FILE.exists():
                         backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
                         shutil.copy(COOKIES_FILE, backup_path)
-                        COOKIES_FILE.unlink() # حذف القديم
-                        COOKIES_FILE.touch()  # إنشاء ملف جديد فارغ
+                        COOKIES_FILE.unlink()
+                        COOKIES_FILE.touch()
                 except Exception as ex:
                     logger.error(f"Failed to reset cookies: {ex}")
                     
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه طوارئ من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول وتم حظر ملف الكوكيز الحالي!\n\n♻️ <b>إجراء الصيانة الذاتية:</b> تم سحب نسخة احتياطية من الملف، وحذف الملف المحظور، وإنشاء ملف `cookies.txt` فارغ لتفادي توقف البوت بالكامل عن العمل.\n\nالرجاء استخراج ملف كوكيز جديد وإرساله للمحادثة هنا فوراً.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه طوارئ من السيرفر:</b>\nتم كشف حظر ملف الكوكيز الحالي!\n\n♻️ تم تفريغ الكوكيز تلقائياً لحين رفع ملف جديد من لوحة التحكم.")
