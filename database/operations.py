@@ -1,5 +1,6 @@
 import time
 import logging
+import json  # تم إضافة الاستيراد هنا لدعم النسخ الاحتياطي السحابي
 from google.cloud.firestore_v1 import Increment
 from google.cloud.firestore_v1.base_query import FieldFilter
 from database.connection import db
@@ -31,10 +32,8 @@ def ban_user_db(uid):
     """حظر المستخدم في قاعدة البيانات وإضافته فوراً للكاش اللحظي"""
     if db is None: return
     try:
-        # 1. الحفظ في فايربيس
         db.collection('banned_users').document(str(uid)).set({'banned_at': int(time.time())})
         
-        # 2. المزامنة الفورية مع كاش الـ RAM لمنع السبام فوراً
         from core.security import BANNED_USERS_CACHE
         BANNED_USERS_CACHE.add(int(uid))
         logger.info(f"🚫 تم حظر المستخدم {uid} ومزامنته مع فايربيس والكاش.")
@@ -45,10 +44,8 @@ def unban_user_db(uid):
     """إلغاء حظر المستخدم من قاعدة البيانات وإزالته من كاش الحماية ليعود للعمل"""
     if db is None: return
     try:
-        # 1. الحذف من فايربيس
         db.collection('banned_users').document(str(uid)).delete()
         
-        # 2. الحذف من كاش الـ RAM
         from core.security import BANNED_USERS_CACHE
         BANNED_USERS_CACHE.discard(int(uid))
         logger.info(f"🟢 تم فك حظر المستخدم {uid} ومزامنته مع فايربيس والكاش.")
@@ -169,15 +166,53 @@ def verify_user_ad_completion(user_id: int):
         logger.error(f"Error updating ad completion for {user_id}: {e}")
 
 def check_ad_verified_status(user_id: int) -> bool:
-    """التحقق هل أكمل المستخدم الإعلان خلال آخر 10 دقائق لتخطي حجب التنزيل"""
+    """التحقق هل أكمل المستخدم الإعلان خلال آخر 5 ثوانٍ لتخطي حجب التنزيل"""
     if db is None: return False
     try:
         doc = db.collection('users').document(str(user_id)).get()
         if doc.exists:
             data = doc.to_dict()
             last_ad = data.get('last_ad_completion', 0)
-            if int(time.time()) - last_ad < 5:  # تم تعديلها هندسياً لـ 10 دقائق (600 ثانية) بدلاً من 5 ثوانٍ لتصبح عملية ومنطقية للمستخدم
+            if int(time.time()) - last_ad < 5:
                 return True
     except Exception as e:
         logger.error(f"Error checking ad status for {user_id}: {e}")
     return False
+
+def export_firebase_backup_json() -> str:
+    """إنشاء نسخة احتياطية كاملة من مجموعات Firebase Firestore وتحويلها إلى ملف JSON"""
+    if db is None: return ""
+    try:
+        backup = {
+            "users": [],
+            "banned_users": [],
+            "settings": []
+        }
+        
+        # 1. تصدير بيانات المستخدمين
+        users_docs = db.collection('users').stream()
+        for doc in users_docs:
+            backup["users"].append(doc.to_dict())
+            
+        # 2. تصدير قائمة المحظورين
+        banned_docs = db.collection('banned_users').stream()
+        for doc in banned_docs:
+            banned_data = doc.to_dict() or {}
+            backup["banned_users"].append({
+                "id": doc.id,
+                **banned_data
+            })
+            
+        # 3. تصدير إعدادات السيرفر والإحصائيات
+        settings_docs = db.collection('settings').stream()
+        for doc in settings_docs:
+            settings_data = doc.to_dict() or {}
+            backup["settings"].append({
+                "document_id": doc.id,
+                **settings_data
+            })
+            
+        return json.dumps(backup, indent=4, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Failed to export Firebase backup: {e}")
+        return ""
