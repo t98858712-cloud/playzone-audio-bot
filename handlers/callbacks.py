@@ -101,39 +101,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=uid, text=caption, reply_markup=keyboard, parse_mode="HTML", disable_web_page_preview=True)
                 
             stat_inc_sync("requests")
-            except (TimedOut, NetworkError) as e:
-        stat_inc_sync("failed")
-        try: await edit_message_smart(query.message, _t("msg_network_error", lang), reply_markup=None)
-        except Exception: pass
-    except Exception as e:
-        stat_inc_sync("failed")
-        err_str = str(e).lower()
-        
-        # ♻️ آلية الاستشعار الذكية لحظر الكوكيز أثناء محاولة تحميل المستخدم
-        if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-            from core.config import COOKIES_FILE
-            try:
-                if COOKIES_FILE.exists():
-                    backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
-                    shutil.copy(COOKIES_FILE, backup_path)
-                    COOKIES_FILE.unlink()
-                    COOKIES_FILE.touch()
-            except Exception: pass
-            
-            await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء التحميل:</b>\nالرابط: {url}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم أخذ نسخة احتياطية وحذف الملف المحظور وإنشاء ملف فارغ لتفادي توقف طلبات باقي المستخدمين.\nالرجاء إرسال ملف `cookies.txt` جديد.")
-            try: await edit_message_smart(query.message, "❌ فشل التحميل مؤقتاً بسبب حماية يوتيوب للمقطع (يتم الآن صيانة الكوكيز تلقائياً). يرجى المحاولة بعد قليل.", reply_markup=None)
-            except Exception: pass
-        else:
-            await alert_admins_live(context.bot, f"🚨 <b>فشل تحميل مقطع:</b>\nالرابط: {url}\nالخطأ:\n<code>{str(e)[:300]}</code>")
-            try: await edit_message_smart(query.message, _t("msg_dl_failed", lang), reply_markup=None)
-            except Exception: pass
-    finally:
-        stop_event.set()
-        try: await updater_task
-        except Exception: pass
-        try: shutil.rmtree(job_dir)
-        except Exception: pass
-        ACTIVE_USERS.discard(uid)
+        except Exception as e:
+            logger.warning(f"فشل جلب المعاينة من البحث: {e}")
+            await context.bot.send_message(chat_id=uid, text=_t("msg_link_error", lang))
+        finally:
+            context.user_data.pop("loading_preview", None)
+        return
 
     if data.startswith("cancel:"):
         ensure_pending_requests(context).pop(data.split(":")[1], None)
@@ -325,13 +298,29 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
     except (TimedOut, NetworkError) as e:
         stat_inc_sync("failed")
-        try: await edit_message_smart(query.message, _t("msg_network_error", lang))
+        try: await edit_message_smart(query.message, _t("msg_network_error", lang), reply_markup=None)
         except Exception: pass
     except Exception as e:
         stat_inc_sync("failed")
-        await alert_admins_live(context.bot, f"🚨 <b>فشل تحميل مقطع:</b>\nالرابط: {url}\nالخطأ:\n<code>{str(e)[:300]}</code>")
-        try: await edit_message_smart(query.message, _t("msg_dl_failed", lang))
-        except Exception: pass
+        err_str = str(e).lower()
+        
+        if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
+            from core.config import COOKIES_FILE
+            try:
+                if COOKIES_FILE.exists():
+                    backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
+                    shutil.copy(COOKIES_FILE, backup_path)
+                    COOKIES_FILE.unlink()
+                    COOKIES_FILE.touch()
+            except Exception: pass
+            
+            await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء التحميل:</b>\nالرابط: {url}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم أخذ نسخة احتياطية وحذف الملف المحظور وإنشاء ملف فارغ لتفادي توقف طلبات باقي المستخدمين.\nالرجاء إرسال ملف `cookies.txt` جديد.")
+            try: await edit_message_smart(query.message, "❌ فشل التحميل مؤقتاً بسبب حماية يوتيوب للمقطع (يتم الآن صيانة الكوكيز تلقائياً). يرجى المحاولة بعد قليل.", reply_markup=None)
+            except Exception: pass
+        else:
+            await alert_admins_live(context.bot, f"🚨 <b>فشل تحميل مقطع:</b>\nالرابط: {url}\nالخطأ:\n<code>{str(e)[:300]}</code>")
+            try: await edit_message_smart(query.message, _t("msg_dl_failed", lang), reply_markup=None)
+            except Exception: pass
     finally:
         stop_event.set()
         try: await updater_task
