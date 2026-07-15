@@ -91,7 +91,7 @@ def main():
     # تسجيل معالجات الأوامر الرئيسية (Commands)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("links", show_playzone_links))
-    app.add_handler(CommandHandler("lang", toggle_lang_command))
+    app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("admin", admin_panel))
     
     # تسجيل معالج الضغطات وتفاعلات الأزرار (Callback Queries)
