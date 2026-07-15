@@ -172,8 +172,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             if "Message is not modified" in str(e): return
             raise e
 
-    # معالجة حدث الضغط على زر تشغيل/إلغاء تفعيل الإعلانات مؤقتاً
-        # معالجة تشغيل / إيقاف إعلانات HilltopAds
+    # معالجة تشغيل / إيقاف إعلانات HilltopAds
     elif data == "adm_toggle_hilltop":
         current = get_setting("hilltop_status", "1")
         new_val = "0" if current == "1" else "1"
