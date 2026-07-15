@@ -158,133 +158,139 @@ def build_server_status_text(lang: str = "ar") -> str:
     )
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
-    """المعالج الموحد والمصفى لكافة تفاعلات، ضغطات، وعمليات لوحة تحكم الإدارة"""
+    """المعالج الموحد والمحمّي بالكامل لكافة تفاعلات لوحة تحكم الإدارة"""
     data = query.data
     lang = get_user_lang(query.from_user.id, context)
     
-    if data == "adm_main_back":
-        await query.answer()
-        context.user_data.pop("awaiting_user_id", None)
-        dashboard_text = get_dashboard_text(lang)
-        return await edit_message_smart(query.message, dashboard_text, reply_markup=admin_main_keyboard(lang))
+    try: # 🛡️ طوق الحماية الشامل لحل مشكلة عطل الإعلانات وتجمد الأزرار
+        if data == "adm_main_back":
+            await query.answer()
+            context.user_data.pop("awaiting_user_id", None)
+            dashboard_text = get_dashboard_text(lang)
+            return await edit_message_smart(query.message, dashboard_text, reply_markup=admin_main_keyboard(lang))
+            
+        elif data in ["adm_cancel_bc", "adm_cancel_action"]:
+            context.user_data.pop("bc_active", None)
+            context.user_data.pop("awaiting_user_id", None)
+            await query.answer(_t("msg_action_canceled", lang))
+            dashboard_text = get_dashboard_text(lang)
+            return await edit_message_smart(query.message, dashboard_text, reply_markup=admin_main_keyboard(lang))
+
+        elif data == "adm_bc_menu":
+            await query.answer()
+            return await edit_message_smart(query.message, _t("msg_bc_menu", lang), reply_markup=admin_broadcast_menu(lang))
         
-    elif data in ["adm_cancel_bc", "adm_cancel_action"]:
-        context.user_data.pop("bc_active", None)
-        context.user_data.pop("awaiting_user_id", None)
-        await query.answer(_t("msg_action_canceled", lang))
-        dashboard_text = get_dashboard_text(lang)
-        return await edit_message_smart(query.message, dashboard_text, reply_markup=admin_main_keyboard(lang))
+        elif data.startswith("adm_bc_start:"):
+            context.user_data["bc_active"] = True
+            context.user_data["bc_target"] = data.split(":")[1]
+            await query.answer()
+            return await edit_message_smart(query.message, _t("msg_adm_bc_ask", lang), reply_markup=admin_cancel_action_keyboard(lang))
+            
+        elif data == "adm_users_menu":
+            await query.answer()
+            return await edit_message_smart(query.message, _t("msg_users_menu", lang), reply_markup=admin_users_menu(lang))
+            
+        elif data == "adm_user_info_prompt":
+            context.user_data["awaiting_user_id"] = True
+            await query.answer()
+            return await edit_message_smart(query.message, _t("msg_ask_user_id", lang), reply_markup=admin_cancel_action_keyboard(lang))
 
-    elif data == "adm_bc_menu":
-        await query.answer()
-        return await edit_message_smart(query.message, _t("msg_bc_menu", lang), reply_markup=admin_broadcast_menu(lang))
-    
-    elif data.startswith("adm_bc_start:"):
-        context.user_data["bc_active"] = True
-        context.user_data["bc_target"] = data.split(":")[1]
-        await query.answer()
-        return await edit_message_smart(query.message, _t("msg_adm_bc_ask", lang), reply_markup=admin_cancel_action_keyboard(lang))
-        
-    elif data == "adm_users_menu":
-        await query.answer()
-        return await edit_message_smart(query.message, _t("msg_users_menu", lang), reply_markup=admin_users_menu(lang))
-        
-    elif data == "adm_user_info_prompt":
-        context.user_data["awaiting_user_id"] = True
-        await query.answer()
-        return await edit_message_smart(query.message, _t("msg_ask_user_id", lang), reply_markup=admin_cancel_action_keyboard(lang))
+        elif data == "adm_export_db":
+            await query.answer(_t("msg_exporting", lang))
+            users = get_all_users_data()
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(["ID", "Username", "First Name", "Last Name", "First Seen", "Last Seen"])
+            for u in users:
+                writer.writerow([u.get('id',''), u.get('username',''), u.get('first_name',''), u.get('last_name',''), u.get('first_seen',''), u.get('last_seen','')])
+            output.seek(0)
+            file_bytes = io.BytesIO(output.getvalue().encode('utf-8'))
+            file_bytes.name = f"PlayZone_Users_{int(time.time())}.csv"
+            await context.bot.send_document(chat_id=query.message.chat_id, document=file_bytes, caption="📊 تقرير شامل لكافة بيانات المشتركين.")
+            return
+            
+        elif data == "adm_sec_menu":
+            await query.answer()
+            return await edit_message_smart(query.message, _t("msg_security_menu", lang), reply_markup=admin_security_menu(lang))
 
-    elif data == "adm_export_db":
-        await query.answer(_t("msg_exporting", lang))
-        users = get_all_users_data()
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["ID", "Username", "First Name", "Last Name", "First Seen", "Last Seen"])
-        for u in users:
-            writer.writerow([u.get('id',''), u.get('username',''), u.get('first_name',''), u.get('last_name',''), u.get('first_seen',''), u.get('last_seen','')])
-        output.seek(0)
-        file_bytes = io.BytesIO(output.getvalue().encode('utf-8'))
-        file_bytes.name = f"PlayZone_Users_{int(time.time())}.csv"
-        await context.bot.send_document(chat_id=query.message.chat_id, document=file_bytes, caption="📊 تقرير شامل لكافة بيانات المشتركين.")
-        return
-        
-    elif data == "adm_sec_menu":
-        await query.answer()
-        return await edit_message_smart(query.message, _t("msg_security_menu", lang), reply_markup=admin_security_menu(lang))
+        elif data == "adm_toggle_maint":
+            new_val = "0" if get_setting("maintenance", "0") == "1" else "1"
+            set_setting("maintenance", new_val)
+            await query.answer(_t("msg_maint_updated", lang))
+            try: return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+            except BadRequest: pass
 
-    elif data == "adm_toggle_maint":
-        new_val = "0" if get_setting("maintenance", "0") == "1" else "1"
-        set_setting("maintenance", new_val)
-        await query.answer(_t("msg_maint_updated", lang))
-        try: return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
-        except BadRequest: pass
+        elif data == "adm_toggle_hilltop":
+            new_val = "0" if get_setting("hilltop_status", "1") == "1" else "1"
+            set_setting("hilltop_status", new_val)
+            await query.answer(_t("msg_ad_updated", lang))
+            try: return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+            except BadRequest: pass
 
-    elif data == "adm_toggle_hilltop":
-        new_val = "0" if get_setting("hilltop_status", "1") == "1" else "1"
-        set_setting("hilltop_status", new_val)
-        await query.answer(_t("msg_ad_updated", lang))
-        try: return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
-        except BadRequest: pass
+        elif data == "adm_toggle_adsterra":
+            new_val = "0" if get_setting("adsterra_status", "1") == "1" else "1"
+            set_setting("adsterra_status", new_val)
+            await query.answer(_t("msg_ad_updated", lang))
+            try: return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
+            except BadRequest: pass
 
-    elif data == "adm_toggle_adsterra":
-        new_val = "0" if get_setting("adsterra_status", "1") == "1" else "1"
-        set_setting("adsterra_status", new_val)
-        await query.answer(_t("msg_ad_updated", lang))
-        try: return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
-        except BadRequest: pass
+        elif data == "adm_update_dlp":
+            await query.answer(_t("msg_updating_engine", lang))
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    "pip", "install", "-U", "yt-dlp",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await process.communicate()
+                if process.returncode == 0:
+                    return await edit_message_smart(query.message, _t("msg_engine_updated", lang), reply_markup=admin_security_menu(lang))
+                else: raise RuntimeError(stderr.decode().strip())
+            except Exception as e:
+                return await edit_message_smart(query.message, _t("msg_engine_failed", lang, error=e), reply_markup=admin_security_menu(lang))
 
-    elif data == "adm_update_dlp":
-        await query.answer(_t("msg_updating_engine", lang))
-        try:
-            process = await asyncio.create_subprocess_exec(
-                "pip", "install", "-U", "yt-dlp",
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-            if process.returncode == 0:
-                return await edit_message_smart(query.message, _t("msg_engine_updated", lang), reply_markup=admin_security_menu(lang))
-            else: raise RuntimeError(stderr.decode().strip())
-        except Exception as e:
-            return await edit_message_smart(query.message, _t("msg_engine_failed", lang, error=e), reply_markup=admin_security_menu(lang))
-
-    elif data == "adm_backup_db":
-        await query.answer(_t("msg_backup_start", lang))
-        from database.operations import export_firebase_backup_json
-        backup_json = export_firebase_backup_json()
-        if backup_json:
-            file_bytes = io.BytesIO(backup_json.encode('utf-8'))
-            file_bytes.name = f"Firebase_Backup_{int(time.time())}.json"
-            await context.bot.send_document(chat_id=query.message.chat_id, document=file_bytes, filename=file_bytes.name, caption="✅ نسخة احتياطية كاملة من خادم Firebase Firestore (JSON).")
-            return await edit_message_smart(query.message, "✅ تم إرسال النسخة الاحتياطية بنجاح.", reply_markup=admin_security_menu(lang))
-        else:
-            if DB_FILE.exists():
-                with open(DB_FILE, 'rb') as f:
-                    await context.bot.send_document(chat_id=query.message.chat_id, document=f, filename="bot_database.db", caption="✅ النسخة الاحتياطية المحلية (SQLite).")
-                return await edit_message_smart(query.message, "✅ تم إرسال النسخة المحلية بنجاح.", reply_markup=admin_security_menu(lang))
+        elif data == "adm_backup_db":
+            await query.answer(_t("msg_backup_start", lang))
+            from database.operations import export_firebase_backup_json
+            backup_json = export_firebase_backup_json()
+            if backup_json:
+                file_bytes = io.BytesIO(backup_json.encode('utf-8'))
+                file_bytes.name = f"Firebase_Backup_{int(time.time())}.json"
+                await context.bot.send_document(chat_id=query.message.chat_id, document=file_bytes, filename=file_bytes.name, caption="✅ نسخة احتياطية كاملة من خادم Firebase Firestore (JSON).")
+                return await edit_message_smart(query.message, "✅ تم إرسال النسخة الاحتياطية بنجاح.", reply_markup=admin_security_menu(lang))
             else:
-                return await edit_message_smart(query.message, "❌ فشل سحب نسخة احتياطية، الداتا غير متوفرة.", reply_markup=admin_security_menu(lang))
+                if DB_FILE.exists():
+                    with open(DB_FILE, 'rb') as f:
+                        await context.bot.send_document(chat_id=query.message.chat_id, document=f, filename="bot_database.db", caption="✅ النسخة الاحتياطية المحلية (SQLite).")
+                    return await edit_message_smart(query.message, "✅ تم إرسال النسخة المحلية بنجاح.", reply_markup=admin_security_menu(lang))
+                else:
+                    return await edit_message_smart(query.message, "❌ فشل سحب نسخة احتياطية، الداتا غير متوفرة.", reply_markup=admin_security_menu(lang))
 
-    elif data == "adm_cookie_guide":
-        await query.answer()
-        return await edit_message_smart(query.message, _t("msg_cookie_guide", lang), reply_markup=admin_security_menu(lang))
-        
-    elif data == "adm_close":
-        await query.answer(_t("msg_logged_out", lang))
-        return await safe_delete(query.message)
-        
-    elif data == "adm_stats":
-        await query.answer()
-        return await edit_message_smart(query.message, build_admin_stats_text(lang), reply_markup=admin_main_keyboard(lang))
-        
-    elif data == "adm_users":
-        await query.answer()
-        return await edit_message_smart(query.message, build_admin_users_text(10, lang), reply_markup=admin_users_menu(lang))
-        
-    elif data == "adm_server":
-        await query.answer()
-        return await edit_message_smart(query.message, build_server_status_text(lang), reply_markup=admin_main_keyboard(lang))
-        
-    elif data == "adm_clean":
-        await query.answer(_t("msg_cleaning_cache", lang))
-        removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
-        return await edit_message_smart(query.message, _t("msg_cache_cleaned", lang, count=removed), reply_markup=admin_security_menu(lang))
+        elif data == "adm_cookie_guide":
+            await query.answer()
+            return await edit_message_smart(query.message, _t("msg_cookie_guide", lang), reply_markup=admin_security_menu(lang))
+            
+        elif data == "adm_close":
+            await query.answer(_t("msg_logged_out", lang))
+            return await safe_delete(query.message)
+            
+        elif data == "adm_stats":
+            await query.answer()
+            return await edit_message_smart(query.message, build_admin_stats_text(lang), reply_markup=admin_main_keyboard(lang))
+            
+        elif data == "adm_users":
+            await query.answer()
+            return await edit_message_smart(query.message, build_admin_users_text(10, lang), reply_markup=admin_users_menu(lang))
+            
+        elif data == "adm_server":
+            await query.answer()
+            return await edit_message_smart(query.message, build_server_status_text(lang), reply_markup=admin_main_keyboard(lang))
+            
+        elif data == "adm_clean":
+            await query.answer(_t("msg_cleaning_cache", lang))
+            removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
+            return await edit_message_smart(query.message, _t("msg_cache_cleaned", lang, count=removed), reply_markup=admin_security_menu(lang))
+
+    except Exception as e: # 🚨 لحماية الأزرار من التجمد وعرض سبب المشكلة فوراً لو حدث خطأ سحابي
+        logger.error(f"Error in admin callback {data}: {e}", exc_info=True)
+        try: await query.answer(f"❌ خطأ في النظام: {e}", show_alert=True)
+        except Exception: pass
