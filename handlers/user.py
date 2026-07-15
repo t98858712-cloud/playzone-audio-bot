@@ -6,6 +6,7 @@ import shutil
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
+from core.config import BOT_USERNAME, COOKIES_FILE
 from database.connection import db
 from database.operations import register_user_sync, get_setting, set_setting, ban_user_db, stat_inc_sync
 from utils.helpers import (
@@ -130,7 +131,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
     
-    # 🌐 معالج حفظ وحذف البروكسي من الأدمن سحابياً
     if is_admin(uid) and context.user_data.get("awaiting_proxy"):
         context.user_data.pop("awaiting_proxy", None)
         proxy_text = text.strip()
@@ -189,15 +189,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             logger.warning(f"فشل البحث: {e}")
             err_str = str(e).lower()
             if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-                from core.config import COOKIES_FILE
-                try:
-                    if COOKIES_FILE.exists():
-                        backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
-                        shutil.copy(COOKIES_FILE, backup_path)
-                        COOKIES_FILE.unlink()
-                        COOKIES_FILE.touch()
-                except Exception: pass
-                await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء البحث:</b>\nالكلمة: {text}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم تفريغ الكوكيز. يرجى إرسال ملف `cookies.txt` جديد.")
+                await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء البحث:</b>\nالكلمة: {text}\n\nالرجاء تحديث ملف الكوكيز من لوحة التحكم.")
             else:
                 await alert_admins_live(context.bot, f"🚨 <b>خطأ في محرك البحث:</b>\n\n<code>{e}</code>")
             
@@ -224,14 +216,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.warning(f"فشل جلب المعاينة: {e}")
         err_str = str(e).lower()
         if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-            from core.config import COOKIES_FILE
-            try:
-                if COOKIES_FILE.exists():
-                    backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
-                    shutil.copy(COOKIES_FILE, backup_path)
-                    COOKIES_FILE.unlink()
-                    COOKIES_FILE.touch()
-            except Exception: pass
-            await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء جلب المعاينة:</b>\nالرابط: {text}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم تفريغ الكوكيز. يرجى إرسال ملف `cookies.txt` جديد.")
+            await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء جلب المعاينة:</b>\nالرابط: {text}\n\nالرجاء تحديث ملف الكوكيز من لوحة التحكم.")
         
         await status.edit_text(_t("msg_link_error", lang))
