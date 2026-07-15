@@ -87,9 +87,15 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     adsterra_status = get_setting("adsterra_status", "1")
     adsterra_btn = InlineKeyboardButton("🔴 إيقاف إعلانات Adsterra" if adsterra_status == "1" else "🟢 تفعيل إعلانات Adsterra", callback_data="adm_toggle_adsterra")
     
+    # 🌐 قراءة حالة البروكسي الحالية لتبديل شكل الزر بشكل ديناميكي أنيق
+    proxy = get_setting("proxy", "")
+    proxy_btn_text = "🌐 تعديل البروكسي (نشط ✅)" if proxy else "🌐 إعداد البروكسي (معطل ❌)"
+    proxy_btn = InlineKeyboardButton(proxy_btn_text, callback_data="adm_proxy_prompt")
+    
     return InlineKeyboardMarkup([
         [maint_btn], 
         [hilltop_btn, adsterra_btn], 
+        [proxy_btn],
         [
             InlineKeyboardButton("🔄 تحديث المحرك", callback_data="adm_update_dlp"), 
             InlineKeyboardButton("🍪 تجديد الكوكيز", callback_data="adm_cookie_guide")
