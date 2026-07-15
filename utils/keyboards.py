@@ -33,11 +33,13 @@ def build_resolution_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboa
         [InlineKeyboardButton(_t("btn_back", lang), callback_data=f"back:{request_id}")]
     ])
 
-def build_playzone_links_keyboard() -> InlineKeyboardMarkup:
+def build_playzone_links_keyboard(bot_username: str) -> InlineKeyboardMarkup:
+    # إنشاء رابط حي ومضمون للبوت الحالي لمنع أي توقف
+    tg_url = f"https://t.me/{bot_username.replace('@', '')}"
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Website PlayZone", url=WEBSITE_PLAYZONE)],
         [InlineKeyboardButton("📘 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
-        [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=TELEGRAM_BOT_PLAYZONE)],
+        [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=tg_url)],
     ])
 
 # =======================================================
@@ -84,7 +86,7 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [maint_btn], 
         [hilltop_btn],
-        [adsterra_btn], # إضافة أزرار التحكم المنفصلة للمنصات هنا
+        [adsterra_btn], 
         [InlineKeyboardButton("🔄 تحديث مكتبة المحرك", callback_data="adm_update_dlp"), 
          InlineKeyboardButton("🍪 إرشادات الكوكيز", callback_data="adm_cookie_guide")],
         [InlineKeyboardButton("🗜️ تحسين القاعدة", callback_data="adm_vacuum_db"), 
