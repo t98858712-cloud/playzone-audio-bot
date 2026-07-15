@@ -132,6 +132,9 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             BANNED_USERS_CACHE.add(uid)
             await alert_admins_live(context.bot, f"🚨 <b>نظام الحماية:</b> تم حظر المستخدم <code>{uid}</code> مؤقتاً بسبب السبام.")
             return await update.message.reply_text(_t("msg_spam_blocked", lang), parse_mode="HTML")
+
+    if text in [_t("btn_lang", "ar"), _t("btn_lang", "en"), "/language"]:
+        return await toggle_lang_command(update, context)
             
     if text in [_t("btn_links", "ar"), _t("btn_links", "en"), "/links", "\\links"]:
         return await show_playzone_links(update, context)
@@ -150,7 +153,9 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=30))
             entries = (search_info.get("entries", []) if search_info else [])[:25]
             if not entries: return await status.edit_text(_t("msg_no_results", lang, query=esc(text)), parse_mode="HTML")
-            search_id = uuid.uuid4].hex[:8]
+            
+            search_id = uuid.uuid4().hex[:8] # ✅ تم تصحيح القوس هنا بنجاح
+            
             context.user_data.setdefault("search_cache", {})[search_id] = {"query": text, "entries": entries, "page": 0}
             if len(context.user_data["search_cache"]) > 5:
                 context.user_data["search_cache"].pop(next(iter(context.user_data["search_cache"])), None)
