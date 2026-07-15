@@ -27,7 +27,7 @@ LANG_DICT = {
         "msg_select_res": "يرجى اختيار الدقة",
         "msg_prep_audio": "جاري تجهيز الصوت...",
         "msg_prep_video": "جاري التجهيز...",
-        "msg_session_expired": "انتهت جلسة هذا الطلال، يرجى إعادة إرسال الرابط.",
+        "msg_session_expired": "انتهت جلسة هذا الطلب، يرجى إعادة إرسال الرابط.",
         "msg_dl_started": "🚀 بدأ التحميل... يرجى الانتظار ⏬",
         "msg_converting": "🎵 جاري تجهيز الملف الصوتي المدمج...",
         "msg_converting_pro": "🎛️ جاري عمل هندسة صوتية...",
@@ -59,7 +59,6 @@ LANG_DICT = {
         "msg_cookie_updated": "✅ تم استلام وتحديث ملف الكوكيز (cookies.txt) بنجاح.",
         "msg_invalid_id": "❌ يرجى إرسال أرقام فقط (ID صالح).",
         
-        # اللوحة المصفاة بدون خطوط وفواصل
         "msg_dashboard": (
             "👑 <b>لوحة القيادة والمراقبة</b>\n\n"
             "📡 حالة البوت: {status}\n"
@@ -93,9 +92,8 @@ LANG_DICT = {
         "msg_cleaning_cache": "جاري تنظيف الملفات المؤقتة... 🧹",
         "msg_cache_cleaned": "✅ <b>تم تفريغ مساحة التخزين المؤقتة بنجاح!</b>\nتم مسح {count} ملف ميديا معلق بنجاح.",
         
-        # نصوص الصيانة والحماية المعادة بنجاح
-        "msg_maintenance": "🚧 <b>عذراً!</b>\nالبوت حالياً في وضع الصيانة والتحديث لإضافة ميزات جديدة. سنعود للعمل قريباً جداً ⚙️",[span_4](start_span)[span_4](end_span)
-        "msg_spam_blocked": "❌ <b>تم حظرك مؤقتاً</b> بسبب إرسال طلبات كثيرة جداً في وقت قصير. يرجى التواصل مع الإدارة.",[span_5](start_span)[span_5](end_span)
+        "msg_maintenance": "🚧 <b>عذراً!</b>\nالبوت حالياً في وضع الصيانة والتحديث لإضافة ميزات جديدة. سنعود للعمل قريباً جداً ⚙️",
+        "msg_spam_blocked": "❌ <b>تم حظرك مؤقتاً</b> بسبب إرسال طلبات كثيرة جداً في وقت قصير. يرجى التواصل مع الإدارة.",
         
         "btn_adm_stats": "📊 الإحصائيات",
         "btn_adm_server": "💽 السيرفر",
@@ -118,10 +116,10 @@ LANG_DICT = {
         "btn_adm_sec_clean": "🧹 تنظيف الكاش",
         "btn_adm_sec_backup": "💾 نسخة سحابية",
         "btn_adm_cancel_action": "❌ إلغاء الإجراء الحالي",
-        "msg_adm_no_users": "❌ لا يوجد مستخدمين لإرسال الإذاعة لهم.",[span_6](start_span)[span_6](end_span)
-        "msg_adm_bc_start": "🚀 جاري بدء الإذاعة... يرجى متابعة التحديث:",[span_7](start_span)[span_7](end_span)
-        "msg_adm_bc_done": "✅ <b>اكتملت الإذاعة بنجاح!</b>\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}",[span_8](start_span)[span_8](end_span)
-        "msg_adm_bc_ask": "📢 <b>أرسل الآن محتوى الإذاعة:</b>\n(يمكنك إرسال نص، صورة، فيديو، أو ملف وسيقوم البوت بتوزيعه بدقة).[span_9](start_span)"[span_9](end_span)
+        "msg_adm_no_users": "❌ لا يوجد مستخدمين لإرسال الإذاعة لهم.",
+        "msg_adm_bc_start": "🚀 جاري بدء الإذاعة... يرجى متابعة التحديث:",
+        "msg_adm_bc_done": "✅ <b>اكتملت الإذاعة بنجاح!</b>\n\n• تم الإرسال: {sent}\n• فشل الإرسال: {fail}",
+        "msg_adm_bc_ask": "📢 <b>أرسل الآن محتوى الإذاعة:</b>\n(يمكنك إرسال نص، صورة، فيديو، أو ملف وسيقوم البوت بتوزيعه بدقة)."
     },
     "en": {
         "btn_guide": "📘 User Guide",
@@ -215,8 +213,8 @@ LANG_DICT = {
         "msg_cleaning_cache": "Cleaning temporary files... 🧹",
         "msg_cache_cleaned": "✅ <b>Storage cleared successfully!</b>\nDeleted {count} media files.",
         
-        "msg_maintenance": "🚧 <b>Sorry!</b>\nThe bot is currently under maintenance for upgrades. We will be back shortly ⚙️",[span_10](start_span)[span_10](end_span)
-        "msg_spam_blocked": "❌ <b>Temporarily blocked</b> due to too many requests. Contact admin.",[span_11](start_span)[span_11](end_span)
+        "msg_maintenance": "🚧 <b>Sorry!</b>\nThe bot is currently under maintenance for upgrades. We will be back shortly ⚙️",
+        "msg_spam_blocked": "❌ <b>Temporarily blocked</b> due to too many requests. Contact admin.",
         
         "btn_adm_stats": "📊 Statistics",
         "btn_adm_server": "💽 Server",
@@ -239,10 +237,10 @@ LANG_DICT = {
         "btn_adm_sec_clean": "🧹 Clean Cache",
         "btn_adm_sec_backup": "💾 Cloud Backup",
         "btn_adm_cancel_action": "❌ Cancel Action",
-        "msg_adm_no_users": "❌ No users found for broadcast.",[span_12](start_span)[span_12](end_span)
-        "msg_adm_bc_start": "🚀 Broadcast starting... Monitor progress:",[span_13](start_span)[span_13](end_span)
-        "msg_adm_bc_done": "✅ <b>Broadcast Complete!</b>\n\n• Sent: {sent}\n• Failed: {fail}",[span_14](start_span)[span_14](end_span)
-        "msg_adm_bc_ask": "📢 <b>Send broadcast content now:</b>\n(Text, photo, video, or document supported).[span_15](start_span)"[span_15](end_span)
+        "msg_adm_no_users": "❌ No users found for broadcast.",
+        "msg_adm_bc_start": "🚀 Broadcast starting... Monitor progress:",
+        "msg_adm_bc_done": "✅ <b>Broadcast Complete!</b>\n\n• Sent: {sent}\n• Failed: {fail}",
+        "msg_adm_bc_ask": "📢 <b>Send broadcast content now:</b>\n(Text, photo, video, or document supported)."
     }
 }
 
