@@ -14,6 +14,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+# 🔇 كتم سجلات httpx الروتينية المزعجة واقتصارها على التحذيرات والأخطاء الحرجة فقط
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 # استيراد التوكن الآمن بحماية مرنة لأسماء المتغيرات
 try:
     from core.config import TELEGRAM_TOKEN as TOKEN
