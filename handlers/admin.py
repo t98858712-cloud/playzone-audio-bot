@@ -27,17 +27,17 @@ def get_dashboard_text(lang: str = "ar") -> str:
     stats = load_stats_sync()
     total_users = len(all_user_ids())
     maint = get_setting("maintenance", "0")
-    status_text = "🟢 متصل (Online)" if maint == "0" else "🔴 وضع الصيانة (Maintenance)"
+    status_text = "🟢 متصل ومتاح للجميع" if maint == "0" else "🔴 مغلق لوضع الصيانة"
 
     return (
-        "👑 <b>لوحة القيادة المتقدمة | Admin Dashboard</b>\n"
+        "👑 <b>لوحة القيادة والمراقبة المتقدمة</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📡 <b>حالة النظام:</b> {status_text}\n"
-        f"👥 <b>إجمالي الأعضاء:</b> <code>{total_users}</code> عضو\n"
+        f"📡 <b>حالة البوت:</b> {status_text}\n"
+        f"👥 <b>المشتركين:</b> <code>{total_users}</code> عضو\n"
         f"📥 <b>الطلبات الناجحة:</b> <code>{stats.get('success', 0)}</code>\n"
         f"⚠️ <b>الطلبات الفاشلة:</b> <code>{stats.get('failed', 0)}</code>\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        "👇 <b>قائمة التحكم والإدارة السريعة:</b>"
+        "👇 <b>خيارات القيادة والتحكم السريعة:</b>"
     )
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -85,7 +85,7 @@ async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_T
     lang = context.user_data.get("lang", "ar")
     target = context.user_data.get("bc_target", "all")
     users = all_user_ids() if target == "all" else get_active_users_48h()
-    if not users: return await update.message.reply_text(_t("msg_adm_no_users", lang))
+    if not users: return update.message.reply_text(_t("msg_adm_no_users", lang))
     status = await update.message.reply_text(_t("msg_adm_bc_start", lang))
     sent, fail = 0, 0
     total = len(users)
@@ -108,7 +108,7 @@ async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_T
     await status.edit_text(_t("msg_adm_bc_done", lang, sent=sent, fail=fail), parse_mode="HTML")
 
 def build_admin_stats_text(lang: str = "ar") -> str:
-    if db is None: return f"⚠️ <b>خطأ تشخيص حي في الاتصال بـ Firebase:</b>\n<code>{firebase_init_error}</code>"
+    if db is None: return f"⚠️ <b>خطأ في الاتصال بـ Firebase:</b>\n<code>{firebase_init_error}</code>"
     stats = load_stats_sync()
     total_users = len(all_user_ids())
     active_users = len(get_active_users_48h())
@@ -128,7 +128,7 @@ def build_admin_users_text(limit: int, lang: str = "ar") -> str:
 
 def build_server_status_text(lang: str = "ar") -> str:
     total, used, free = shutil.disk_usage(BASE_DOWNLOAD_DIR)
-    return f"💽 <b>حالة مساحة التخزين الخاصة بالسيرفر:</b>\n\n📁 المساحة الكلية: <code>{format_size(total, lang)}</code>\n🟢 المساحة المستخدمة: <code>{format_size(used, lang)}</code>\n⚪ المساحة الحرة: <code>{format_size(free, lang)}</code>\n\n⚙️ مسار العمل: <code>{BASE_DOWNLOAD_DIR}</code>"
+    return f"💽 <b>حالة مساحة التخزين لخادم الميديا:</b>\n\n📁 المساحة الكلية: <code>{format_size(total, lang)}</code>\n🟢 المساحة المستخدمة: <code>{format_size(used, lang)}</code>\n⚪ المساحة الحرة: <code>{format_size(free, lang)}</code>"
 
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
@@ -149,7 +149,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "adm_bc_menu":
         await query.answer()
-        return await edit_message_smart(query.message, "📢 <b>خيارات الإذاعة الشاملة:</b>\nيرجى تحديد الشريحة المستهدفة للرسالة:", reply_markup=admin_broadcast_menu(lang))
+        return await edit_message_smart(query.message, "📢 <b>قسم الإذاعة والتواصل:</b>\nيرجى تحديد فئة الإرسال المستهدفة:", reply_markup=admin_broadcast_menu(lang))
     
     elif data.startswith("adm_bc_start:"):
         target = data.split(":")[1]
@@ -160,15 +160,15 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         
     elif data == "adm_users_menu":
         await query.answer()
-        return await edit_message_smart(query.message, "👥 <b>لوحة إدارة الأعضاء والمشتركين:</b>", reply_markup=admin_users_menu(lang))
+        return await edit_message_smart(query.message, "👥 <b>لوحة التحكم بالمشتركين:</b>", reply_markup=admin_users_menu(lang))
         
     elif data == "adm_user_info_prompt":
         context.user_data["awaiting_user_id"] = True
         await query.answer()
-        return await edit_message_smart(query.message, "✍️ <b>الاستعلام السريع:</b>\n\nالرجاء إرسال ID المستخدم (أرقام فقط) للاستعلام عن حالته وبياناته:", reply_markup=admin_cancel_action_keyboard(lang))
+        return await edit_message_smart(query.message, "✍️ <b>فحص مستخدم سريع:</b>\n\nالرجاء إرسال ID المستخدم للاستعلام عن بياناته وحالته حياً:", reply_markup=admin_cancel_action_keyboard(lang))
 
     elif data == "adm_export_db":
-        await query.answer("جاري سحب تقرير البيانات... 📥")
+        await query.answer("جاري تصدير تقرير البيانات... 📥")
         users = get_all_users_data()
         output = io.StringIO()
         writer = csv.writer(output)
@@ -178,88 +178,72 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         output.seek(0)
         file_bytes = io.BytesIO(output.getvalue().encode('utf-8'))
         file_bytes.name = f"PlayZone_Users_{int(time.time())}.csv"
-        await context.bot.send_document(chat_id=query.message.chat_id, document=file_bytes, caption="📊 تقرير شامل لكافة بيانات المستخدمين.")
+        await context.bot.send_document(chat_id=query.message.chat_id, document=file_bytes, caption="📊 تقرير شامل لكافة بيانات المشتركين.")
         return
         
     elif data == "adm_sec_menu":
         await query.answer()
-        return await edit_message_smart(query.message, "🛡️ <b>لوحة الحماية، الإعلانات وإعدادات النظام:</b>", reply_markup=admin_security_menu(lang))
+        return await edit_message_smart(query.message, "🛡️ <b>لوحة التحكم بإعدادات النظام والحماية:</b>", reply_markup=admin_security_menu(lang))
 
     elif data == "adm_toggle_maint":
         current = get_setting("maintenance", "0")
         new_val = "0" if current == "1" else "1"
         set_setting("maintenance", new_val)
-        await query.answer("✅ تم تحديث حالة الصيانة بنجاح")
+        await query.answer("✅ تم تحديث حالة الصيانة")
         try:
             return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
-        except BadRequest as e:
-            if "Message is not modified" in str(e): return
-            raise e
+        except BadRequest: pass
 
     elif data == "adm_toggle_hilltop":
         current = get_setting("hilltop_status", "1")
         new_val = "0" if current == "1" else "1"
         set_setting("hilltop_status", new_val)
-        await query.answer("✅ تم تحديث إعلانات HilltopAds")
+        await query.answer("✅ تم تحديث إعلانات Hilltop")
         try:
             return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
-        except BadRequest as e:
-            if "Message is not modified" in str(e): return
-            raise e
+        except BadRequest: pass
 
     elif data == "adm_toggle_adsterra":
         current = get_setting("adsterra_status", "1")
         new_val = "0" if current == "1" else "1"
         set_setting("adsterra_status", new_val)
-        await query.answer("✅ تم تحديث إعلانات Adsterra")
+        await query.answer("✅ تم تحديث إعلانات AdSterra")
         try:
             return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
-        except BadRequest as e:
-            if "Message is not modified" in str(e): return
-            raise e
+        except BadRequest: pass
 
     elif data == "adm_update_dlp":
-        await query.answer("جاري جلب أحدث إصدار للمحرك... ⏳")
+        await query.answer("جاري تحديث المحرك... ⏳")
         try:
             subprocess.run(["pip", "install", "-U", "yt-dlp"], check=True)
-            return await edit_message_smart(query.message, "✅ <b>تم تحديث محرك التحميل الأساسي (yt-dlp) لآخر إصدار متوفر بنجاح!</b>", reply_markup=admin_security_menu(lang))
+            return await edit_message_smart(query.message, "✅ <b>تم تحديث محرك التحميل (yt-dlp) بنجاح!</b>", reply_markup=admin_security_menu(lang))
         except Exception as e:
             return await edit_message_smart(query.message, f"❌ <b>حدث خطأ أثناء التحديث:</b>\n<code>{e}</code>", reply_markup=admin_security_menu(lang))
 
     elif data == "adm_backup_db":
-        await query.answer("جاري سحب وتجهيز النسخة الاحتياطية... 💾")
+        await query.answer("جاري تجهيز النسخة الاحتياطية... 💾")
         from database.operations import export_firebase_backup_json
         backup_json = export_firebase_backup_json()
         if backup_json:
             file_bytes = io.BytesIO(backup_json.encode('utf-8'))
             file_bytes.name = f"Firebase_Backup_{int(time.time())}.json"
-            await context.bot.send_document(
-                chat_id=query.message.chat_id, 
-                document=file_bytes, 
-                filename=file_bytes.name,
-                caption="✅ نسخة احتياطية كاملة من قاعدة بيانات Firebase Firestore (صيغة JSON)."
-            )
+            await context.bot.send_document(chat_id=query.message.chat_id, document=file_bytes, filename=file_bytes.name, caption="✅ نسخة احتياطية كاملة من خادم Firebase Firestore (JSON).")
             return await edit_message_smart(query.message, "✅ تم إرسال النسخة الاحتياطية بنجاح.", reply_markup=admin_security_menu(lang))
         else:
             if DB_FILE.exists():
                 with open(DB_FILE, 'rb') as f:
-                    await context.bot.send_document(chat_id=query.message.chat_id, document=f, filename="bot_database.db", caption="✅ النسخة الاحتياطية المحلية المحدثة (SQLite).")
-                return await edit_message_smart(query.message, "✅ تم إرسال النسخة الاحتياطية المحلية بنجاح.", reply_markup=admin_security_menu(lang))
+                    await context.bot.send_document(chat_id=query.message.chat_id, document=f, filename="bot_database.db", caption="✅ النسخة الاحتياطية المحلية (SQLite).")
+                return await edit_message_smart(query.message, "✅ تم إرسال النسخة المحلية بنجاح.", reply_markup=admin_security_menu(lang))
             else:
-                return await edit_message_smart(query.message, "❌ فشل سحب نسخة احتياطية، قاعدة البيانات السحابية والمحلية غير متوفرة.", reply_markup=admin_security_menu(lang))
+                return await edit_message_smart(query.message, "❌ فشل سحب نسخة احتياطية، الداتا غير متوفرة.", reply_markup=admin_security_menu(lang))
 
     elif data == "adm_cookie_guide":
         await query.answer()
         guide_text = (
-            "🍪 <b>طريقة تجديد ملف الكوكيز:</b>\n\n"
-            "لا حاجة لكتابة أي أوامر معقدة! فقط قم باستخراج ملف <code>cookies.txt</code> جديد من متصفحك (عبر إضافة Get cookies.txt)، وأرسله كملف مباشر في هذه المحادثة، وسيقوم البوت باستبدال القديم فوراً."
+            "🍪 <b>تحديث كوكيز يوتيوب:</b>\n\n"
+            "قم باستخراج ملف <code>cookies.txt</code> جديد من متصفحك الشخصي، ثم أرسله مباشرة كملف في هذه المحادثة وسيقوم البوت باستبداله وتفعيله فوراً."
         )
         return await edit_message_smart(query.message, guide_text, reply_markup=admin_security_menu(lang))
-        
-    elif data == "adm_vacuum_db":
-        await query.answer("جاري تحسين القاعدة... 🗜️")
-        optimize_db()
-        return await edit_message_smart(query.message, "✅ <b>تم فحص وتحسين استقرار قاعدة البيانات!</b>\n\n💡 <i>ملحوظة: بما أن قاعدة بيانات البوت سحابية (Firebase Firestore)، فإن عمليات الفهرسة وضغط الملفات تتم آلياً ومستمرة بالكامل من طرف خوادم جوجل لتوفير أعلى سرعة استجابة.</i>", reply_markup=admin_security_menu(lang))
         
     elif data == "adm_close":
         await query.answer("تم تسجيل الخروج بنجاح ✖️")
@@ -278,6 +262,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         return await edit_message_smart(query.message, build_server_status_text(lang), reply_markup=admin_main_keyboard(lang))
         
     elif data == "adm_clean":
-        await query.answer("جاري تفريغ مساحة السيرفر... 🧹")
+        await query.answer("جاري تنظيف الملفات المؤقتة... 🧹")
         removed = await asyncio.get_running_loop().run_in_executor(None, _force_cleanup_all_sync)
-        return await edit_message_smart(query.message, f"✅ <b>تم تفريغ مساحة التخزين المؤقتة بنجاح!</b>\nتم تنظيف وحذف {removed} ملف ميديا مؤقت من السيرفر.", reply_markup=admin_security_menu(lang))
+        return await edit_message_smart(query.message, f"✅ <b>تم تفريغ مساحة التخزين المؤقتة بنجاح!</b>\nتم مسح {removed} ملف ميديا معلق بنجاح.", reply_markup=admin_security_menu(lang))
