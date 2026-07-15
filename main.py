@@ -1,3 +1,4 @@
+import time
 import logging
 import asyncio
 from telegram import Update, BotCommand, BotCommandScopeChat, MenuButtonCommands
@@ -93,6 +94,8 @@ def main():
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
+    logger.info("⏳ انتظار 5 ثوانٍ قبل بدء تشغيل البوت...")
+    time.sleep(5)
     logger.info("🚀 تم تشغيل البوت بنظام الإدارة المؤسسية (Enterprise Control Center) بنجاح.")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
