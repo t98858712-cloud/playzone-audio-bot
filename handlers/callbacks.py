@@ -123,10 +123,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(_t("msg_select_res", lang))
         return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id, lang))
 
-    if data.startswith("aud:") or data.startswith("res:") or data.startswith("v_ad:"):
+    if data.startswith("aud:") or data.startswith("aud_pro:") or data.startswith("res:") or data.startswith("v_ad:"):
         if data.startswith("v_ad:"):
             parts = data.split(":")
             mode, resolution, request_id = parts[1], parts[2], parts[3]
+        elif data.startswith("aud_pro:"):
+            mode, resolution, request_id = "audio_pro", "720", data.split(":")[1]
         elif data.startswith("aud:"):
             mode, resolution, request_id = "audio", "720", data.split(":")[1]
         else:
@@ -142,7 +144,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if data.startswith("v_ad:"):
                 await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
             else:
-                if mode == "audio": await query.answer(_t("msg_prep_audio", lang))
+                if mode in ["audio", "audio_pro"]: await query.answer(_t("msg_prep_audio", lang))
                 else: await query.answer(_t("msg_prep_video", lang))
 
             request = ensure_pending_requests(context).pop(request_id, None)
@@ -233,10 +235,13 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
-            if mode == "audio":
-                progress_data["text"] = _t("msg_converting", lang)
+            if mode in ["audio", "audio_pro"]:
+                if mode == "audio_pro":
+                    progress_data["text"] = "🎛️ جاري عمل هندسة صوتية احترافية (Studio Mastering)..." if lang == "ar" else "🎛️ Running professional audio mastering..."
+                else:
+                    progress_data["text"] = _t("msg_converting", lang)
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
-                success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
+                success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb, pro_mode=(mode == "audio_pro")))
                 target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
             else:
                 target_file = raw_downloaded_file
@@ -265,7 +270,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(_t("btn_share", lang), url=share_link)]])
 
             with open(target_file, "rb") as f:
-                if mode == "audio":
+                if mode in ["audio", "audio_pro"]:
                     t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
                     try:
                         await context.bot.send_audio(
