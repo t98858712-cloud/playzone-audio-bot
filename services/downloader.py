@@ -1,6 +1,4 @@
-import uuid
 import time
-import shutil
 import logging
 import asyncio
 import urllib.request
@@ -34,7 +32,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if mode in ["audio", "audio_pro"]:
         opts["format"] = "bestaudio/best"
     else:
-        from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
         if resolution == "best":
@@ -53,8 +50,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
-    from core.config import COOKIES_FILE
-    from utils.helpers import cookie_file_is_usable
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
@@ -167,3 +162,4 @@ async def youtube_health_monitor(app: Application):
         except Exception as e:
             if "Sign in" in str(e) or "cookie" in str(e).lower():
                 await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي انتهت صلاحيته أو تم حظره.")
+
