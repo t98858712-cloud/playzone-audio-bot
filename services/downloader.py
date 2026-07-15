@@ -1,4 +1,5 @@
 import uuid
+import time # تم إضافة time لدعم تسمية النسخ الاحتياطية
 import shutil
 import logging
 import asyncio
@@ -36,7 +37,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # ⚡ ترقية ذكية ومحترفة لفلترة جودة الفيديو الحقيقية لمنع التشوش
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
@@ -149,7 +149,7 @@ async def youtube_health_monitor(app: Application):
         await asyncio.sleep(6 * 3600)
         try:
             if not cookie_file_is_usable(COOKIES_FILE):
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو فارغ. يرجى إرسال ملف جديد لتخطي قيود يوتيوب العمرية والمحظورة.")
                 continue
             opts = {
                 "quiet": True, 
@@ -165,5 +165,16 @@ async def youtube_health_monitor(app: Application):
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
         except Exception as e:
-            if "Sign in" in str(e) or "cookie" in str(e).lower():
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور.")
+            err_str = str(e).lower()
+            if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
+                # ♻️ آلية الصيانة الذاتية التلقائية للكوكيز
+                try:
+                    if COOKIES_FILE.exists():
+                        backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
+                        shutil.copy(COOKIES_FILE, backup_path)
+                        COOKIES_FILE.unlink() # حذف القديم
+                        COOKIES_FILE.touch()  # إنشاء ملف جديد فارغ
+                except Exception as ex:
+                    logger.error(f"Failed to reset cookies: {ex}")
+                    
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه طوارئ من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول وتم حظر ملف الكوكيز الحالي!\n\n♻️ <b>إجراء الصيانة الذاتية:</b> تم سحب نسخة احتياطية من الملف، وحذف الملف المحظور، وإنشاء ملف `cookies.txt` فارغ لتفادي توقف البوت بالكامل عن العمل.\n\nالرجاء استخراج ملف كوكيز جديد وإرساله للمحادثة هنا فوراً.")
