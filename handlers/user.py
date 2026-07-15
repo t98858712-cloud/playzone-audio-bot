@@ -5,7 +5,7 @@ import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from core.config import BOT_USERNAME, COOKIES_FILE
+from core.config import BOT_USERNAME, COOKIES_FILE, EXECUTOR
 from database.connection import db
 from database.operations import register_user_sync, get_setting, ban_user_db, stat_inc_sync
 from utils.helpers import (
@@ -14,7 +14,7 @@ from utils.helpers import (
     ensure_pending_requests, trim_old_pending_requests, send_preview, alert_admins_live
 )
 from utils.keyboards import user_main_keyboard, build_playzone_links_keyboard, build_preview_keyboard
-from services.downloader import search_youtube, extract_metadata, EXECUTOR
+from services.downloader import search_youtube, extract_metadata
 from core.security import BANNED_USERS_CACHE, ANTI_SPAM_CACHE, ACTIVE_USERS
 from locales.language import _t
 
