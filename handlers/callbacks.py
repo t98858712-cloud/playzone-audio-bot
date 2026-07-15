@@ -249,7 +249,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
             if mode in ["audio", "audio_pro"]:
                 if mode == "audio_pro":
-                    progress_data["text"] = "🎛️ جاري عمل هندسة صوتية احترافية (Studio Mastering)..." if lang == "ar" else "🎛️ Running professional audio mastering..."
+                    progress_data["text"] = "🎛️ جاري عمل هندسة صوتية..." if lang == "ar" else "🎛️ Running professional audio..."
                 else:
                     progress_data["text"] = _t("msg_converting", lang)
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
