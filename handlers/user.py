@@ -5,14 +5,14 @@ import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from core.config import BOT_USERNAME, COOKIES_FILE
+from core.config import BOT_USERNAME, COOKIES_FILE, EXECUTOR # تم تصحيح استيراد EXECUTOR هنا
 from database.connection import db
 from database.operations import register_user_sync, get_setting, ban_user_db, stat_inc_sync
 from utils.helpers import (
     is_admin, is_valid_url, esc, clean_title, get_artist, format_size, 
     get_thumbnail, get_largest_estimated_size, format_duration, 
     ensure_pending_requests, trim_old_pending_requests, send_preview, alert_admins_live,
-    get_user_lang # <--- تم إضافتها هنا
+    get_user_lang
 )
 from utils.keyboards import user_main_keyboard, build_playzone_links_keyboard, build_preview_keyboard
 from services.downloader import search_youtube, extract_metadata
@@ -133,7 +133,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             await alert_admins_live(context.bot, f"🚨 <b>نظام الحماية:</b> تم حظر المستخدم <code>{uid}</code> مؤقتاً بسبب السبام.")
             return await update.message.reply_text(_t("msg_spam_blocked", lang), parse_mode="HTML")
 
-    # التقاط زر تغيير اللغة
     if text in [_t("btn_lang", "ar"), _t("btn_lang", "en"), "/language"]:
         return await toggle_lang_command(update, context)
             
@@ -151,7 +150,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         status = await update.message.reply_text(_t("msg_searching", lang, query=esc(text)), parse_mode="HTML")
         try:
             loop = asyncio.get_running_loop()
-            from services.downloader import EXECUTOR
             search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=30))
             entries = (search_info.get("entries", []) if search_info else [])[:25]
             if not entries: return await status.edit_text(_t("msg_no_results", lang, query=esc(text)), parse_mode="HTML")
@@ -169,7 +167,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     status = await update.message.reply_text(_t("msg_check_link", lang))
     try:
         loop = asyncio.get_running_loop()
-        from services.downloader import EXECUTOR
         info = await loop.run_in_executor(EXECUTOR, lambda: extract_metadata(text))
         title = clean_title(info.get("title"), lang=lang)
         artist = get_artist(info, lang=lang)
