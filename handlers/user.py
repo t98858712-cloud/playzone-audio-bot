@@ -2,9 +2,11 @@ import uuid
 import time
 import asyncio
 import logging
+import shutil
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
+from core.config import BOT_USERNAME, COOKIES_FILE
 from database.operations import register_user_sync, get_setting, ban_user_db, stat_inc_sync
 from utils.helpers import (
     is_admin, is_valid_url, esc, clean_title, get_artist, format_size, 
@@ -34,13 +36,8 @@ async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["lang"] = new_lang
     await update.message.reply_text(_t("msg_lang_changed", new_lang), reply_markup=user_main_keyboard(new_lang))
 
-# استيراد متغير اسم البوت من الإعدادات في أعلى الملف
-from core.config import BOT_USERNAME
-
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ar")
-    
-    # تمرير المتغير الحكومي المستورد BOT_USERNAME إلى الكيبورد
     await update.message.reply_text(
         _t("msg_links", lang), 
         reply_markup=build_playzone_links_keyboard(BOT_USERNAME), 
@@ -85,7 +82,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
-            from core.config import COOKIES_FILE
             new_file = await context.bot.get_file(update.message.document.file_id)
             await new_file.download_to_drive(COOKIES_FILE)
             return await update.message.reply_text("✅ تم استلام وتحديث ملف الكوكيز (cookies.txt) بنجاح.")
@@ -149,7 +145,19 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             return
         except Exception as e:
             logger.warning(f"فشل البحث: {e}")
-            await alert_admins_live(context.bot, f"🚨 <b>خطأ في محرك البحث:</b>\n\n<code>{e}</code>")
+            err_str = str(e).lower()
+            if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
+                try:
+                    if COOKIES_FILE.exists():
+                        backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
+                        shutil.copy(COOKIES_FILE, backup_path)
+                        COOKIES_FILE.unlink()
+                        COOKIES_FILE.touch()
+                except Exception: pass
+                await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء البحث:</b>\nالكلمة: {text}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم تفريغ الكوكيز. يرجى إرسال ملف `cookies.txt` جديد.")
+            else:
+                await alert_admins_live(context.bot, f"🚨 <b>خطأ في محرك البحث:</b>\n\n<code>{e}</code>")
+            
             return await status.edit_text(_t("msg_link_error", lang))
 
     status = await update.message.reply_text(_t("msg_check_link", lang))
@@ -171,4 +179,15 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         stat_inc_sync("requests")
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
+        err_str = str(e).lower()
+        if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
+            try:
+                if COOKIES_FILE.exists():
+                    backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
+                    shutil.copy(COOKIES_FILE, backup_path)
+                    COOKIES_FILE.unlink()
+                    COOKIES_FILE.touch()
+            except Exception: pass
+            await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء جلب المعاينة:</b>\nالرابط: {text}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم تفريغ الكوكيز. يرجى إرسال ملف `cookies.txt` جديد.")
+        
         await status.edit_text(_t("msg_link_error", lang))
