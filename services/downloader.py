@@ -31,11 +31,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
-    from database.operations import get_setting
-    proxy = get_setting("proxy", "")
-    if proxy:
-        opts["proxy"] = proxy
-    
     if mode in ["audio", "audio_pro"]:
         opts["format"] = "bestaudio/best"
     else:
@@ -44,14 +39,14 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         
         if resolution == "best":
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/ "
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/ "
                 f"best[filesize<?{max_fs}]"
             )
         else:
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/ "
+                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/ "
                 f"best[height<={resolution}][filesize<?{max_fs}]"
             )
             
@@ -88,12 +83,6 @@ def search_youtube(query: str, limit: int = 30):
             }
         }
     }
-    
-    from database.operations import get_setting
-    proxy = get_setting("proxy", "")
-    if proxy:
-        opts["proxy"] = proxy
-        
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
     combined_entries = []
@@ -160,7 +149,7 @@ async def youtube_health_monitor(app: Application):
         await asyncio.sleep(6 * 3600)
         try:
             if not cookie_file_is_usable(COOKIES_FILE):
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر إرساله هنا لمنع توقف طلبات يوتيوب القياسية.")
                 continue
             opts = {
                 "quiet": True, 
@@ -173,14 +162,8 @@ async def youtube_health_monitor(app: Application):
                     }
                 }
             }
-            
-            from database.operations import get_setting
-            proxy = get_setting("proxy", "")
-            if proxy:
-                opts["proxy"] = proxy
-
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
         except Exception as e:
             if "Sign in" in str(e) or "cookie" in str(e).lower():
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي انتهت صلاحيته أو تم حظره.")
