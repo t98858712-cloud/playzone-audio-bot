@@ -34,12 +34,16 @@ async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["lang"] = new_lang
     await update.message.reply_text(_t("msg_lang_changed", new_lang), reply_markup=user_main_keyboard(new_lang))
 
+# استيراد متغير اسم البوت من الإعدادات في أعلى الملف
+from core.config import BOT_USERNAME
+
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ar")
-    # ✅ تم إصلاح الاستدعاء هنا بتمرير اسم البوت ديناميكياً لتفعيل الزر والأمر فوراً
+    
+    # تمرير المتغير الحكومي المستورد BOT_USERNAME إلى الكيبورد
     await update.message.reply_text(
         _t("msg_links", lang), 
-        reply_markup=build_playzone_links_keyboard(context.bot.username), 
+        reply_markup=build_playzone_links_keyboard(BOT_USERNAME), 
         disable_web_page_preview=True
     )
 
