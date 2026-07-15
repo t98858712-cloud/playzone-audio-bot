@@ -21,9 +21,6 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# ⏱️ مؤقت منع تكرار تنبيهات الكوكيز في واجهة المستخدم
-LAST_COOKIE_ALERT_TIME = 0
-
 def get_user_lang(uid: int, context: ContextTypes.DEFAULT_TYPE) -> str:
     lang = context.user_data.get("lang")
     if lang:
@@ -111,7 +108,6 @@ async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search
     await edit_message_smart(message, results_text, InlineKeyboardMarkup(btn_rows))
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global LAST_COOKIE_ALERT_TIME
     from handlers.admin import handle_broadcast_media
     uid = update.effective_user.id
     lang = get_user_lang(uid, context)
@@ -191,15 +187,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             return
         except Exception as e:
             logger.warning(f"فشل البحث: {e}")
-            err_str = str(e).lower()
-            if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-                now = time.time()
-                if now - LAST_COOKIE_ALERT_TIME > 1800:
-                    LAST_COOKIE_ALERT_TIME = now
-                    await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء البحث:</b>\nالكلمة: {text}\n\nالرجاء إرسال ملف `cookies.txt` جديد.")
-            else:
-                await alert_admins_live(context.bot, f"🚨 <b>خطأ في محرك البحث:</b>\n\n<code>{e}</code>")
-            
+            await alert_admins_live(context.bot, f"🚨 <b>خطأ في محرك البحث:</b>\n\n<code>{e}</code>")
             return await status.edit_text(_t("msg_link_error", lang))
 
     status = await update.message.reply_text(_t("msg_check_link", lang))
@@ -221,11 +209,4 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         stat_inc_sync("requests")
     except Exception as e:
         logger.warning(f"فشل جلب المعاينة: {e}")
-        err_str = str(e).lower()
-        if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-            now = time.time()
-            if now - LAST_COOKIE_ALERT_TIME > 1800:
-                LAST_COOKIE_ALERT_TIME = now
-                await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء جلب المعاينة:</b>\nالرابط: {text}\n\nالرجاء إرسال ملف `cookies.txt` جديد.")
-        
         await status.edit_text(_t("msg_link_error", lang))
