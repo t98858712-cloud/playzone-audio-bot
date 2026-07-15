@@ -157,7 +157,3 @@ def export_firebase_backup_json() -> str:
             backup["stats"] = stats_doc.to_dict()
         return json.dumps(backup, ensure_ascii=False, indent=2)
     except Exception: return ""
-
-def optimize_db():
-    """دالة صامتة للتوافقية الهيكلية مع أزرار الإدارة القديمة بعد تفضيل السحابي التام"""
-    pass
