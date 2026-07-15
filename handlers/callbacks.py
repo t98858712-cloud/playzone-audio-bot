@@ -2,6 +2,7 @@ import random
 import uuid
 import time
 import asyncio
+import shutil
 import logging
 from urllib.parse import quote
 
@@ -9,7 +10,8 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
-from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK, ADSTERRA_LINK
+# تم استيراد EXECUTOR هنا بشكل علوي سليم من الإعدادات
+from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK, ADSTERRA_LINK, EXECUTOR
 from core.security import ACTIVE_USERS
 from database.operations import stat_inc_sync
 from locales.language import _t
@@ -36,7 +38,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not query: return
     
     uid = query.from_user.id
-    lang = get_user_lang(uid, context) # تحديث: سحب اللغة فوراً من السيرفر!
+    lang = get_user_lang(uid, context)
     data = query.data or ""
     
     if data.startswith("adm_"):
@@ -76,7 +78,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         try:
             loop = asyncio.get_running_loop()
-            from services.downloader import EXECUTOR
             info = await loop.run_in_executor(EXECUTOR, lambda: extract_metadata(url))
             
             title = clean_title(info.get("title"), lang=lang)
@@ -211,7 +212,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             progress_data["text"] = _t("msg_dl_started", lang)
             
             loop = asyncio.get_running_loop()
-            from services.downloader import EXECUTOR
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
             
             info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data, resolution))
