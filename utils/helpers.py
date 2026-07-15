@@ -12,8 +12,7 @@ from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from core.config import (
-    BASE_DOWNLOAD_DIR, COOKIES_FILE, REQUEST_EXPIRE_SECONDS, 
-    OLD_DOWNLOADS_EXPIRE_SECONDS, MAX_THUMBNAIL_BYTES
+    BASE_DOWNLOAD_DIR, REQUEST_EXPIRE_SECONDS
 )
 from locales.language import _t
 
@@ -136,16 +135,6 @@ def cookie_file_is_usable(path: Path) -> bool:
                     break
         return has_valid_cookie
     except Exception: return False
-
-def _cleanup_old_downloads_sync():
-    now = time.time()
-    try:
-        for item in BASE_DOWNLOAD_DIR.iterdir():
-            try:
-                if now - item.stat().st_mtime > OLD_DOWNLOADS_EXPIRE_SECONDS:
-                    shutil.rmtree(item) if item.is_dir() else item.unlink()
-            except Exception: pass
-    except Exception: pass
 
 def _force_cleanup_all_sync() -> int:
     removed = 0
