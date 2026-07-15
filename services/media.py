@@ -12,7 +12,6 @@ def convert_to_mp3_local(input_file: Path, output_file: Path, local_thumb: Path 
         else:
             cmd.extend(["-vn"])
         
-        # 🎛️ حقن فلاتر هندسة صوت الاستوديو باحترافية تامة عند تفعيل الوضع المتقدم
         if pro_mode:
             cmd.extend([
                 "-af", 
