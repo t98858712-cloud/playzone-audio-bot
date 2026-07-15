@@ -105,14 +105,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"فشل جلب المعاينة من البحث: {e}")
             err_str = str(e).lower()
             if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-                try:
-                    if COOKIES_FILE.exists():
-                        backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
-                        shutil.copy(COOKIES_FILE, backup_path)
-                        COOKIES_FILE.unlink()
-                        COOKIES_FILE.touch()
-                except Exception: pass
-                await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء جلب المعاينة:</b>\nالرابط: {url}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم تفريغ الكوكيز لتفادي توقف البوت. يرجى إرسال ملف `cookies.txt` جديد فوراً.")
+                await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء جلب المعاينة:</b>\nالرابط: {url}\n\nالرجاء إرسال ملف `cookies.txt` جديد فوراً.")
             
             await context.bot.send_message(chat_id=uid, text=_t("msg_link_error", lang))
         finally:
@@ -248,7 +241,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
             if mode in ["audio", "audio_pro"]:
                 if mode == "audio_pro":
-                    progress_data["text"] = "🎛️ جاري عمل هندسة صوتية احترافية (Studio Mastering)..." if lang == "ar" else "🎛️ Running professional audio mastering..."
+                    progress_data["text"] = "🎛️ جاري عمل هندسة صوتية..." if lang == "ar" else "🎛️ Running professional audio ..."
                 else:
                     progress_data["text"] = _t("msg_converting", lang)
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
@@ -316,16 +309,9 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         err_str = str(e).lower()
         
         if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-            try:
-                if COOKIES_FILE.exists():
-                    backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
-                    shutil.copy(COOKIES_FILE, backup_path)
-                    COOKIES_FILE.unlink()
-                    COOKIES_FILE.touch()
-            except Exception: pass
-            
-            await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء التحميل:</b>\nالرابط: {url}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم تفريغ الكوكيز لتفادي توقف طلبات باقي المستخدمين. يرجى إرسال ملف `cookies.txt` جديد.")
-            try: await edit_message_smart(query.message, "❌ فشل التحميل مؤقتاً بسبب حماية يوتيوب للمقطع (يتم الآن صيانة الكوكيز تلقائياً). يرجى المحاولة بعد قليل.", reply_markup=None)
+            # يقتصر الإجراء على الإنذار فقط دون تعديل أو حذف للملفات محلياً
+            await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء التحميل:</b>\nالرابط: {url}\n\nالرجاء تجديد ملف الكوكيز عبر إرساله هنا في أقرب وقت.")
+            try: await edit_message_smart(query.message, "❌ فشل التحميل بسبب قيود حماية يوتيوب للمقطع. يرجى الانتظار لحين تجديد الكوكيز من قبل الإدارة.", reply_markup=None)
             except Exception: pass
         else:
             await alert_admins_live(context.bot, f"🚨 <b>فشل تحميل مقطع:</b>\nالرابط: {url}\nالخطأ:\n<code>{str(e)[:300]}</code>")
