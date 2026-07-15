@@ -2,11 +2,12 @@ import uuid
 import time
 import asyncio
 import logging
+import shutil
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from database.connection import db # استيراد داتابيز الفايربيس مباشرة للربط السحابي
-from database.operations import register_user_sync, get_setting, ban_user_db, stat_inc_sync
+from database.connection import db
+from database.operations import register_user_sync, get_setting, set_setting, ban_user_db, stat_inc_sync
 from utils.helpers import (
     is_admin, is_valid_url, esc, clean_title, get_artist, format_size, 
     get_thumbnail, get_largest_estimated_size, format_duration, 
@@ -19,14 +20,10 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# 🌐 دالة ذكية لجلب لغة المستخدم حية ومحفوظة من الداتابيز أو الكاش
 def get_user_lang(uid: int, context: ContextTypes.DEFAULT_TYPE) -> str:
-    # 1. فحص الكاش المؤقت أولاً لسرعة الاستجابة
     lang = context.user_data.get("lang")
     if lang:
         return lang
-    
-    # 2. إذا لم تكن بالكاش، نسحبها فوراً من الفايربيس Firestore
     try:
         if db:
             doc = db.collection('users').document(str(uid)).get()
@@ -37,15 +34,13 @@ def get_user_lang(uid: int, context: ContextTypes.DEFAULT_TYPE) -> str:
                 return lang
     except Exception as e:
         logger.error(f"Failed to load lang from Firestore for {uid}: {e}")
-    
-    # 3. لغة افتراضية احتياطية في حال تعذر الاتصال
     context.user_data["lang"] = "ar"
     return "ar"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
     uid = update.effective_user.id
-    lang = get_user_lang(uid, context) # استخدام الدالة الذكية
+    lang = get_user_lang(uid, context)
     
     await update.message.reply_text(
         _t("msg_start", lang, first_name=esc(update.effective_user.first_name or "")), 
@@ -59,22 +54,15 @@ async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     current_lang = get_user_lang(uid, context)
     new_lang = "en" if current_lang == "ar" else "ar"
     
-    # 1. تحديث الكاش المحلي فوراً لسرعة التبديل
     context.user_data["lang"] = new_lang
-    
-    # 2. الحفظ السحابي الآمن في Firebase لمنع ضياع اللغة عند إعادة تشغيل السيرفر
     try:
         if db:
             db.collection('users').document(str(uid)).set({"lang": new_lang}, merge=True)
     except Exception as e:
         logger.error(f"Failed to update lang on Firestore for {uid}: {e}")
     
-    # 3. إرسال رد التأكيد بلوحة المفاتيح المناسبة للغة الجديدة
     confirm_msg = "✅ تم تغيير لغة البوت إلى العربية بنجاح." if new_lang == "ar" else "✅ Bot language has been changed to English successfully."
-    await update.message.reply_text(
-        confirm_msg, 
-        reply_markup=user_main_keyboard(new_lang)
-    )
+    await update.message.reply_text(confirm_msg, reply_markup=user_main_keyboard(new_lang))
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -142,6 +130,17 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
     
+    # 🌐 معالج حفظ وحذف البروكسي من الأدمن سحابياً
+    if is_admin(uid) and context.user_data.get("awaiting_proxy"):
+        context.user_data.pop("awaiting_proxy", None)
+        proxy_text = text.strip()
+        if proxy_text.lower() in ["حذف", "delete"]:
+            set_setting("proxy", "")
+            return await update.message.reply_text("🌐 تم تعطيل وحذف البروكسي بنجاح. سيعود البوت لاستخدام IP السيرفر الرئيسي.")
+        else:
+            set_setting("proxy", proxy_text)
+            return await update.message.reply_text(f"🌐 تم حفظ وتفعيل البروكسي الجديد بنجاح!\n\n<code>{esc(proxy_text)}</code>", parse_mode="HTML")
+
     if is_admin(uid) and context.user_data.get("awaiting_user_id"):
         context.user_data.pop("awaiting_user_id", None)
         try:
@@ -190,6 +189,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             logger.warning(f"فشل البحث: {e}")
             err_str = str(e).lower()
             if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
+                from core.config import COOKIES_FILE
                 try:
                     if COOKIES_FILE.exists():
                         backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
@@ -224,6 +224,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.warning(f"فشل جلب المعاينة: {e}")
         err_str = str(e).lower()
         if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
+            from core.config import COOKIES_FILE
             try:
                 if COOKIES_FILE.exists():
                     backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
