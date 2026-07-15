@@ -42,60 +42,75 @@ def build_playzone_links_keyboard(bot_username: str = BOT_USERNAME) -> InlineKey
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=tg_url)],
     ])
 
+# =======================================================
+#    📊 لوحة تحكم الإدارة الاحترافية (UI/UX Redesign)
+# =======================================================
+
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
+    """لوحة القيادة الرئيسية - شبكة مدمجة scannable ومريحة للعين"""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 الإحصائيات والمراقبة المتقدمة", callback_data="adm_stats")],
         [
-            InlineKeyboardButton("📢 الإذاعة والتواصل", callback_data="adm_bc_menu"), 
-            InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="adm_users_menu")
+            InlineKeyboardButton("📊 الإحصائيات", callback_data="adm_stats"),
+            InlineKeyboardButton("💽 السيرفر", callback_data="adm_server")
         ],
         [
-            InlineKeyboardButton("🛡️ الحماية وإعدادات النظام", callback_data="adm_sec_menu"), 
-            InlineKeyboardButton("💽 مساحة السيرفر", callback_data="adm_server")
+            InlineKeyboardButton("📢 الإذاعة", callback_data="adm_bc_menu"),
+            InlineKeyboardButton("👥 المشتركين", callback_data="adm_users_menu")
         ],
-        [InlineKeyboardButton("✖️ إغلاق لوحة القيادة", callback_data="adm_close")]
+        [InlineKeyboardButton("⚙️ إعدادات النظام والحماية", callback_data="adm_sec_menu")],
+        [InlineKeyboardButton("❌ إغلاق لوحة القيادة", callback_data="adm_close")]
     ])
 
 def admin_broadcast_menu(lang: str = "ar") -> InlineKeyboardMarkup:
+    """قائمة خيارات الإذاعة والتواصل المدمجة"""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌍 إرسال للجميع (كافة المشتركين)", callback_data="adm_bc_start:all")],
-        [InlineKeyboardButton("⚡ إرسال للنشطين فقط (آخر 48 ساعة)", callback_data="adm_bc_start:active")],
-        [InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="adm_main_back")]
+        [
+            InlineKeyboardButton("🌍 إرسال للكل", callback_data="adm_bc_start:all"),
+            InlineKeyboardButton("⚡ للنشطين فقط", callback_data="adm_bc_start:active")
+        ],
+        [InlineKeyboardButton("🔙 عودة للرئيسية", callback_data="adm_main_back")]
     ])
 
 def admin_users_menu(lang: str = "ar") -> InlineKeyboardMarkup:
+    """قائمة خيارات المشتركين والتقارير الاستخراجية"""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📋 أحدث المنضمين", callback_data="adm_users"), 
-            InlineKeyboardButton("🔎 استعلام عن (ID)", callback_data="adm_user_info_prompt")
+            InlineKeyboardButton("📋 أحدث الأعضاء", callback_data="adm_users"),
+            InlineKeyboardButton("🔎 استعلام ID", callback_data="adm_user_info_prompt")
         ],
-        [InlineKeyboardButton("📥 استخراج تقرير داتا المستخدمين (CSV)", callback_data="adm_export_db")],
-        [InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="adm_main_back")]
+        [InlineKeyboardButton("📥 استخراج الداتا (CSV)", callback_data="adm_export_db")],
+        [InlineKeyboardButton("🔙 عودة للرئيسية", callback_data="adm_main_back")]
     ])
 
 def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
-    maint = get_setting("maintenance", "0")
-    maint_btn = InlineKeyboardButton("🔴 إيقاف وضع الصيانة" if maint == "1" else "🟢 تفعيل وضع الصيانة", callback_data="adm_toggle_maint")
+    """لوحة الحماية والنظام المحدثة - نقاط ديناميكية حية وبدون ميزات مكررة"""
+    # 🟢/🔴 تبديل مؤشر وضع الصيانة
+    maint_on = get_setting("maintenance", "0") == "1"
+    maint_text = "🟢 وضع الصيانة" if maint_on else "🔴 وضع الصيانة"
     
-    hilltop_status = get_setting("hilltop_status", "1")
-    hilltop_btn = InlineKeyboardButton("🔴 إيقاف إعلانات Hilltop" if hilltop_status == "1" else "🟢 تفعيل إعلانات Hilltop", callback_data="adm_toggle_hilltop")
+    # 🟢/🔴 تبديل مؤشر إعلانات Hilltop
+    hilltop_on = get_setting("hilltop_status", "1") == "1"
+    hilltop_text = "🟢 إعلانات Hilltop" if hilltop_on else "🔴 إعلانات Hilltop"
     
-    adsterra_status = get_setting("adsterra_status", "1")
-    adsterra_btn = InlineKeyboardButton("🔴 إيقاف إعلانات Adsterra" if adsterra_status == "1" else "🟢 تفعيل إعلانات Adsterra", callback_data="adm_toggle_adsterra")
+    # 🟢/🔴 تبديل مؤشر إعلانات Adsterra
+    adsterra_on = get_setting("adsterra_status", "1") == "1"
+    adsterra_text = "🟢 إعلانات AdSterra" if adsterra_on else "🔴 إعلانات AdSterra"
     
     return InlineKeyboardMarkup([
-        [maint_btn], 
-        [hilltop_btn, adsterra_btn], 
+        [InlineKeyboardButton(maint_text, callback_data="adm_toggle_maint")],
         [
-            InlineKeyboardButton("🔄 تحديث المحرك", callback_data="adm_update_dlp"), 
+            InlineKeyboardButton(hilltop_text, callback_data="adm_toggle_hilltop"),
+            InlineKeyboardButton(adsterra_text, callback_data="adm_toggle_adsterra")
+        ],
+        [
+            InlineKeyboardButton("🔄 تحديث المحرك", callback_data="adm_update_dlp"),
             InlineKeyboardButton("🍪 تجديد الكوكيز", callback_data="adm_cookie_guide")
         ],
         [
-            InlineKeyboardButton("🗜️ تحسين الـ DB", callback_data="adm_vacuum_db"), 
-            InlineKeyboardButton("🧹 تنظيف الكاش", callback_data="adm_clean")
+            InlineKeyboardButton("🧹 تنظيف الكاش", callback_data="adm_clean"),
+            InlineKeyboardButton("💾 نسخة سحابية", callback_data="adm_backup_db")
         ],
-        [InlineKeyboardButton("💾 سحب نسخة احتياطية سحابية (JSON)", callback_data="adm_backup_db")],
-        [InlineKeyboardButton("🔙 العودة للرئيسية", callback_data="adm_main_back")]
+        [InlineKeyboardButton("🔙 عودة للرئيسية", callback_data="adm_main_back")]
     ])
 
 def admin_cancel_action_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
