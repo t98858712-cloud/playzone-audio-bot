@@ -7,7 +7,7 @@ from telegram.ext import ContextTypes
 
 from core.config import BOT_USERNAME, COOKIES_FILE
 from database.connection import db
-from database.operations import register_user_sync, get_setting, ban_user_db
+from database.operations import register_user_sync, get_setting, ban_user_db, stat_inc_sync
 from utils.helpers import (
     is_admin, is_valid_url, esc, clean_title, get_artist, format_size, 
     get_thumbnail, get_largest_estimated_size, format_duration, 
@@ -17,7 +17,6 @@ from utils.keyboards import user_main_keyboard, build_playzone_links_keyboard, b
 from services.downloader import search_youtube, extract_metadata, EXECUTOR
 from core.security import BANNED_USERS_CACHE, ANTI_SPAM_CACHE, ACTIVE_USERS
 from locales.language import _t
-from database.operations import stat_inc_sync
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
@@ -115,7 +114,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         if update.message.document.file_name == "cookies.txt":
             new_file = await context.bot.get_file(update.message.document.file_id)
             await new_file.download_to_drive(COOKIES_FILE)
-            return await update.message.reply_text(_t("msg_cookie_updated", lang))
+            return await update.message.reply_text("✅ تم استلام وتحديث ملف الكوكيز (cookies.txt) بنجاح.")
 
     if uid in BANNED_USERS_CACHE: return
     maintenance = get_setting("maintenance", "0")
@@ -137,7 +136,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             from handlers.admin import process_user_info
             return await process_user_info(update, context, target_uid)
         except ValueError:
-            return await update.message.reply_text(_t("msg_invalid_id", lang))
+            return await update.message.reply_text("❌ يرجى إرسال أرقام فقط (ID صالح).")
         
     if not is_admin(uid):
         now = time.time()
