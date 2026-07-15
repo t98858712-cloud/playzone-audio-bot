@@ -4,6 +4,7 @@ from core.config import WEBSITE_PLAYZONE, FACEBOOK_PLAYZONE, INSTAGRAM_PLAYZONE,
 from database.operations import get_setting
 
 def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
+    """لوحة مفاتيح المستخدم الرئيسية متناسقة ومزدوجة الأزرار"""
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
@@ -13,6 +14,7 @@ def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
     )
 
 def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
+    """لوحة خيارات التحميل للمقطع"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(_t("btn_audio", lang), callback_data=f"aud:{request_id}")],
         [InlineKeyboardButton(_t("btn_audio_pro", lang), callback_data=f"aud_pro:{request_id}")],
@@ -21,6 +23,7 @@ def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardM
     ])
 
 def build_resolution_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
+    """لوحة اختيار جودة الفيديو"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("360p", callback_data=f"res:360:{request_id}"),
@@ -35,6 +38,7 @@ def build_resolution_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboa
     ])
 
 def build_playzone_links_keyboard(bot_username: str = BOT_USERNAME) -> InlineKeyboardMarkup:
+    """لوحة روابط السوشيال ميديا لـ PlayZone"""
     tg_url = f"https://t.me/{bot_username.replace('@', '')}"
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Website PlayZone", url=WEBSITE_PLAYZONE)],
@@ -42,7 +46,12 @@ def build_playzone_links_keyboard(bot_username: str = BOT_USERNAME) -> InlineKey
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=tg_url)],
     ])
 
+# =====================================================================
+# 📊 لوحة تحكم الإدارة المتقدمة المصفّاة والموزعة شبكياً (Grid Layout)
+# =====================================================================
+
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
+    """اللوحة الرئيسية للادمن - أزرار متقابلة ومتناسقة تمنع الإطالة"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(_t("btn_adm_stats", lang), callback_data="adm_stats"),
@@ -57,6 +66,7 @@ def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     ])
 
 def admin_broadcast_menu(lang: str = "ar") -> InlineKeyboardMarkup:
+    """لوحة قسم الإذاعة والنشر"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(_t("btn_adm_bc_all", lang), callback_data="adm_bc_start:all"),
@@ -66,6 +76,7 @@ def admin_broadcast_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     ])
 
 def admin_users_menu(lang: str = "ar") -> InlineKeyboardMarkup:
+    """لوحة التحكم بالمشتركين واستخراج الداتا"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(_t("btn_adm_usr_latest", lang), callback_data="adm_users"),
@@ -76,6 +87,7 @@ def admin_users_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     ])
 
 def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
+    """لوحة إعدادات النظام، الصيانة، مفاتيح الإعلانات وأدوات المطور المعززة"""
     maint_on = get_setting("maintenance", "0") == "1"
     maint_text = _t("txt_maint_on", lang) if maint_on else _t("txt_maint_off", lang)
     
@@ -103,6 +115,7 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     ])
 
 def admin_cancel_action_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
+    """زر إلغاء أي إجراء إداري معلق والعودة الفورية للرئيسية"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(_t("btn_adm_cancel_action", lang), callback_data="adm_cancel_action")]
     ])
