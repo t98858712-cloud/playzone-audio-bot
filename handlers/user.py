@@ -5,13 +5,14 @@ import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from core.config import BOT_USERNAME, COOKIES_FILE, EXECUTOR
+from core.config import BOT_USERNAME, COOKIES_FILE
 from database.connection import db
 from database.operations import register_user_sync, get_setting, ban_user_db, stat_inc_sync
 from utils.helpers import (
     is_admin, is_valid_url, esc, clean_title, get_artist, format_size, 
     get_thumbnail, get_largest_estimated_size, format_duration, 
-    ensure_pending_requests, trim_old_pending_requests, send_preview, alert_admins_live
+    ensure_pending_requests, trim_old_pending_requests, send_preview, alert_admins_live,
+    get_user_lang # <--- تم إضافتها هنا
 )
 from utils.keyboards import user_main_keyboard, build_playzone_links_keyboard, build_preview_keyboard
 from services.downloader import search_youtube, extract_metadata
@@ -19,23 +20,6 @@ from core.security import BANNED_USERS_CACHE, ANTI_SPAM_CACHE, ACTIVE_USERS
 from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
-
-def get_user_lang(uid: int, context: ContextTypes.DEFAULT_TYPE) -> str:
-    lang = context.user_data.get("lang")
-    if lang:
-        return lang
-    try:
-        if db:
-            doc = db.collection('users').document(str(uid)).get()
-            if doc.exists:
-                user_data = doc.to_dict()
-                lang = user_data.get("lang", "ar")
-                context.user_data["lang"] = lang
-                return lang
-    except Exception as e:
-        logger.error(f"Failed to load lang from Firestore for {uid}: {e}")
-    context.user_data["lang"] = "ar"
-    return "ar"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
@@ -61,8 +45,7 @@ async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"Failed to update lang on Firestore for {uid}: {e}")
     
-    confirm_msg = "✅ تم تغيير لغة البوت إلى العربية بنجاح." if new_lang == "ar" else "✅ Bot language has been changed to English successfully."
-    await update.message.reply_text(confirm_msg, reply_markup=user_main_keyboard(new_lang))
+    await update.message.reply_text(_t("msg_lang_changed", new_lang), reply_markup=user_main_keyboard(new_lang))
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -114,7 +97,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         if update.message.document.file_name == "cookies.txt":
             new_file = await context.bot.get_file(update.message.document.file_id)
             await new_file.download_to_drive(COOKIES_FILE)
-            return await update.message.reply_text("✅ تم استلام وتحديث ملف الكوكيز (cookies.txt) بنجاح.")
+            return await update.message.reply_text(_t("msg_cookie_updated", lang))
 
     if uid in BANNED_USERS_CACHE: return
     maintenance = get_setting("maintenance", "0")
@@ -136,7 +119,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             from handlers.admin import process_user_info
             return await process_user_info(update, context, target_uid)
         except ValueError:
-            return await update.message.reply_text("❌ يرجى إرسال أرقام فقط (ID صالح).")
+            return await update.message.reply_text(_t("msg_invalid_id", lang))
         
     if not is_admin(uid):
         now = time.time()
@@ -149,6 +132,10 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             BANNED_USERS_CACHE.add(uid)
             await alert_admins_live(context.bot, f"🚨 <b>نظام الحماية:</b> تم حظر المستخدم <code>{uid}</code> مؤقتاً بسبب السبام.")
             return await update.message.reply_text(_t("msg_spam_blocked", lang), parse_mode="HTML")
+
+    # التقاط زر تغيير اللغة
+    if text in [_t("btn_lang", "ar"), _t("btn_lang", "en"), "/language"]:
+        return await toggle_lang_command(update, context)
             
     if text in [_t("btn_links", "ar"), _t("btn_links", "en"), "/links", "\\links"]:
         return await show_playzone_links(update, context)
@@ -164,6 +151,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         status = await update.message.reply_text(_t("msg_searching", lang, query=esc(text)), parse_mode="HTML")
         try:
             loop = asyncio.get_running_loop()
+            from services.downloader import EXECUTOR
             search_info = await loop.run_in_executor(EXECUTOR, lambda: search_youtube(text, limit=30))
             entries = (search_info.get("entries", []) if search_info else [])[:25]
             if not entries: return await status.edit_text(_t("msg_no_results", lang, query=esc(text)), parse_mode="HTML")
@@ -181,6 +169,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     status = await update.message.reply_text(_t("msg_check_link", lang))
     try:
         loop = asyncio.get_running_loop()
+        from services.downloader import EXECUTOR
         info = await loop.run_in_executor(EXECUTOR, lambda: extract_metadata(text))
         title = clean_title(info.get("title"), lang=lang)
         artist = get_artist(info, lang=lang)
