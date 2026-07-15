@@ -2,11 +2,10 @@ import uuid
 import time
 import asyncio
 import logging
-import shutil
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from core.config import BOT_USERNAME, COOKIES_FILE
+from database.connection import db # استيراد داتابيز الفايربيس مباشرة للربط السحابي
 from database.operations import register_user_sync, get_setting, ban_user_db, stat_inc_sync
 from utils.helpers import (
     is_admin, is_valid_url, esc, clean_title, get_artist, format_size, 
@@ -20,9 +19,34 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+# 🌐 دالة ذكية لجلب لغة المستخدم حية ومحفوظة من الداتابيز أو الكاش
+def get_user_lang(uid: int, context: ContextTypes.DEFAULT_TYPE) -> str:
+    # 1. فحص الكاش المؤقت أولاً لسرعة الاستجابة
+    lang = context.user_data.get("lang")
+    if lang:
+        return lang
+    
+    # 2. إذا لم تكن بالكاش، نسحبها فوراً من الفايربيس Firestore
+    try:
+        if db:
+            doc = db.collection('users').document(str(uid)).get()
+            if doc.exists:
+                user_data = doc.to_dict()
+                lang = user_data.get("lang", "ar")
+                context.user_data["lang"] = lang
+                return lang
+    except Exception as e:
+        logger.error(f"Failed to load lang from Firestore for {uid}: {e}")
+    
+    # 3. لغة افتراضية احتياطية في حال تعذر الاتصال
+    context.user_data["lang"] = "ar"
+    return "ar"
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     register_user_sync(update.effective_user)
-    lang = context.user_data.get("lang", "ar")
+    uid = update.effective_user.id
+    lang = get_user_lang(uid, context) # استخدام الدالة الذكية
+    
     await update.message.reply_text(
         _t("msg_start", lang, first_name=esc(update.effective_user.first_name or "")), 
         reply_markup=user_main_keyboard(lang), 
@@ -31,13 +55,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    current_lang = context.user_data.get("lang", "ar")
+    uid = update.effective_user.id
+    current_lang = get_user_lang(uid, context)
     new_lang = "en" if current_lang == "ar" else "ar"
+    
+    # 1. تحديث الكاش المحلي فوراً لسرعة التبديل
     context.user_data["lang"] = new_lang
-    await update.message.reply_text(_t("msg_lang_changed", new_lang), reply_markup=user_main_keyboard(new_lang))
+    
+    # 2. الحفظ السحابي الآمن في Firebase لمنع ضياع اللغة عند إعادة تشغيل السيرفر
+    try:
+        if db:
+            db.collection('users').document(str(uid)).set({"lang": new_lang}, merge=True)
+    except Exception as e:
+        logger.error(f"Failed to update lang on Firestore for {uid}: {e}")
+    
+    # 3. إرسال رد التأكيد بلوحة المفاتيح المناسبة للغة الجديدة
+    confirm_msg = "✅ تم تغيير لغة البوت إلى العربية بنجاح." if new_lang == "ar" else "✅ Bot language has been changed to English successfully."
+    await update.message.reply_text(
+        confirm_msg, 
+        reply_markup=user_main_keyboard(new_lang)
+    )
 
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = context.user_data.get("lang", "ar")
+    uid = update.effective_user.id
+    lang = get_user_lang(uid, context)
+    
+    from core.config import BOT_USERNAME
     await update.message.reply_text(
         _t("msg_links", lang), 
         reply_markup=build_playzone_links_keyboard(BOT_USERNAME), 
@@ -78,7 +121,7 @@ async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from handlers.admin import handle_broadcast_media
     uid = update.effective_user.id
-    lang = context.user_data.get("lang", "ar")
+    lang = get_user_lang(uid, context)
     
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
