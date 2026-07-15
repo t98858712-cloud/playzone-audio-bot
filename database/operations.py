@@ -1,218 +1,163 @@
-import time
 import logging
-import json  # تم إضافة الاستيراد هنا لدعم النسخ الاحتياطي السحابي
-from google.cloud.firestore_v1 import Increment
-from google.cloud.firestore_v1.base_query import FieldFilter
+import time
+import json
 from database.connection import db
-from firebase_admin import firestore
+from core.security import BANNED_USERS_CACHE
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+def register_user_sync(user):
+    """تسجيل أو تحديث بيانات المستخدم في Firebase Firestore"""
+    if db is None: return
+    try:
+        uid = str(user.id)
+        user_ref = db.collection('users').document(uid)
+        user_ref.set({
+            "id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "last_seen": int(time.time())
+        }, merge=True)
+    except Exception as e:
+        logger.error(f"Error in register_user_sync: {e}")
+
 def load_banned_users():
-    """شحن كاش الـ RAM تلقائياً من فايربيس عند تشغيل البوت لمنع ضياع البيانات"""
-    if db is None: return set()
+    """شحن قائمة المستخدمين المحظورين إلى الكاش فوراً عند الإقلاع"""
+    if db is None: return
     try:
-        docs = db.collection('banned_users').stream()
-        from core.security import BANNED_USERS_CACHE
         BANNED_USERS_CACHE.clear()
-        
+        docs = db.collection('users').where('banned', '==', True).stream()
         for doc in docs:
-            try:
-                BANNED_USERS_CACHE.add(int(doc.id))
-            except ValueError:
-                BANNED_USERS_CACHE.add(doc.id)
-                
+            BANNED_USERS_CACHE.add(int(doc.id))
         logger.info(f"🔥 [Firebase] تم شحن كاش الحماية بنجاح بـ {len(BANNED_USERS_CACHE)} مستخدم محظور.")
-        return BANNED_USERS_CACHE
     except Exception as e:
-        logger.error(f"Error loading banned users: {e}")
-        return set()
+        logger.error(f"Error in load_banned_users: {e}")
 
-def ban_user_db(uid):
-    """حظر المستخدم في قاعدة البيانات وإضافته فوراً للكاش اللحظي"""
+def ban_user_db(uid: int):
+    """حظر مستخدم في قاعدة البيانات السحابية"""
     if db is None: return
     try:
-        db.collection('banned_users').document(str(uid)).set({'banned_at': int(time.time())})
-        
-        from core.security import BANNED_USERS_CACHE
-        BANNED_USERS_CACHE.add(int(uid))
-        logger.info(f"🚫 تم حظر المستخدم {uid} ومزامنته مع فايربيس والكاش.")
+        db.collection('users').document(str(uid)).set({"banned": True}, merge=True)
     except Exception as e:
-        logger.error(f"Error banning user: {e}")
+        logger.error(f"Error banning user {uid}: {e}")
 
-def unban_user_db(uid):
-    """إلغاء حظر المستخدم من قاعدة البيانات وإزالته من كاش الحماية ليعود للعمل"""
-    if db is None: return
-    try:
-        db.collection('banned_users').document(str(uid)).delete()
-        
-        from core.security import BANNED_USERS_CACHE
-        BANNED_USERS_CACHE.discard(int(uid))
-        logger.info(f"🟢 تم فك حظر المستخدم {uid} ومزامنته مع فايربيس والكاش.")
-    except Exception as e:
-        logger.error(f"Error unbanning user: {e}")
-
-def set_setting(key, value):
-    if db is None: return
-    try:
-        db.collection('settings').document('config').set({key: str(value)}, merge=True)
-    except Exception as e:
-        logger.error(f"Error setting config: {e}")
-
-def get_setting(key, default="0"):
+def get_setting(key: str, default: str = "") -> str:
+    """جلب قيمة إعداد معين من الـ Settings سحابياً"""
     if db is None: return default
     try:
-        doc = db.collection('settings').document('config').get()
+        doc = db.collection('settings').document(key).get()
         if doc.exists:
-            return doc.to_dict().get(key, default)
-    except Exception as e:
-        logger.error(f"Error getting setting {key}: {e}")
+            return str(doc.to_dict().get("value", default))
+    except Exception:
+        pass
     return default
 
-def register_user_sync(user):
-    if not user or db is None: return
-    now = int(time.time())
-    try:
-        doc_ref = db.collection('users').document(str(user.id))
-        doc = doc_ref.get()
-        if not doc.exists:
-            doc_ref.set({
-                'id': user.id,
-                'username': user.username or "",
-                'first_name': user.first_name or "",
-                'last_name': user.last_name or "",
-                'first_seen': now,
-                'last_seen': now
-            })
-        else:
-            doc_ref.update({
-                'username': user.username or "",
-                'first_name': user.first_name or "",
-                'last_name': user.last_name or "",
-                'last_seen': now
-            })
-    except Exception as e:
-        logger.error(f"Error registering user {user.id}: {e}")
-
-def stat_inc_sync(key: str, value: int = 1):
+def set_setting(key: str, value: str):
+    """تحديث أو تفعيل قيمة إعداد في الـ Settings سحابياً"""
     if db is None: return
     try:
-        db.collection('settings').document('stats').update({key: Increment(value)})
+        db.collection('settings').document(key).set({"value": value}, merge=True)
     except Exception as e:
-        logger.error(f"Error incrementing stat {key}: {e}")
+        logger.error(f"Error setting {key} to {value}: {e}")
 
 def load_stats_sync() -> dict:
+    """جلب إحصائيات البوت التراكمية"""
     if db is None: return {}
     try:
-        doc = db.collection('settings').document('stats').get()
-        return doc.to_dict() if doc.exists else {}
-    except Exception as e:
-        logger.error(f"Error loading stats: {e}")
-        return {}
+        doc = db.collection('stats').document('global').get()
+        if doc.exists:
+            return doc.to_dict()
+    except Exception: pass
+    return {}
+
+def stat_inc_sync(key: str, value: int = 1):
+    """زيادة العدادات الإحصائية سحابياً بالتزامن مع الحركات"""
+    if db is None: return
+    try:
+        from google.cloud import firestore
+        db.collection('stats').document('global').update({
+            key: firestore.Increment(value)
+        })
+    except Exception:
+        try:
+            db.collection('stats').document('global').set({key: value}, merge=True)
+        except Exception: pass
 
 def all_user_ids() -> list:
+    """جلب قائمة بكافة معرّفات المستخدمين المشتركين للراديو والإذاعة"""
     if db is None: return []
     try:
-        docs = db.collection('users').select(['id']).stream()
-        return [int(doc.id) for doc in docs]
+        users = db.collection('users').stream()
+        return [int(u.id) for u in users]
     except Exception as e:
-        logger.error(f"Error getting all user ids: {e}")
-        return []
-
-def get_all_users_data() -> list:
-    if db is None: return []
-    try:
-        docs = db.collection('users').stream()
-        return [doc.to_dict() for doc in docs]
-    except Exception as e:
-        logger.error(f"Error getting all users data: {e}")
+        logger.error(f"Error getting all user IDs: {e}")
         return []
 
 def get_active_users_48h() -> list:
+    """جلب المستخدمين المتفاعلين خلال آخر 48 ساعة فقط"""
     if db is None: return []
-    threshold = int(time.time()) - (48 * 3600)
     try:
-        docs = db.collection('users').where(filter=FieldFilter('last_seen', '>=', threshold)).select(['id']).stream()
-        return [int(doc.id) for doc in docs]
-    except Exception as e:
-        logger.error(f"Error getting active users: {e}")
-        return []
+        cutoff = int(time.time()) - (48 * 3600)
+        users = db.collection('users').where('last_seen', '>=', cutoff).stream()
+        return [int(u.id) for u in users]
+    except Exception:
+        return all_user_ids()
 
 def get_latest_users(limit: int = 10) -> list:
+    """جلب قائمة بأحدث الأعضاء المنضمين للبوت لتفقد جودة الإقلاع"""
     if db is None: return []
     try:
-        docs = db.collection('users').order_by('last_seen', direction=firestore.Query.DESCENDING).limit(limit).stream()
-        return [doc.to_dict() for doc in docs]
-    except Exception as e:
-        logger.error(f"Error getting latest users: {e}")
+        users = db.collection('users').order_by('last_seen', direction='DESCENDING').limit(limit).stream()
+        return [u.to_dict() for u in users]
+    except Exception:
         return []
 
-def optimize_db():
-    """
-    قاعدة بيانات Firebase السحابية لا تتطلب عملية ضغط (Vacuum) كالسابق،
-    لذا تبقى هذه الدالة لتلبية طلب زر (تحسين الـ Database) في لوحة التحكم دون التسبب بأخطاء.
-    """
-    pass
-
-def verify_user_ad_completion(user_id: int):
-    """تسجيل وقت اكتمال مشاهدة الإعلان للمخدم بداخل الفايرستور للتأكيد"""
-    if db is None: return
+def get_all_users_data() -> list:
+    """جلب كافة بيانات الأعضاء لغرض التصدير لملفات الـ CSV"""
+    if db is None: return []
     try:
-        db.collection('users').document(str(user_id)).update({
-            'last_ad_completion': int(time.time())
-        })
-        logger.info(f"💰 Recorded ad completion for user {user_id}")
-    except Exception as e:
-        logger.error(f"Error updating ad completion for {user_id}: {e}")
+        users = db.collection('users').stream()
+        return [u.to_dict() for u in users]
+    except Exception: return []
 
-def check_ad_verified_status(user_id: int) -> bool:
-    """التحقق هل أكمل المستخدم الإعلان خلال آخر 5 ثوانٍ لتخطي حجب التنزيل"""
-    if db is None: return False
+def check_ad_verified_status(uid: int) -> bool:
+    """التحقق من حالة تخطي المستخدم للإعلانات حالياً"""
+    if db is None: return True
     try:
-        doc = db.collection('users').document(str(user_id)).get()
+        doc = db.collection('users').document(str(uid)).get()
         if doc.exists:
             data = doc.to_dict()
-            last_ad = data.get('last_ad_completion', 0)
-            if int(time.time()) - last_ad < 5:
+            expire = data.get("ad_expire", 0)
+            if time.time() < expire:
                 return True
-    except Exception as e:
-        logger.error(f"Error checking ad status for {user_id}: {e}")
+    except Exception: pass
     return False
 
+def verify_user_ad_completion(uid: int):
+    """تفعيل تخطي الإعلانات للمستخدم بنجاح لمدة 24 ساعة"""
+    if db is None: return
+    try:
+        expire_time = int(time.time()) + (24 * 3600)
+        db.collection('users').document(str(uid)).set({"ad_expire": expire_time}, merge=True)
+    except Exception as e:
+        logger.error(f"Error verifying ad for user {uid}: {e}")
+
 def export_firebase_backup_json() -> str:
-    """إنشاء نسخة احتياطية كاملة من مجموعات Firebase Firestore وتحويلها إلى ملف JSON"""
+    """سحب نسخة احتياطية سحابية كاملة بهيئة JSON"""
     if db is None: return ""
     try:
-        backup = {
-            "users": [],
-            "banned_users": [],
-            "settings": []
-        }
-        
-        # 1. تصدير بيانات المستخدمين
-        users_docs = db.collection('users').stream()
-        for doc in users_docs:
-            backup["users"].append(doc.to_dict())
-            
-        # 2. تصدير قائمة المحظورين
-        banned_docs = db.collection('banned_users').stream()
-        for doc in banned_docs:
-            banned_data = doc.to_dict() or {}
-            backup["banned_users"].append({
-                "id": doc.id,
-                **banned_data
-            })
-            
-        # 3. تصدير إعدادات السيرفر والإحصائيات
-        settings_docs = db.collection('settings').stream()
-        for doc in settings_docs:
-            settings_data = doc.to_dict() or {}
-            backup["settings"].append({
-                "document_id": doc.id,
-                **settings_data
-            })
-            
-        return json.dumps(backup, indent=4, ensure_ascii=False)
-    except Exception as e:
-        logger.error(f"Failed to export Firebase backup: {e}")
-        return ""
+        backup = {"users": [], "settings": [], "stats": {}}
+        for u in db.collection('users').stream():
+            backup["users"].append(u.to_dict())
+        for s in db.collection('settings').stream():
+            backup["settings"].append({s.id: s.to_dict()})
+        stats_doc = db.collection('stats').document('global').get()
+        if stats_doc.exists:
+            backup["stats"] = stats_doc.to_dict()
+        return json.dumps(backup, ensure_ascii=False, indent=2)
+    except Exception: return ""
+
+def optimize_db():
+    """دالة صامتة للتوافقية الهيكلية مع أزرار الإدارة القديمة بعد تفضيل السحابي التام"""
+    pass
