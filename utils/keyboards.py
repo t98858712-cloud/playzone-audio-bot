@@ -1,6 +1,7 @@
 from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from locales.language import _t
-from core.config import WEBSITE_PLAYZONE, FACEBOOK_PLAYZONE, INSTAGRAM_PLAYZONE, THREADS_PLAYZONE, TELEGRAM_BOT_PLAYZONE
+# تم استبدال TELEGRAM_BOT_PLAYZONE بالمتغير العالمي BOT_USERNAME ليكون صمام أمان
+from core.config import WEBSITE_PLAYZONE, FACEBOOK_PLAYZONE, INSTAGRAM_PLAYZONE, THREADS_PLAYZONE, BOT_USERNAME
 from database.operations import get_setting
 
 def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
@@ -33,7 +34,8 @@ def build_resolution_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboa
         [InlineKeyboardButton(_t("btn_back", lang), callback_data=f"back:{request_id}")]
     ])
 
-def build_playzone_links_keyboard(bot_username: str) -> InlineKeyboardMarkup:
+# تم وضع = BOT_USERNAME كقيمة افتراضية لمنع أي خطأ برمي في السيرفر عند استدعاء الدالة
+def build_playzone_links_keyboard(bot_username: str = BOT_USERNAME) -> InlineKeyboardMarkup:
     # إنشاء رابط حي ومضمون للبوت الحالي لمنع أي توقف
     tg_url = f"https://t.me/{bot_username.replace('@', '')}"
     return InlineKeyboardMarkup([
