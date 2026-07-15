@@ -3,7 +3,7 @@ LANG_DICT = {
         "btn_guide": "📘 دليل الاستخدام",
         "btn_links": "🔗 روابط PlayZone",
         "btn_add_group": "➕ إضافة البوت للمجموعة",
-        "btn_lang": "🌐 English",  # زر تغيير اللغة للإنجليزية
+        "btn_lang": "🌐 English",
         "btn_audio": "🎵 تحميل صوت",
         "btn_audio_pro": "🎛️ هندسة صوتية",
         "btn_video": "🎬 تحميل فيديو",
@@ -48,6 +48,7 @@ LANG_DICT = {
         "share_text": "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:",
         "btn_share": "🌟 أعجبك البوت؟ شاركه",
         
+        # --- نصوص الإدارة والأزرار والإعلانات ---
         "msg_admin_only": "⛔ هذا الزر مخصص للمدراء فقط.",
         "msg_loading_preview_already": "⏳ جاري فحص خيارات الرابط بالفعل، يرجى الانتظار...",
         "msg_ad_verified": "✅ تم التحقق بنجاح! جاري بدء التحميل...",
@@ -57,7 +58,17 @@ LANG_DICT = {
         "btn_verify_ad": "🔄 التحقق من اكتمال المشاهدة",
         "msg_cookie_updated": "✅ تم استلام وتحديث ملف الكوكيز (cookies.txt) بنجاح.",
         "msg_invalid_id": "❌ يرجى إرسال أرقام فقط (ID صالح).",
-        "msg_dashboard": "👑 <b>لوحة القيادة والمراقبة المتقدمة</b>\n━━━━━━━━━━━━━━━━━━━━━\n📡 <b>حالة البوت:</b> {status}\n👥 <b>المشتركين:</b> <code>{users}</code> عضو\n📥 <b>الطلبات الناجحة:</b> <code>{success}</code>\n⚠️ <b>الطلبات الفاشلة:</b> <code>{failed}</code>\n━━━━━━━━━━━━━━━━━━━━━\n👇 <b>خيارات القيادة والتحكم السريعة:</b>",
+        
+        # اللوحة المصفاة بدون خطوط وفواصل
+        "msg_dashboard": (
+            "👑 <b>لوحة القيادة والمراقبة</b>\n\n"
+            "📡 حالة البوت: {status}\n"
+            "👥 المشتركين: <code>{users}</code> عضو\n"
+            "📥 الطلبات الناجحة: <code>{success}</code>\n"
+            "⚠️ الطلبات الفاشلة: <code>{failed}</code>\n\n"
+            "👇 خيارات التحكم السريعة:"
+        ),
+        
         "txt_online": "🟢 متصل ومتاح للجميع",
         "txt_maintenance": "🔴 مغلق لوضع الصيانة",
         "txt_banned": "🔴 Banned (محظور)",
@@ -111,7 +122,7 @@ LANG_DICT = {
         "btn_guide": "📘 User Guide",
         "btn_links": "🔗 PlayZone Links",
         "btn_add_group": "➕ Add Bot to Group",
-        "btn_lang": "🌐 العربية",  # زر العودة للعربية
+        "btn_lang": "🌐 العربية",
         "btn_audio": "🎵 Download Audio",
         "btn_audio_pro": "🎛️ Sound Engineering",
         "btn_video": "🎬 Download Video",
@@ -165,7 +176,17 @@ LANG_DICT = {
         "btn_verify_ad": "🔄 Verify Ad Completion",
         "msg_cookie_updated": "✅ Cookies file updated successfully.",
         "msg_invalid_id": "❌ Please send numbers only (Valid ID).",
-        "msg_dashboard": "👑 <b>Advanced Dashboard</b>\n━━━━━━━━━━━━━━━━━━━━━\n📡 <b>Status:</b> {status}\n👥 <b>Users:</b> <code>{users}</code>\n📥 <b>Success:</b> <code>{success}</code>\n⚠️ <b>Failed:</b> <code>{failed}</code>\n━━━━━━━━━━━━━━━━━━━━━\n👇 <b>Quick Controls:</b>",
+        
+        # Clean Dashboard without lines for English
+        "msg_dashboard": (
+            "👑 <b>Advanced Dashboard</b>\n\n"
+            "📡 Status: {status}\n"
+            "👥 Users: <code>{users}</code>\n"
+            "📥 Success: <code>{success}</code>\n"
+            "⚠️ Failed: <code>{failed}</code>\n\n"
+            "👇 Quick Controls:"
+        ),
+        
         "txt_online": "🟢 Online",
         "txt_maintenance": "🔴 Maintenance Mode",
         "txt_banned": "🔴 Banned",
