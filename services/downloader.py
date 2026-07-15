@@ -14,6 +14,9 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+# ⏱️ مؤقت منع تكرار تنبيهات الكوكيز في السيرفر
+LAST_COOKIE_ALERT_TIME = 0
+
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
@@ -156,6 +159,7 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     except Exception: return None
 
 async def youtube_health_monitor(app: Application):
+    global LAST_COOKIE_ALERT_TIME
     while True:
         await asyncio.sleep(6 * 3600)
         try:
@@ -184,5 +188,7 @@ async def youtube_health_monitor(app: Application):
         except Exception as e:
             err_str = str(e).lower()
             if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-                # يقتصر الإجراء على إرسال إشعار للمدير فقط دون تعديل في ملف الكوكيز
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه طوارئ من السيرفر:</b>\nتم كشف حظر ملف الكوكيز الحالي! الرجاء استخراج ملف كوكيز جديد وإرساله هنا لتجديده.")
+                now = time.time()
+                if now - LAST_COOKIE_ALERT_TIME > 1800:
+                    LAST_COOKIE_ALERT_TIME = now
+                    await alert_admins_live(app.bot, "⚠️ <b>تنبيه طوارئ من السيرفر:</b>\nتم كشف حظر ملف الكوكيز الحالي! الرجاء استخراج ملف كوكيز جديد وإرساله للمحادثة هنا فوراً.")
