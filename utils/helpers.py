@@ -13,8 +13,24 @@ from telegram.ext import ContextTypes
 
 from core.config import BASE_DOWNLOAD_DIR, REQUEST_EXPIRE_SECONDS
 from locales.language import _t
+from database.connection import db
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
+
+def get_user_lang(uid: int, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """دالة مركزية ذكية لجلب لغة المستخدم (من الذاكرة أو من Firebase مباشرة)"""
+    lang = context.user_data.get("lang")
+    if lang: return lang
+    try:
+        if db:
+            doc = db.collection('users').document(str(uid)).get()
+            if doc.exists:
+                lang = doc.to_dict().get("lang", "ar")
+                context.user_data["lang"] = lang
+                return lang
+    except Exception: pass
+    context.user_data["lang"] = "ar"
+    return "ar"
 
 def parse_admin_ids():
     admin_ids_raw = os.getenv("ADMIN_IDS", "")
