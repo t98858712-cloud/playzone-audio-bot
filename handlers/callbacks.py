@@ -19,7 +19,7 @@ from locales.language import _t
 from utils.helpers import (
     is_admin, clean_title, format_duration, format_size, esc, 
     ensure_pending_requests, trim_old_pending_requests, get_artist, 
-    get_thumbnail, get_largest_estimated_size, alert_admins_live, progress_lock
+    get_thumbnail, get_largest_estimated_size, alert_admins_live
 )
 from utils.keyboards import build_preview_keyboard, build_resolution_keyboard
 
@@ -221,7 +221,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception: pass
 
         async with DOWNLOAD_SEMAPHORE:
-            with progress_lock: progress_data["text"] = _t("msg_dl_started", lang)
+            progress_data["text"] = _t("msg_dl_started", lang)
             
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
@@ -234,7 +234,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
             if mode == "audio":
-                with progress_lock: progress_data["text"] = _t("msg_converting", lang)
+                progress_data["text"] = _t("msg_converting", lang)
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
                 target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
