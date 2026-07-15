@@ -4,11 +4,11 @@ from core.config import WEBSITE_PLAYZONE, FACEBOOK_PLAYZONE, INSTAGRAM_PLAYZONE,
 from database.operations import get_setting
 
 def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
-    """لوحة مفاتيح المستخدم الرئيسية متناسقة ومزدوجة الأزرار"""
+    """لوحة مفاتيح المستخدم الرئيسية بعد تصفية وإزالة زر اللغة"""
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
-            [KeyboardButton(_t("btn_lang", lang)), KeyboardButton(_t("btn_add_group", lang))]
+            [KeyboardButton(_t("btn_add_group", lang))]
         ],
         resize_keyboard=True, is_persistent=True, input_field_placeholder=_t("txt_placeholder", lang)
     )
