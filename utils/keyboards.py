@@ -7,7 +7,7 @@ def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
-            [KeyboardButton(_t("btn_add_group", lang))]
+            [KeyboardButton(_t("btn_lang", lang)), KeyboardButton(_t("btn_add_group", lang))]
         ],
         resize_keyboard=True, is_persistent=True, input_field_placeholder=_t("txt_placeholder", lang)
     )
@@ -15,7 +15,7 @@ def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
 def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(_t("btn_audio", lang), callback_data=f"aud:{request_id}")],
-        [InlineKeyboardButton("🎛️ هندسة صوتية" if lang == "ar" else "🎛️ Sound Engineering", callback_data=f"aud_pro:{request_id}")],
+        [InlineKeyboardButton(_t("btn_audio_pro", lang), callback_data=f"aud_pro:{request_id}")],
         [InlineKeyboardButton(_t("btn_video", lang), callback_data=f"vid:{request_id}")],
         [InlineKeyboardButton(_t("btn_cancel", lang), callback_data=f"cancel:{request_id}")],
     ])
@@ -41,10 +41,6 @@ def build_playzone_links_keyboard(bot_username: str = BOT_USERNAME) -> InlineKey
         [InlineKeyboardButton("📘 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=tg_url)],
     ])
-
-# =======================================================
-#    📊 لوحة تحكم الإدارة (بدون نصوص صلبة)
-# =======================================================
 
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
