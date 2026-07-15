@@ -33,11 +33,7 @@ from handlers.user import render_search_page
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# ⏱️ مؤقت منع تكرار تنبيهات الكوكيز في الكولباك
-LAST_COOKIE_ALERT_TIME = 0
-
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global LAST_COOKIE_ALERT_TIME
     query = update.callback_query
     if not query: return
     
@@ -107,13 +103,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             stat_inc_sync("requests")
         except Exception as e:
             logger.warning(f"فشل جلب المعاينة من البحث: {e}")
-            err_str = str(e).lower()
-            if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-                now = time.time()
-                if now - LAST_COOKIE_ALERT_TIME > 1800:
-                    LAST_COOKIE_ALERT_TIME = now
-                    await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء جلب المعاينة:</b>\nالرابط: {url}\n\nالرجاء إرسال ملف `cookies.txt` جديد فوراً.")
-            
             await context.bot.send_message(chat_id=uid, text=_t("msg_link_error", lang))
         finally:
             context.user_data.pop("loading_preview", None)
@@ -218,7 +207,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str, lang: str):
-    global LAST_COOKIE_ALERT_TIME
     uid = query.from_user.id
     url = request.get("url")
     ACTIVE_USERS.add(uid)
@@ -314,19 +302,9 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         except Exception: pass
     except Exception as e:
         stat_inc_sync("failed")
-        err_str = str(e).lower()
-        
-        if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-            now = time.time()
-            if now - LAST_COOKIE_ALERT_TIME > 1800:
-                LAST_COOKIE_ALERT_TIME = now
-                await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء التحميل:</b>\nالرابط: {url}\n\nالرجاء إرسال ملف `cookies.txt` جديد فوراً.")
-            try: await edit_message_smart(query.message, "❌ فشل التحميل بسبب قيود حماية يوتيوب للمقطع. يرجى الانتظار لحين تجديد الكوكيز من قبل الإدارة.", reply_markup=None)
-            except Exception: pass
-        else:
-            await alert_admins_live(context.bot, f"🚨 <b>فشل تحميل مقطع:</b>\nالرابط: {url}\nالخطأ:\n<code>{str(e)[:300]}</code>")
-            try: await edit_message_smart(query.message, _t("msg_dl_failed", lang), reply_markup=None)
-            except Exception: pass
+        await alert_admins_live(context.bot, f"🚨 <b>فشل تحميل مقطع:</b>\nالرابط: {url}\nالخطأ:\n<code>{str(e)[:300]}</code>")
+        try: await edit_message_smart(query.message, _t("msg_dl_failed", lang), reply_markup=None)
+        except Exception: pass
     finally:
         stop_event.set()
         try: await updater_task
