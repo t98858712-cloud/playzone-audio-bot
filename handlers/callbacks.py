@@ -11,7 +11,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
-from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK, ADSTERRA_LINK
+from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
 from core.security import ACTIVE_USERS
 from database.operations import stat_inc_sync
 from locales.language import _t
@@ -103,6 +103,17 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             stat_inc_sync("requests")
         except Exception as e:
             logger.warning(f"فشل جلب المعاينة من البحث: {e}")
+            err_str = str(e).lower()
+            if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
+                try:
+                    if COOKIES_FILE.exists():
+                        backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
+                        shutil.copy(COOKIES_FILE, backup_path)
+                        COOKIES_FILE.unlink()
+                        COOKIES_FILE.touch()
+                except Exception: pass
+                await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء جلب المعاينة:</b>\nالرابط: {url}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم تفريغ الكوكيز لتفادي توقف البوت. يرجى إرسال ملف `cookies.txt` جديد فوراً.")
+            
             await context.bot.send_message(chat_id=uid, text=_t("msg_link_error", lang))
         finally:
             context.user_data.pop("loading_preview", None)
@@ -305,7 +316,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
         err_str = str(e).lower()
         
         if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-            from core.config import COOKIES_FILE
             try:
                 if COOKIES_FILE.exists():
                     backup_path = COOKIES_FILE.with_name(f"cookies_banned_{int(time.time())}.txt")
@@ -314,7 +324,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                     COOKIES_FILE.touch()
             except Exception: pass
             
-            await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء التحميل:</b>\nالرابط: {url}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم أخذ نسخة احتياطية وحذف الملف المحظور وإنشاء ملف فارغ لتفادي توقف طلبات باقي المستخدمين.\nالرجاء إرسال ملف `cookies.txt` جديد.")
+            await alert_admins_live(context.bot, f"🚨 <b>حظر مفاجئ للكوكيز أثناء التحميل:</b>\nالرابط: {url}\n\n♻️ <b>تمت الصيانة الذاتية:</b> تم تفريغ الكوكيز لتفادي توقف طلبات باقي المستخدمين. يرجى إرسال ملف `cookies.txt` جديد.")
             try: await edit_message_smart(query.message, "❌ فشل التحميل مؤقتاً بسبب حماية يوتيوب للمقطع (يتم الآن صيانة الكوكيز تلقائياً). يرجى المحاولة بعد قليل.", reply_markup=None)
             except Exception: pass
         else:
