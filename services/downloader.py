@@ -14,9 +14,6 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# ⏱️ مؤقت منع تكرار تنبيهات الكوكيز في السيرفر
-LAST_COOKIE_ALERT_TIME = 0
-
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
@@ -24,8 +21,8 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["tvhtml5", "tv"],
-                "player_skip": ["web", "mweb", "android", "ios"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         },
         "http_headers": {
@@ -47,14 +44,14 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         
         if resolution == "best":
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/ "
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/ "
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"best[filesize<?{max_fs}]"
             )
         else:
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/ "
-                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/ "
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
                 f"best[height<={resolution}][filesize<?{max_fs}]"
             )
             
@@ -86,8 +83,8 @@ def search_youtube(query: str, limit: int = 30):
         "ignoreerrors": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["tvhtml5", "tv"],
-                "player_skip": ["web", "mweb", "android", "ios"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         }
     }
@@ -159,12 +156,11 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     except Exception: return None
 
 async def youtube_health_monitor(app: Application):
-    global LAST_COOKIE_ALERT_TIME
     while True:
         await asyncio.sleep(6 * 3600)
         try:
             if not cookie_file_is_usable(COOKIES_FILE):
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو فارغ. يرجى إرسال ملف جديد لتخطي قيود يوتيوب العمرية والمحظورة.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
                 continue
             opts = {
                 "quiet": True, 
@@ -172,8 +168,8 @@ async def youtube_health_monitor(app: Application):
                 "cookiefile": str(COOKIES_FILE),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["tvhtml5", "tv"],
-                        "player_skip": ["web", "mweb", "android", "ios"]
+                        "player_client": ["android", "ios", "tv"],
+                        "player_skip": ["web", "mweb"]
                     }
                 }
             }
@@ -186,9 +182,5 @@ async def youtube_health_monitor(app: Application):
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
         except Exception as e:
-            err_str = str(e).lower()
-            if "sign in" in err_str or "cookie" in err_str or "botcheck" in err_str:
-                now = time.time()
-                if now - LAST_COOKIE_ALERT_TIME > 1800:
-                    LAST_COOKIE_ALERT_TIME = now
-                    await alert_admins_live(app.bot, "⚠️ <b>تنبيه طوارئ من السيرفر:</b>\nتم كشف حظر ملف الكوكيز الحالي! الرجاء استخراج ملف كوكيز جديد وإرساله للمحادثة هنا فوراً.")
+            if "Sign in" in str(e) or "cookie" in str(e).lower():
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور.")
