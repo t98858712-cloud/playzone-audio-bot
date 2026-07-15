@@ -42,10 +42,6 @@ def build_playzone_links_keyboard(bot_username: str = BOT_USERNAME) -> InlineKey
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=tg_url)],
     ])
 
-# =======================================================
-#          لوحات تحكم الإدارة (التصميم الحديث الاحترافي)
-# =======================================================
-
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 الإحصائيات والمراقبة المتقدمة", callback_data="adm_stats")],
@@ -87,15 +83,9 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     adsterra_status = get_setting("adsterra_status", "1")
     adsterra_btn = InlineKeyboardButton("🔴 إيقاف إعلانات Adsterra" if adsterra_status == "1" else "🟢 تفعيل إعلانات Adsterra", callback_data="adm_toggle_adsterra")
     
-    # 🌐 قراءة حالة البروكسي الحالية لتبديل شكل الزر بشكل ديناميكي أنيق
-    proxy = get_setting("proxy", "")
-    proxy_btn_text = "🌐 تعديل البروكسي (نشط ✅)" if proxy else "🌐 إعداد البروكسي (معطل ❌)"
-    proxy_btn = InlineKeyboardButton(proxy_btn_text, callback_data="adm_proxy_prompt")
-    
     return InlineKeyboardMarkup([
         [maint_btn], 
         [hilltop_btn, adsterra_btn], 
-        [proxy_btn],
         [
             InlineKeyboardButton("🔄 تحديث المحرك", callback_data="adm_update_dlp"), 
             InlineKeyboardButton("🍪 تجديد الكوكيز", callback_data="adm_cookie_guide")
