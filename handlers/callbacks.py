@@ -4,14 +4,13 @@ import time
 import asyncio
 import shutil
 import logging
-import os
 from urllib.parse import quote
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.error import TimedOut, NetworkError, BadRequest
 
-from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
+from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, HILLTOPADS_LINK, ADSTERRA_LINK
 from core.security import ACTIVE_USERS
 from database.operations import stat_inc_sync
 from locales.language import _t
@@ -40,7 +39,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data, uid, lang = query.data or "", query.from_user.id, context.user_data.get("lang", "ar")
     
     if data.startswith("adm_"):
-        if not is_admin(uid): return await query.answer("⛔ هذا الزر مخصص للمدراء فقط.", show_alert=True)
+        if not is_admin(uid): return await query.answer(_t("msg_admin_only", lang), show_alert=True)
         return await handle_admin_callbacks(query, context)
         
     if data == "cancel_search":
@@ -60,7 +59,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = f"https://www.youtube.com/watch?v={video_id}"
         
         if context.user_data.get("loading_preview"):
-            return await query.answer("⏳ جاري فحص خيارات الرابط بالفعل، يرجى الانتظار...", show_alert=True)
+            return await query.answer(_t("msg_loading_preview_already", lang), show_alert=True)
         
         context.user_data["loading_preview"] = True
         await query.answer()
@@ -68,10 +67,11 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await query.message.edit_text(_t("msg_check_link", lang), reply_markup=None)
         except BadRequest as e:
-            if "Message is not modified" in str(e) or "There is no text" in str(e):
+            if "not modified" not in str(e).lower() and "no text" not in str(e).lower():
+                logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
+            else:
                 context.user_data.pop("loading_preview", None)
                 return
-            logger.warning(f"تنبيه أثناء تعديل نص البحث: {e}")
         
         try:
             loop = asyncio.get_running_loop()
@@ -142,7 +142,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if is_admin(uid) or (hilltop_status == "0" and adsterra_status == "0") or check_ad_verified_status(uid):
             if data.startswith("v_ad:"):
-                await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
+                await query.answer(_t("msg_ad_verified", lang), show_alert=True)
             else:
                 if mode in ["audio", "audio_pro"]: await query.answer(_t("msg_prep_audio", lang))
                 else: await query.answer(_t("msg_prep_video", lang))
@@ -161,14 +161,14 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     from database.operations import verify_user_ad_completion
                     verify_user_ad_completion(uid)
                     
-                    await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
+                    await query.answer(_t("msg_ad_verified", lang), show_alert=True)
                     request = ensure_pending_requests(context).pop(request_id, None)
                     trim_old_pending_requests(context)
                     if not request: return await edit_message_smart(query.message, _t("msg_session_expired", lang))
                     if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
                     await start_download_from_callback(query, context, request, mode, resolution, lang)
                 else:
-                    return await query.answer("❌ لم تنتهِ من مشاهدة الإعلان بالكامل. يرجى الانتظار والمحاولة.", show_alert=True)
+                    return await query.answer(_t("msg_ad_not_finished", lang), show_alert=True)
             else:
                 await query.answer()
                 context.user_data[f"ad_start_{request_id}"] = time.time()
@@ -179,31 +179,14 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if adsterra_status == "1":
                     available_links.append(ADSTERRA_LINK)
                 
-                if not available_links:
-                    ad_direct_url = HILLTOPADS_LINK
-                else:
-                    ad_direct_url = random.choice(available_links)
-                
-                btn_watch = "📺 مشاهدة الإعلان " if lang == "ar" else "📺 Watch Ad"
-                btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
+                ad_direct_url = random.choice(available_links) if available_links else HILLTOPADS_LINK
                 
                 ad_keyboard = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(btn_watch, url=ad_direct_url)],
-                    [InlineKeyboardButton(btn_verify, callback_data=f"v_ad:{mode}:{resolution}:{request_id}")]
+                    [InlineKeyboardButton(_t("btn_watch_ad", lang), url=ad_direct_url)],
+                    [InlineKeyboardButton(_t("btn_verify_ad", lang), callback_data=f"v_ad:{mode}:{resolution}:{request_id}")]
                 ])
                 
-                msg_text = (
-                    "📥 <b>لفك قفل التحميل:</b>\n\n"
-                    "1️⃣ اضغط على زر الإعلان.\n"
-                    "2️⃣ افتح الرابط ثم أغلقه.\n"
-                    "3️⃣ اضغط على زر التحقق، وسيبدأ التحميل مباشرة. ❤️"
-                    if lang == "ar" else
-                    "📥 <b>To unlock your download:</b>\n\n"
-                    "1️⃣ Tap the ad button.\n"
-                    "2️⃣ Open the link, then close it.\n"
-                    "3️⃣ Tap Verify to start your download instantly. ❤️"
-                )
-                await edit_message_smart(query.message, msg_text, reply_markup=ad_keyboard)
+                await edit_message_smart(query.message, _t("msg_ad_unlock", lang), reply_markup=ad_keyboard)
         return
 
 async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE, request: dict, mode: str, resolution: str, lang: str):
@@ -236,10 +219,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
             if mode in ["audio", "audio_pro"]:
-                if mode == "audio_pro":
-                    progress_data["text"] = "🎛️ جاري عمل هندسة صوتية..." if lang == "ar" else "🎛️ Running professional audio..."
-                else:
-                    progress_data["text"] = _t("msg_converting", lang)
+                progress_data["text"] = _t("msg_converting", lang)
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb, pro_mode=(mode == "audio_pro")))
                 target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
