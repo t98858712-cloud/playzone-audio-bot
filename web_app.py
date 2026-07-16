@@ -9,7 +9,7 @@ import yt_dlp
 
 # --- إعدادات البوت والبيئة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي
+BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي 
 # -------------------------------------------------------------
 
 try:
@@ -196,11 +196,11 @@ INDEX_HTML = f"""
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 
-                <!-- حاوية نتائج البحث (5 خيارات) -->
-                <div id="searchResults" class="hidden mt-6 bg-bgDark border border-panelBorder rounded-3xl p-5">
-                    <div class="flex justify-between items-center mb-5 border-b border-panelBorder pb-3">
-                        <h3 class="text-white font-bold text-lg"><i class="fas fa-list-ol text-accent ml-2"></i>اختر المقطع المطلوب:</h3>
-                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 text-sm transition-colors"><i class="fas fa-times"></i> إغلاق</button>
+                <!-- حاوية نتائج البحث المُحسّنة (قائمة من 5 خيارات عمودية) -->
+                <div id="searchResults" class="hidden mt-6 bg-bgDark border border-panelBorder rounded-3xl p-4 md:p-5">
+                    <div class="flex justify-between items-center mb-4 border-b border-panelBorder pb-3">
+                        <h3 class="text-white font-bold text-lg flex items-center gap-2"><i class="fas fa-list-ol text-accent"></i>اختر المقطع المطلوب:</h3>
+                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 text-sm transition-colors flex items-center gap-1"><i class="fas fa-times"></i> إغلاق</button>
                     </div>
                     <div id="searchResultsList" class="flex flex-col gap-3"></div>
                 </div>
@@ -251,6 +251,7 @@ INDEX_HTML = f"""
             </div>
         </section>
 
+        <!-- بقية الأقسام -->
         <section id="libraryView" class="view-section p-4 md:p-8 max-w-6xl mx-auto h-full flex flex-col">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <h2 class="text-2xl font-bold text-white">ملفاتي المحفوظة</h2>
@@ -488,7 +489,6 @@ INDEX_HTML = f"""
             applyFilters(); showToast("تم الحذف بنجاح", "info");
         }}
 
-        // إرجاع وظيفة التحميل الكلاسيكية المباشرة حسب طلبك 
         function forceDownload(url, title) {{
             const a = document.createElement('a');
             a.href = url;
@@ -578,6 +578,7 @@ INDEX_HTML = f"""
         function seekAudio(e) {{ const rect = document.getElementById('progressContainer').getBoundingClientRect(); let percent = (e.clientX - rect.left) / rect.width; if(document.dir === 'rtl') percent = 1 - percent; audioEl.currentTime = percent * audioEl.duration; }}
         function changeVolume() {{ audioEl.volume = document.getElementById('volumeSlider').value; }}
 
+        // --- نظام البحث المطور لتجنب أخطاء العرض (التداخل) ---
         let currentUrl = "", adWatched = false;
         async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
@@ -592,26 +593,31 @@ INDEX_HTML = f"""
                     const data = await res.json();
                     if(data.success && data.entries.length) {{
                         let box = document.getElementById('searchResultsList'); box.innerHTML = '';
-                        // عرض 5 خيارات فقط بشكل عمودي احترافي
+                        
+                        // عرض 5 خيارات كحد أقصى بتصميم متجاوب
                         data.entries.slice(0, 5).forEach((v, idx) => {{
                             if(v.id) {{
                                 const thumb = v.thumbnails && v.thumbnails.length ? v.thumbnails[0].url : 'https://via.placeholder.com/150';
                                 const duration = formatTime(v.duration || 0);
                                 const uploader = v.uploader || 'غير معروف';
                                 
+                                // إصلاح تداخل النصوص باستخدام min-w-0 و flex-shrink-0
                                 box.innerHTML += `
-                                <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="p-3 bg-panel hover:bg-panelBorder rounded-2xl cursor-pointer flex gap-4 items-center border border-panelBorder hover:border-accent/50 transition-all mb-3 shadow-sm group">
-                                    <div class="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center font-bold text-lg flex-shrink-0">${{idx + 1}}</div>
-                                    <img src="${{thumb}}" class="w-20 h-14 rounded-lg object-cover shadow-sm">
-                                    <div class="flex-1 overflow-hidden">
-                                        <p class="font-bold text-[15px] text-white line-clamp-1 mb-1">${{v.title}}</p>
-                                        <p class="text-xs text-textMuted flex items-center gap-3">
-                                            <span><i class="fas fa-user-circle"></i> ${{uploader}}</span>
-                                            <span><i class="far fa-clock"></i> ${{duration}}</span>
+                                <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full flex items-center gap-3 p-3 bg-panel rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all shadow-sm">
+                                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent font-bold text-sm">
+                                        ${{idx + 1}}
+                                    </div>
+                                    <div class="flex-shrink-0 relative w-20 h-14 rounded-lg overflow-hidden border border-panelBorder/50">
+                                        <img src="${{thumb}}" class="w-full h-full object-cover">
+                                    </div>
+                                    <div class="flex-1 min-w-0 flex flex-col justify-center">
+                                        <p class="text-white font-bold text-sm truncate w-full" dir="auto">${{v.title}}</p>
+                                        <p class="text-textMuted text-xs mt-1 truncate w-full" dir="auto">
+                                            <i class="fas fa-user-circle"></i> ${{uploader}} • <i class="far fa-clock"></i> ${{duration}}
                                         </p>
                                     </div>
-                                    <div class="w-10 h-10 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent flex-shrink-0 group-hover:bg-accent group-hover:text-white transition-colors">
-                                        <i class="fas fa-download"></i>
+                                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent">
+                                        <i class="fas fa-download text-xs"></i>
                                     </div>
                                 </div>`;
                             }}
@@ -812,13 +818,11 @@ async def send_to_telegram(req: TelegramRequest):
         api_method = "sendAudio" if req.is_audio else "sendVideo"
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         
-        # --- تنسيق الوقت وتحويله من ثواني إلى (دقائق:ثواني) ---
         dur = int(req.duration) if req.duration else 0
         m, s = divmod(dur, 60)
         h, m = divmod(m, 60)
         time_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
         
-        # --- تنسيق الكابشن والزر ليكون مطابقاً للصورة (نص الزر بدون أسهم) ---
         caption = f"- @{BOT_USERNAME} , {time_str}"
         reply_markup = {
             "inline_keyboard": [
