@@ -4,13 +4,22 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from jinja2 import Template
 import yt_dlp
 
-# استيراد إعدادات الأمان والكوكيز من البوت لضمان تخطي الحظر
-from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
-from database.connection import init_db
-from utils.helpers import cookie_file_is_usable
+# --- حماية الاستيراد (Fallback) لضمان عمل الكود في أي بيئة ---
+try:
+    from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
+    from database.connection import init_db
+    from utils.helpers import cookie_file_is_usable
+except ImportError:
+    # إعدادات افتراضية في حال تشغيل الكود كملف مستقل
+    BASE_DOWNLOAD_DIR = Path("./downloads")
+    HILLTOPADS_LINK = "https://example.com/ad"
+    ADSTERRA_LINK = None
+    COOKIES_FILE = Path("cookies.txt")
+    def init_db(): pass
+    def cookie_file_is_usable(f): return False
+# -------------------------------------------------------------
 
 app = FastAPI(title="PlayZone Cloud Enterprise")
 init_db()
@@ -56,8 +65,15 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         opts["progress_hooks"] = [progress_hook]
     return opts
 
+# دالة البحث المفقودة (تمت برمجتها لتجلب النتائج بسلاسة)
+def search_youtube(query: str, limit: int = 5):
+    opts = get_hardened_ydl_options()
+    opts['extract_flat'] = True
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+
 # ==========================================
-# واجهة الويب المؤسسية المتطورة وشاملة الميزات
+# واجهة الويب المؤسسية المتطورة والموجهة للمستخدم (UX-Centric)
 # ==========================================
 INDEX_HTML = f"""
 <!DOCTYPE html>
@@ -72,26 +88,30 @@ INDEX_HTML = f"""
         .modern-input {{ background: #0f172a; border: 1px solid #334155; color: white; width: 100%; padding: 1rem; border-radius: 1rem; outline: none; transition: all 0.3s; }}
         .modern-input:focus {{ border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }}
         .modern-btn {{ padding: 1rem; border-radius: 1rem; font-weight: bold; transition: all 0.3s; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 0.5rem; }}
-        #toast {{ visibility: hidden; min-width: 250px; background: #10b981; color: #000; text-align: center; border-radius: 99px; padding: 12px 24px; position: fixed; z-index: 50; left: 50%; bottom: 40px; font-weight: bold; transform: translateX(-50%) translateY(20px); transition: all 0.4s; opacity: 0; box-shadow: 0 10px 25px rgba(16,185,129,0.3); }}
+        .modern-btn:disabled {{ opacity: 0.7; cursor: not-allowed; }}
+        #toast {{ visibility: hidden; min-width: 250px; background: #10b981; color: #fff; text-align: center; border-radius: 99px; padding: 12px 24px; position: fixed; z-index: 50; left: 50%; bottom: 40px; font-weight: bold; transform: translateX(-50%) translateY(20px); transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); opacity: 0; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }}
         #toast.show {{ visibility: visible; opacity: 1; transform: translateX(-50%) translateY(0); }}
+        #toast.error {{ background: #ef4444; }}
+        #toast.success {{ background: #10b981; }}
+        #toast.info {{ background: #3b82f6; }}
     </style>
 </head>
-<body class="font-sans p-4浏览 pb-10">
+<body class="font-sans p-4 pb-10">
     <div id="toast"></div>
 
     <div class="max-w-4xl mx-auto space-y-8 mt-4">
-        <!-- الهيدر الرئيسي مع زر وضع الإضاءة -->
+        <!-- الهيدر الرئيسي -->
         <header class="flex justify-between items-center bg-slate-800/40 p-4 rounded-2xl border border-slate-700 shadow-sm">
             <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full bg-primary animate-pulse"></span>
-                <h1 class="text-xl font-black text-white">Play<span class="text-primary">Zone</span> Web</h1>
+                <h1 class="text-xl font-black text-white">Play<span class="text-primary">Zone</span> Cloud</h1>
             </div>
-            <button onclick="toggleTheme()" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-slate-700 transition-colors">
+            <button onclick="toggleTheme()" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-slate-700 transition-colors tooltip" title="تغيير المظهر">
                 <i id="themeIcon" class="fas fa-moon text-lg"></i>
             </button>
         </header>
 
-        <!-- صندوق البحث والفحص الخارق -->
+        <!-- صندوق البحث والفحص -->
         <section class="glass-panel rounded-3xl p-6 md:p-8 text-center shadow-xl">
             <h2 class="text-2xl font-bold mb-2">أهلاً بك في منصة التحميل الذكية</h2>
             <p class="text-slate-400 mb-6 text-sm">أدخل رابط المقطع مباشرة، أو اكتب اسم الأغنية للبحث الفوري عنها 🔎</p>
@@ -103,16 +123,16 @@ INDEX_HTML = f"""
             
             <div id="searchResults" class="hidden mt-6 text-right space-y-2 max-h-60 overflow-y-auto pr-1"></div>
 
-            <div id="previewBox" class="hidden mt-6 p-4 bg-slate-800 rounded-2xl text-right flex flex-col md:flex-row gap-4 items-center border border-slate-700">
+            <div id="previewBox" class="hidden mt-6 p-4 bg-slate-800 rounded-2xl text-right flex flex-col md:flex-row gap-4 items-center border border-slate-700 transition-all">
                 <img id="thumb" class="w-full md:w-40 rounded-xl object-cover shadow-md aspect-video">
                 <div class="flex-1 w-full">
                     <h3 id="title" class="font-bold text-lg text-primary truncate mb-2"></h3>
                     
                     <!-- بوابة دعم الموقع (Ad-Gate) -->
                     <div id="adGate" class="bg-primary/10 border border-primary/30 p-4 rounded-xl text-center mb-4">
-                        <p class="text-sm mb-3 font-medium">فضلاً، ادعم استمرار الخدمة مجاناً بزيارة الرابط لـ 10 ثوانٍ فقط ❤️</p>
+                        <p class="text-sm mb-3 font-medium text-slate-200">فضلاً، ادعم استمرار الخدمة مجاناً بزيارة الرابط لـ 10 ثوانٍ فقط ❤️</p>
                         <div class="flex flex-col sm:flex-row gap-2 justify-center">
-                            <a href="{AD_LINK}" target="_blank" onclick="startAdTimer()" class="modern-btn bg-primary text-slate-900 py-2 px-4 text-sm"><i class="fas fa-external-link-alt"></i> 1. تصفح الإعلان</a>
+                            <a href="{AD_LINK}" target="_blank" onclick="startAdTimer()" class="modern-btn bg-primary text-slate-900 py-2 px-4 text-sm hover:bg-green-400"><i class="fas fa-external-link-alt"></i> 1. تصفح الإعلان</a>
                             <button id="verifyBtn" disabled class="modern-btn bg-slate-700 text-slate-500 py-2 px-4 text-sm cursor-not-allowed border border-slate-600"><i class="fas fa-lock"></i> 2. فك القفل</button>
                         </div>
                     </div>
@@ -120,8 +140,8 @@ INDEX_HTML = f"""
                     <!-- خيارات التحميل المتطورة -->
                     <div id="dlOptions" class="hidden space-y-3">
                         <div class="grid grid-cols-2 gap-2">
-                            <select id="mode" onchange="toggleRes()" class="modern-input py-2 px-3 text-sm"><option value="video">🎬 جودة فيديو (MP4)</option><option value="audio">🎵 جودة صوت (MP3)</option></select>
-                            <select id="resolution" class="modern-input py-2 px-3 text-sm"><option value="480">عادية 480p</option><option value="720" selected>عالية 720p (HD)</option><option value="best">أعلى جودة</option></select>
+                            <select id="mode" onchange="toggleRes()" class="modern-input py-2 px-3 text-sm focus:ring-1 ring-primary"><option value="video">🎬 جودة فيديو (MP4)</option><option value="audio">🎵 جودة صوت (MP3)</option></select>
+                            <select id="resolution" class="modern-input py-2 px-3 text-sm focus:ring-1 ring-primary"><option value="480">عادية 480p</option><option value="720" selected>عالية 720p (HD)</option><option value="best">أعلى جودة</option></select>
                         </div>
                         <button onclick="startDownload()" class="modern-btn bg-primary text-slate-900 w-full hover:bg-green-500"><i class="fas fa-cloud-download-alt"></i> بدء سحب وتحميل الملف</button>
                     </div>
@@ -131,7 +151,7 @@ INDEX_HTML = f"""
             <!-- شريط تقدم التحميل المباشر للويب بالثانية -->
             <div id="progressBox" class="hidden mt-6 text-right bg-slate-800 p-5 rounded-2xl border border-slate-700">
                 <div class="flex justify-between text-sm mb-2 font-bold"><span id="progStatus" class="text-primary">جاري الاتصال بمخدمات ميديا...</span><span id="progPercent">0%</span></div>
-                <div class="w-full bg-slate-700 rounded-full h-3 mb-2 overflow-hidden"><div id="progBar" class="bg-gradient-to-r from-primary to-blue-500 h-full transition-all duration-300" style="width: 0%"></div></div>
+                <div class="w-full bg-slate-700 rounded-full h-3 mb-2 overflow-hidden"><div id="progBar" class="bg-gradient-to-r from-primary to-blue-500 h-full transition-all duration-300 relative" style="width: 0%"></div></div>
                 <div class="flex justify-between text-xs text-slate-400"><span id="progSize">0 MB / 0 MB</span><span id="progSpeed">0 MB/s</span></div>
             </div>
         </section>
@@ -140,13 +160,18 @@ INDEX_HTML = f"""
         <section class="glass-panel rounded-3xl p-6 shadow-xl">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-xl font-bold flex items-center gap-2"><i class="fas fa-history text-primary"></i> سجل تحميلاتي الشخصية</h2>
-                <button onclick="renderLibrary()" class="text-sm font-bold text-slate-400 hover:text-white"><i class="fas fa-sync-alt"></i> تحديث السجل</button>
+                <button onclick="renderLibrary()" class="text-sm font-bold text-slate-400 hover:text-white transition-colors"><i class="fas fa-sync-alt"></i> تحديث السجل</button>
             </div>
             <div id="libraryContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
         </section>
     </div>
     
     <script>
+        // دعم تجربة المستخدم: البحث عند الضغط على Enter
+        document.getElementById('url').addEventListener('keypress', function(e) {{
+            if (e.key === 'Enter') processInput();
+        }});
+
         // نظام الوضع الليلي التلقائي وحفظ خيار المستخدم
         function toggleTheme() {{
             document.documentElement.classList.toggle('light');
@@ -156,7 +181,13 @@ INDEX_HTML = f"""
         }}
         if(localStorage.getItem('theme') === 'light') {{ toggleTheme(); }}
 
-        function showToast(msg) {{ const t = document.getElementById("toast"); t.innerText = msg; t.className = "show"; setTimeout(() => t.className = "", 3000); }}
+        // نظام التنبيهات المطور (دعم الألوان حسب الحالة)
+        function showToast(msg, type = 'info') {{ 
+            const t = document.getElementById("toast"); 
+            t.innerHTML = msg; 
+            t.className = `show ${{type}}`; 
+            setTimeout(() => t.className = "", 4000); 
+        }}
         
         // جلب سجل المستخدم المحفوظ داخل هاتف المستخدم أوتوماتيكياً
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
@@ -164,7 +195,7 @@ INDEX_HTML = f"""
         function renderLibrary() {{
             const container = document.getElementById('libraryContainer');
             if(myLibrary.length === 0) {{
-                container.innerHTML = '<div class="col-span-full text-center py-10 text-slate-500">سجلك فارغ حالياً، جميع تنزيلاتك القادمة ستحفظ هنا بشكل دائم لحمايتها ☁️</div>';
+                container.innerHTML = '<div class="col-span-full text-center py-10 text-slate-500"><i class="fas fa-folder-open text-3xl mb-3 opacity-50 block"></i>سجلك فارغ حالياً، جميع تنزيلاتك القادمة ستحفظ هنا بشكل دائم ☁️</div>';
                 return;
             }}
             let html = '';
@@ -174,16 +205,16 @@ INDEX_HTML = f"""
                     `<video controls class="w-full h-40 mt-3 bg-black rounded-xl outline-none object-cover"><source src="${{file.url}}" type="video/mp4"></video>`;
 
                 html += `
-                <div class="bg-slate-800 p-4 rounded-2xl shadow-lg border border-slate-700">
+                <div class="bg-slate-800 p-4 rounded-2xl shadow-lg border border-slate-700 hover:border-primary/50 transition-colors">
                     <div class="flex justify-between items-start">
-                        <div class="flex gap-3 items-center w-4/5">
-                            <img src="${{file.thumb}}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0 aspect-video">
+                        <div class="flex gap-3 items-center w-4/5 overflow-hidden">
+                            <img src="${{file.thumb}}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0 aspect-video shadow">
                             <p class="font-bold text-sm truncate" dir="ltr" title="${{file.title}}">${{file.title}}</p>
                         </div>
-                        <button onclick="removeFile('${{file.id}}')" class="text-red-500 p-2 hover:bg-slate-700 rounded-lg"><i class="fas fa-trash"></i></button>
+                        <button onclick="removeFile('${{file.id}}')" class="text-red-500 p-2 hover:bg-slate-700 rounded-lg transition-colors tooltip" title="حذف من السجل"><i class="fas fa-trash"></i></button>
                     </div>
                     ${{mediaTag}}
-                    <button onclick="forceDownload('${{file.url}}', '${{file.title}}')" class="w-full mt-4 modern-btn bg-slate-700 hover:bg-slate-600 text-white py-2 text-sm"><i class="fas fa-download ml-1"></i> إعادة حفظ في جهازي</button>
+                    <button onclick="forceDownload('${{file.url}}', '${{file.title}}')" class="w-full mt-4 modern-btn bg-slate-700 hover:bg-slate-600 text-white py-2 text-sm"><i class="fas fa-download ml-1"></i> حفظ في جهازي</button>
                 </div>`;
             }});
             container.innerHTML = html;
@@ -193,15 +224,14 @@ INDEX_HTML = f"""
             myLibrary = myLibrary.filter(f => f.id !== id);
             localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
             renderLibrary();
-            showToast("🗑️ تم المسح من السجل بنجاح");
+            showToast("🗑️ تم المسح من السجل بنجاح", "success");
         }}
 
-        // دالة الحفظ الفوري بداخل استوديو/ملفات الهاتف تلقائياً
         function forceDownload(url, title) {{
             const a = document.createElement('a');
             a.href = url; a.download = title;
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            showToast("📥 جاري تصدير وحفظ الملف في جهازك...");
+            showToast("📥 جاري تصدير وحفظ الملف في جهازك...", "info");
         }}
 
         window.onload = renderLibrary;
@@ -209,74 +239,117 @@ INDEX_HTML = f"""
         let currentUrl = "", adWatched = false;
 
         async function processInput() {{
-            const input = document.getElementById('url').value.trim(); if(!input) return showToast("⚠️ يرجى كتابة اسم مقطع أو وضع رابط");
-            document.getElementById('mainBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            const input = document.getElementById('url').value.trim(); 
+            if(!input) return showToast("⚠️ يرجى كتابة اسم مقطع أو وضع رابط", "error");
+            
+            const btn = document.getElementById('mainBtn');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري العمل...';
+            btn.disabled = true;
             
             if (input.startsWith('http')) {{
                 await renderPreview(input);
             }} else {{
-                const res = await fetch('/api/search', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{query:input}})}});
-                const data = await res.json();
-                if(data.success && data.entries.length > 0) {{
-                    let box = document.getElementById('searchResults');
-                    box.innerHTML = '<h3 class="font-bold mb-3 text-primary"><i class="fas fa-list-ul ml-1"></i> نتائج البحث المطابقة للطلب:</h3><div class="space-y-2">';
-                    data.entries.forEach(v => {{
-                        if(v.id) {{
-                            box.innerHTML += `<div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl cubic-bezier cursor-pointer flex justify-between items-center border border-slate-700">
-                                <p class="font-bold text-sm truncate flex-1 ml-3 text-white">${{v.title}}</p><span class="text-xs bg-slate-900 px-3 py-1 rounded-full whitespace-nowrap text-slate-300">⏱ ${{v.duration || '0'}} ث</span>
-                            </div>`;
-                        }}
-                    }});
-                    box.innerHTML += '</div>'; box.classList.remove('hidden');
-                }} else showToast("❌ لم يتم العثور على نتائج بحث تطابق الكلمة");
+                try {{
+                    const res = await fetch('/api/search', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{query:input}})}});
+                    const data = await res.json();
+                    if(data.success && data.entries.length > 0) {{
+                        let box = document.getElementById('searchResults');
+                        box.innerHTML = '<h3 class="font-bold mb-3 text-primary"><i class="fas fa-list-ul ml-1"></i> نتائج البحث المطابقة:</h3><div class="space-y-2">';
+                        data.entries.forEach(v => {{
+                            if(v.id) {{
+                                const thumbUrl = v.thumbnails ? v.thumbnails[0].url : 'https://via.placeholder.com/150';
+                                box.innerHTML += `<div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all cursor-pointer flex justify-between items-center border border-slate-700 hover:border-primary/50">
+                                    <div class="flex items-center gap-3 overflow-hidden">
+                                        <img src="${{thumbUrl}}" class="w-16 h-10 rounded object-cover shadow">
+                                        <p class="font-bold text-sm truncate text-white">${{v.title}}</p>
+                                    </div>
+                                    <span class="text-xs bg-slate-900 px-3 py-1 rounded-full whitespace-nowrap text-slate-300">⏱ ${{v.duration || '0'}} ث</span>
+                                </div>`;
+                            }}
+                        }});
+                        box.innerHTML += '</div>'; box.classList.remove('hidden');
+                        showToast("✅ اكتمل البحث، اختر المقطع المطلوب", "success");
+                    }} else {{
+                        showToast("❌ لم يتم العثور على نتائج بحث مطابقة", "error");
+                    }}
+                }} catch(e) {{
+                    showToast("❌ حدث خطأ في الاتصال بالسيرفر", "error");
+                }}
             }}
-            document.getElementById('mainBtn').innerHTML = '<i class="fas fa-search"></i> فحص / بحث';
+            btn.innerHTML = '<i class="fas fa-search"></i> فحص / بحث';
+            btn.disabled = false;
         }}
 
         async function renderPreview(url) {{
-            currentUrl = url; document.getElementById('searchResults').classList.add('hidden');
+            currentUrl = url; 
+            document.getElementById('searchResults').classList.add('hidden');
             document.getElementById('previewBox').classList.add('hidden');
-            showToast("🔍 جاري التحقق وفحص خيارات الرابط بمحرك الحماية...");
+            showToast("🔍 جاري التحقق وفحص خيارات الرابط...", "info");
             
-            const res = await fetch('/api/preview', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{url:url}})}});
-            const data = await res.json();
-            
-            if(data.success) {{
-                document.getElementById('previewBox').classList.remove('hidden');
-                document.getElementById('thumb').src = data.thumb;
-                document.getElementById('title').innerText = data.title;
+            try {{
+                const res = await fetch('/api/preview', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{url:url}})}});
+                const data = await res.json();
                 
-                document.getElementById('adGate').classList.remove('hidden');
-                document.getElementById('dlOptions').classList.add('hidden');
-                document.getElementById('progressBox').classList.add('hidden');
-                const vBtn = document.getElementById('verifyBtn');
-                vBtn.disabled = true; vBtn.className = "modern-btn bg-slate-700 text-slate-500 py-2 px-4 text-sm cursor-not-allowed border border-slate-600";
-                vBtn.innerHTML = '<i class="fas fa-lock"></i> مقفول'; adWatched = false;
-            }} else showToast("❌ فشل قراءة الرابط. تأكد من كوكيز السيرفر أو الرابط.");
+                if(data.success) {{
+                    document.getElementById('previewBox').classList.remove('hidden');
+                    document.getElementById('thumb').src = data.thumb;
+                    document.getElementById('title').innerText = data.title;
+                    
+                    document.getElementById('adGate').classList.remove('hidden');
+                    document.getElementById('dlOptions').classList.add('hidden');
+                    document.getElementById('progressBox').classList.add('hidden');
+                    
+                    const vBtn = document.getElementById('verifyBtn');
+                    vBtn.disabled = true; 
+                    vBtn.onclick = null; // إعادة تعيين الحدث
+                    vBtn.className = "modern-btn bg-slate-700 text-slate-500 py-2 px-4 text-sm cursor-not-allowed border border-slate-600";
+                    vBtn.innerHTML = '<i class="fas fa-lock"></i> مقفول'; 
+                    adWatched = false;
+                }} else {{
+                    showToast("❌ فشل قراءة الرابط. قد يكون المقطع خاصاً أو به قيود.", "error");
+                }}
+            }} catch(e) {{
+                showToast("❌ حدث خطأ في الاتصال.", "error");
+            }}
         }}
 
-        function toggleRes() {{ document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; }}
+        function toggleRes() {{ 
+            const resSelect = document.getElementById('resolution');
+            const isAudio = document.getElementById('mode').value === 'audio';
+            resSelect.style.display = isAudio ? 'none' : 'block'; 
+        }}
 
         function startAdTimer() {{
-            showToast("⏳ بدأ فحص وقت البقاء بصفحة الراعي الإعلاني (10 ثوانٍ)...");
+            if(adWatched) return; // لمنع تشغيل العداد أكثر من مرة
+            showToast("⏳ بدأ فحص الزيارة (10 ثوانٍ)...", "info");
             let btn = document.getElementById('verifyBtn');
             let timeLeft = 10;
+            
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> فحص (${{timeLeft}})...`;
+            
             let timer = setInterval(() => {{
                 timeLeft--;
-                if(timeLeft > 0) {{ btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> فحص الزيارة (${{timeLeft}})...`; }}
+                if(timeLeft > 0) {{ 
+                    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> فحص (${{timeLeft}})...`; 
+                }}
                 else {{
-                    clearInterval(timer); btn.disabled = false;
-                    btn.className = "modern-btn bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 text-sm font-bold shadow-md animate-pulse";
-                    btn.innerHTML = "<i class='fas fa-unlock'></i> افتح قفل التحميل"; adWatched = true;
-                    showToast("🔓 تم التحقق بنجاح! يمكنك فك قفل التنزيل وبدء سحب الملف فوراً.");
+                    clearInterval(timer); 
+                    btn.disabled = false;
+                    // إصلاح المشكلة: ربط الدالة بالزر بعد فتحه
+                    btn.onclick = unlockDownload; 
+                    btn.className = "modern-btn bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 text-sm font-bold shadow-md animate-pulse cursor-pointer";
+                    btn.innerHTML = "<i class='fas fa-unlock'></i> افتح قفل التحميل"; 
+                    adWatched = true;
+                    showToast("🔓 تم التحقق بنجاح! يمكنك الآن فك القفل.", "success");
                 }}
             }}, 1000);
         }}
 
         function unlockDownload() {{
-            if(!adWatched) return showToast("⚠️ يرجى الضغط على زر زيارة الراعي أولاً");
+            if(!adWatched) return showToast("⚠️ يرجى الضغط على زر زيارة الراعي أولاً", "error");
             document.getElementById('adGate').classList.add('hidden');
             document.getElementById('dlOptions').classList.remove('hidden');
+            showToast("✅ تم فتح خيارات التحميل", "success");
         }}
 
         async function startDownload() {{
@@ -286,37 +359,55 @@ INDEX_HTML = f"""
             const mode = document.getElementById('mode').value;
             const resVal = document.getElementById('resolution').value;
 
-            const res = await fetch('/api/download', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{url:currentUrl, mode:mode, resolution:resVal}})}});
-            const data = await res.json();
-            
-            if(data.success) {{
-                const interval = setInterval(async ()=>{{
-                    const progRes = await fetch(`/api/progress/${{data.job_id}}`); const prog = await progRes.json();
-                    
-                    if(prog.status === 'downloading') {{
-                        document.getElementById('progPercent').innerText = prog.percent + '%';
-                        document.getElementById('progBar').style.width = prog.percent + '%';
-                        document.getElementById('progSize').innerText = prog.downloaded + ' / ' + prog.total;
-                        document.getElementById('progSpeed').innerText = prog.speed;
-                    }} 
-                    else if(prog.status === 'converting') {{
-                        document.getElementById('progStatus').innerHTML = '<i class="fas fa-cog fa-spin ml-1 text-primary"></i> جاري دمج وضغط الملف الاحترافي بمحرك المعالجة المحلي...';
-                        document.getElementById('progBar').style.width = '100%'; document.getElementById('progPercent').innerText = '100%';
-                    }} 
-                    else if(prog.status === 'completed') {{
-                        clearInterval(interval);
-                        document.getElementById('progStatus').innerHTML = '🎉 تم التحميل واكتمال الإضافة بنجاح!';
-                        
-                        // حفظ البيانات الوصفية للمقطع في متصفح المستخدم لحمايتها للأبد من مسح السيرفر
-                        myLibrary.push({{ id: Date.now().toString(), title: prog.title, url: prog.url, thumb: prog.thumb, is_audio: prog.is_audio }});
-                        localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
-                        renderLibrary();
-                        
-                        // التنزيل الفوري والمباشر بداخل هاتف المستخدم تلقائياً
-                        forceDownload(prog.url, prog.title);
-                    }} 
-                    else if(prog.status === 'error') {{ clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">❌ فشل تحميل المقطع من المصدر</span>'; showToast("❌ حدث خطأ أثناء سحب دفق الميديا"); }}
-                }}, 1500);
+            try {{
+                const res = await fetch('/api/download', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{url:currentUrl, mode:mode, resolution:resVal}})}});
+                const data = await res.json();
+                
+                if(data.success) {{
+                    const interval = setInterval(async ()=>{{
+                        try {{
+                            const progRes = await fetch(`/api/progress/${{data.job_id}}`); 
+                            const prog = await progRes.json();
+                            
+                            if(prog.status === 'downloading') {{
+                                document.getElementById('progPercent').innerText = prog.percent + '%';
+                                document.getElementById('progBar').style.width = prog.percent + '%';
+                                document.getElementById('progSize').innerText = prog.downloaded + ' / ' + prog.total;
+                                document.getElementById('progSpeed').innerText = prog.speed;
+                            }} 
+                            else if(prog.status === 'converting') {{
+                                document.getElementById('progStatus').innerHTML = '<i class="fas fa-cog fa-spin ml-1 text-primary"></i> جاري دمج وضغط الملف...';
+                                document.getElementById('progBar').style.width = '100%'; 
+                                document.getElementById('progPercent').innerText = '100%';
+                            }} 
+                            else if(prog.status === 'completed') {{
+                                clearInterval(interval);
+                                document.getElementById('progStatus').innerHTML = '🎉 اكتمل التحميل بنجاح!';
+                                
+                                // حفظ البيانات في السجل
+                                myLibrary.push({{ id: Date.now().toString(), title: prog.title, url: prog.url, thumb: prog.thumb, is_audio: prog.is_audio }});
+                                localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+                                renderLibrary();
+                                
+                                // تنزيل تلقائي
+                                forceDownload(prog.url, prog.title);
+                            }} 
+                            else if(prog.status === 'error') {{ 
+                                clearInterval(interval); 
+                                document.getElementById('progStatus').innerHTML = '<span class="text-red-500">❌ فشل تحميل المقطع</span>'; 
+                                showToast("❌ حدث خطأ أثناء التحميل: " + (prog.error || ""), "error"); 
+                            }}
+                        }} catch(err) {{
+                            console.error("Progress fetch error:", err);
+                        }}
+                    }}, 1500);
+                }} else {{
+                    showToast("❌ فشل في بدء التحميل", "error");
+                    document.getElementById('progressBox').classList.add('hidden');
+                    document.getElementById('dlOptions').classList.remove('hidden');
+                }}
+            }} catch(e) {{
+                showToast("❌ خطأ في الاتصال بالخادم", "error");
             }}
         }}
     </script>
@@ -330,17 +421,25 @@ async def home():
 
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
-    try: return {"success": True, "entries": search_youtube(req.query, limit=5).get("entries", [])}
-    except Exception as e: return {"success": False, "error": str(e)}
+    try: 
+        # جلب النتائج وإعادتها للواجهة الأمامية
+        results = search_youtube(req.query, limit=5)
+        return {"success": True, "entries": results.get("entries", [])}
+    except Exception as e: 
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
 async def get_preview(req: URLRequest):
     try:
-        # الترقية المؤسسية: استخدام إعدادات فحص معززة بالكوكيز وخداع القيود لمنع الـ 429
         opts = get_hardened_ydl_options()
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(req.url, download=False)
-            return {"success": True, "title": info.get("title", "بدون اسم"), "thumb": info.get("thumbnail", "https://via.placeholder.com/150"), "duration": info.get("duration", 0)}
+            return {
+                "success": True, 
+                "title": info.get("title", "بدون اسم"), 
+                "thumb": info.get("thumbnail", "https://via.placeholder.com/150"), 
+                "duration": info.get("duration", 0)
+            }
     except Exception as e: 
         return {"success": False, "error": str(e)}
 
@@ -349,8 +448,10 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
         if d['status'] == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate', 1)
             PROGRESS_CACHE[job_id] = {
-                "status": "downloading", "percent": round((d.get('downloaded_bytes',0)/total)*100, 1),
-                "downloaded": f"{round(d.get('downloaded_bytes',0)/1048576, 1)} MB", "total": f"{round(total/1048576, 1)} MB",
+                "status": "downloading", 
+                "percent": round((d.get('downloaded_bytes',0)/total)*100, 1),
+                "downloaded": f"{round(d.get('downloaded_bytes',0)/1048576, 1)} MB", 
+                "total": f"{round(total/1048576, 1)} MB",
                 "speed": f"{round(d.get('speed',0)/1048576, 1)} MB/s" if d.get('speed') else "0 MB/s"
             }
         elif d['status'] == 'finished':
@@ -358,21 +459,28 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
             prev["status"] = "converting"
             PROGRESS_CACHE[job_id] = prev
 
-    # ضبط خيارات التنزيل والدمج المتوازي عالي السرعة بـ aria2 والكوكيز والحماية
-    opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}_%(title)s.%(ext)s', progress_hook=hook)
+    # استخدام الـ ID بدلاً من العنوان في اسم الملف كحماية من مسارات الـ URL المعطوبة
+    opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     opts["external_downloader"] = "aria2c"
     opts["external_downloader_args"] = ["-j16", "-x16", "-s16", "-k1M"]
 
     if mode == 'audio': 
-        opts.update({'format': 'bestaudio/best', 'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}]})
+        opts.update({
+            'format': 'bestaudio/best', 
+            'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}]
+        })
     else: 
-        opts.update({'format': f'bestvideo[height<={res}]+bestaudio/best', 'merge_output_format': 'mp4'})
+        opts.update({
+            'format': f'bestvideo[height<={res}]+bestaudio/best', 
+            'merge_output_format': 'mp4'
+        })
     
     try:
         with yt_dlp.YoutubeDL(opts) as ydl: 
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            if mode == 'audio': filename = filename.rsplit('.', 1)[0] + '.mp3'
+            if mode == 'audio': 
+                filename = filename.rsplit('.', 1)[0] + '.mp3'
             
             PROGRESS_CACHE[job_id] = {
                 "status": "completed",
@@ -392,4 +500,5 @@ async def start_download(req: URLRequest):
     return {"success": True, "job_id": job_id}
 
 @app.get("/api/progress/{job_id}")
-async def get_progress(job_id: str): return PROGRESS_CACHE.get(job_id, {"status": "waiting"})
+async def get_progress(job_id: str): 
+    return PROGRESS_CACHE.get(job_id, {"status": "waiting"})
