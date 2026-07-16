@@ -259,6 +259,11 @@ INDEX_HTML = f"""
                                 <span id="progSize">-- MB / -- MB</span>
                                 <span id="progSpeed">-- MB/s</span>
                             </div>
+                            
+                            <!-- زر التحميل المباشر للجهاز المضاف -->
+                            <div id="directDownloadArea" class="hidden mt-4 pt-4 border-t border-panelBorder">
+                                <a id="directDownloadBtn" href="#" download class="btn bg-green-600 text-white w-full hover:bg-green-500 shadow-lg shadow-green-500/20"><i class="fas fa-arrow-alt-circle-down"></i> تحميل الملف إلى جهازك مباشرة 💾</a>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -434,7 +439,7 @@ INDEX_HTML = f"""
             }}
         }}
 
-        // نظام تصفية وعرض ملفات المكتبة
+        // نظام تصفية وعرض ملفات المكتبة (تمت إضافة زر التحميل للجهاز هنا)
         function applyFilters() {{
             const query = document.getElementById('libSearch').value.toLowerCase();
             const filter = document.getElementById('libFilter').value;
@@ -474,6 +479,7 @@ INDEX_HTML = f"""
                 const durationStr = formatTime(item.duration || 0);
                 const favClass = item.favorite ? 'fas fa-heart text-red-500' : 'far fa-heart';
                 const icon = item.is_audio ? '<i class="fas fa-music text-accent"></i>' : '<i class="fas fa-video text-tgBlue"></i>';
+                const fileExt = item.is_audio ? 'mp3' : 'mp4';
                 
                 container.innerHTML += `
                     <div class="bg-panel rounded-2xl p-4 border border-panelBorder flex gap-4 items-center relative group">
@@ -489,13 +495,19 @@ INDEX_HTML = f"""
                             <p class="text-textMuted text-xs mt-1 truncate">${{icon}} ${{item.uploader || 'غير معروف'}}</p>
                         </div>
                         <div class="flex items-center gap-2 flex-row-reverse">
-                            <button onclick="deleteFromLibrary('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-400 active:scale-95 transition-transform">
+                            <button onclick="deleteFromLibrary('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-400 active:scale-95 transition-transform" title="حذف">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
-                            <button onclick="triggerSendToTelegram('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-tgBlue active:scale-95 transition-transform">
+                            
+                            <!-- زر تحميل للجهاز مضاف هنا -->
+                            <a href="${{item.url}}" download="${{item.title}}.${{fileExt}}" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-green-400 active:scale-95 transition-transform flex items-center justify-center" title="تحميل للجهاز">
+                                <i class="fas fa-download"></i>
+                            </a>
+                            
+                            <button onclick="triggerSendToTelegram('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-tgBlue active:scale-95 transition-transform" title="إرسال لتيليجرام">
                                 <i class="fab fa-telegram-plane"></i>
                             </button>
-                            <button onclick="toggleFavorite('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-500 active:scale-95 transition-transform">
+                            <button onclick="toggleFavorite('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-500 active:scale-95 transition-transform" title="مفضلة">
                                 <i class="${{favClass}}"></i>
                             </button>
                         </div>
@@ -546,6 +558,7 @@ INDEX_HTML = f"""
             }}
         }}
 
+        // تحديث عدد ملفات المكتبة
         function updateLibraryCount() {{
             const count = myLibrary.length;
             document.getElementById('libCountStatus').innerText = "السجل (" + count + ")";
@@ -755,6 +768,9 @@ INDEX_HTML = f"""
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
             document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
             
+            // إعادة ضبط وإخفاء زر التحميل المباشر للجهاز لتجنب خلط الروابط السابقة
+            document.getElementById('directDownloadArea').classList.add('hidden');
+            
             document.getElementById('progPercent').innerText = '0%';
             document.getElementById('progBar').style.width = '0%';
             document.getElementById('progSize').innerText = '-- / --';
@@ -784,6 +800,14 @@ INDEX_HTML = f"""
                             else if(prog.status === 'completed') {{
                                 clearInterval(interval); 
                                 document.getElementById('progStatus').innerHTML = '<span class="text-green-400"><i class="fas fa-check-circle"></i> اكتمل التحميل بنجاح</span>';
+                                
+                                // تفعيل وتجهيز زر التحميل المباشر للجهاز فوراً
+                                const dlArea = document.getElementById('directDownloadArea');
+                                const dlBtn = document.getElementById('directDownloadBtn');
+                                dlBtn.href = prog.url;
+                                const extension = prog.is_audio ? '.mp3' : '.mp4';
+                                dlBtn.setAttribute('download', prog.title + extension);
+                                dlArea.classList.remove('hidden');
                                 
                                 myLibrary.unshift({{ 
                                     id: Date.now().toString(), title: prog.title, url: prog.url, thumb: prog.thumb, 
@@ -893,7 +917,6 @@ INDEX_HTML = f"""
             }}
         }}
 
-        // تعديل السطر المسبب لمشكلة الـ NameError بالكامل هنا
         function updatePlayerProgress() {{
             const cur = audioEl.currentTime;
             const dur = audioEl.duration;
