@@ -9,7 +9,7 @@ import yt_dlp
 
 # --- إعدادات البوت والبيئة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي
+BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي كما طلبت
 # -------------------------------------------------------------
 
 try:
@@ -87,13 +87,14 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
 
-def search_youtube(query: str, limit: int = 15):
+# زيادة الحد إلى 20 لضمان استخراج 5 مقاطع فيديو صحيحة تماماً وتجاهل القنوات
+def search_youtube(query: str, limit: int = 20):
     opts = get_hardened_ydl_options()
     opts['extract_flat'] = True
     with yt_dlp.YoutubeDL(opts) as ydl: return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
 # ==========================================
-# الواجهة الاحترافية المتكاملة
+# الواجهة الاحترافية المتكاملة (إصلاح شامل لمشكلة الموبايل)
 # ==========================================
 INDEX_HTML = f"""
 <!DOCTYPE html>
@@ -196,17 +197,17 @@ INDEX_HTML = f"""
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 
-                <!-- حاوية نتائج البحث (تم إصلاحها بـ flex-none و min-w-0 لمنع التداخل) -->
-                <div id="searchResults" class="hidden mt-8 bg-[#18181b] border border-panelBorder rounded-3xl p-5 shadow-xl">
+                <!-- حاوية نتائج البحث المُصلحة كلياً (Block Buttons) لمنع التداخل -->
+                <div id="searchResults" class="hidden mt-8 bg-panel border border-panelBorder rounded-3xl p-5 shadow-xl">
                     <div class="mb-5 pb-4 border-b border-panelBorder flex justify-between items-start">
                         <div>
                             <h3 class="text-white font-bold text-lg mb-1 flex items-center gap-2"><span id="searchQueryTitle">🔎 نتائج البحث</span></h3>
                             <p class="text-textMuted text-sm">اختر المقطع المناسب من الأزرار أدناه:</p>
                         </div>
-                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2 bg-bgDark rounded-full transition-colors flex-shrink-0"><i class="fas fa-times"></i></button>
+                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2 bg-bgDark rounded-full transition-colors"><i class="fas fa-times"></i></button>
                     </div>
-                    <!-- القائمة المرقمة مع الصور -->
-                    <div id="searchResultsList" class="flex flex-col gap-3"></div>
+                    <!-- قائمة النتائج العمودية الصارمة -->
+                    <div id="searchResultsList" class="block w-full"></div>
                 </div>
             </div>
 
@@ -582,7 +583,7 @@ INDEX_HTML = f"""
         function seekAudio(e) {{ const rect = document.getElementById('progressContainer').getBoundingClientRect(); let percent = (e.clientX - rect.left) / rect.width; if(document.dir === 'rtl') percent = 1 - percent; audioEl.currentTime = percent * audioEl.duration; }}
         function changeVolume() {{ audioEl.volume = document.getElementById('volumeSlider').value; }}
 
-        // --- نظام البحث المطور: إصلاح شامل للموبايل مع المعاينة (Flex-none & min-w-0) ---
+        // --- نظام البحث المطور: إصلاح جذري بأسلوب الأزرار المنفصلة (Block Buttons) ---
         let currentUrl = "", adWatched = false;
         async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
@@ -608,31 +609,27 @@ INDEX_HTML = f"""
                             return;
                         }}
 
+                        const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+
                         validVideos.forEach((v, idx) => {{
-                            const thumb = v.thumbnails && v.thumbnails.length ? v.thumbnails[v.thumbnails.length-1].url : `https://i.ytimg.com/vi/${{v.id}}/hqdefault.jpg`;
                             const duration = formatTime(v.duration || 0);
                             const uploader = v.uploader || 'غير معروف';
+                            const numEmoji = emojis[idx] || (idx + 1);
                             
-                            // التصميم السحري: استخدام flex-none و min-w-0 لمنع المتصفح من إخفاء النصوص
+                            // التصميم السحري: استخدام زر <button> يمنع الانضغاط نهائياً في الموبايل
                             box.innerHTML += `
-                            <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full flex items-center p-3 bg-panel rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-sm mb-3">
-                                <div class="flex-none w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center font-bold text-sm ml-3">
-                                    ${{idx + 1}}
+                            <button onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full text-right p-4 bg-bgDark rounded-2xl border border-panelBorder hover:border-accent/50 active:scale-95 transition-all mb-3 block shadow-sm">
+                                <h4 class="text-white font-bold text-[15px] leading-relaxed mb-2" style="word-break: break-word;" dir="auto">
+                                    <span class="ml-1 text-lg">${{numEmoji}}</span> ${{v.title}}
+                                </h4>
+                                <div class="flex items-center gap-2 text-sm text-textMuted font-medium" dir="auto">
+                                    <i class="fas fa-user-circle text-accent/70 text-xs"></i> 
+                                    <span class="truncate max-w-[120px] md:max-w-[200px]">${{uploader}}</span>
+                                    <span class="text-accent/30 mx-1">•</span>
+                                    <i class="far fa-clock text-accent/70 text-xs"></i> 
+                                    <span>${{duration}}</span>
                                 </div>
-                                <div class="flex-none w-24 h-14 rounded-lg overflow-hidden border border-panelBorder shadow-sm relative ml-3">
-                                    <img src="${{thumb}}" class="w-full h-full object-cover">
-                                    <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] px-1 rounded-sm">${{duration}}</div>
-                                </div>
-                                <div class="flex-1 min-w-0 flex flex-col justify-center">
-                                    <h4 class="text-white font-bold text-sm truncate w-full mb-1" dir="auto" title="${{v.title}}">${{v.title}}</h4>
-                                    <p class="text-textMuted text-xs truncate w-full" dir="auto">
-                                        <i class="fas fa-user-circle text-accent/70"></i> ${{uploader}}
-                                    </p>
-                                </div>
-                                <div class="flex-none w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent mr-2">
-                                    <i class="fas fa-check text-xs"></i>
-                                </div>
-                            </div>`;
+                            </button>`;
                         }});
                         document.getElementById('searchResults').classList.remove('hidden');
                     }} else showToast("لم يتم العثور على نتائج", "error");
@@ -642,8 +639,10 @@ INDEX_HTML = f"""
         }}
 
         async function renderPreview(url) {{
-            currentUrl = url; document.getElementById('searchResults').classList.add('hidden');
-            document.getElementById('previewBox').classList.add('hidden'); document.getElementById('progressBox').classList.add('hidden');
+            currentUrl = url; 
+            document.getElementById('searchResults').classList.add('hidden');
+            document.getElementById('previewBox').classList.add('hidden'); 
+            document.getElementById('progressBox').classList.add('hidden');
             document.getElementById('dlOptions').classList.remove('hidden'); 
             try {{
                 const res = await fetch('/api/preview', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{url:url}})}});
@@ -750,7 +749,7 @@ async def home():
 
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
-    try: return {"success": True, "entries": search_youtube(req.query, limit=15).get("entries", [])}
+    try: return {"success": True, "entries": search_youtube(req.query, limit=20).get("entries", [])}
     except Exception as e: return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
