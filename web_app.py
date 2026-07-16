@@ -9,7 +9,7 @@ import yt_dlp
 
 # --- إعدادات البوت والبيئة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي
+BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي 
 # -------------------------------------------------------------
 
 try:
@@ -42,7 +42,6 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 PROGRESS_CACHE = {}
 AD_LINK = HILLTOPADS_LINK if HILLTOPADS_LINK else (ADSTERRA_LINK or "#")
 
-# نظام التنظيف الذاتي
 def cleanup_daemon():
     while True:
         try:
@@ -65,7 +64,6 @@ class URLRequest(BaseModel):
 class SearchRequest(BaseModel):
     query: str
 
-# تحديث نموذج تيليجرام لاستقبال التفاصيل الاحترافية
 class TelegramRequest(BaseModel):
     file_url: str
     chat_id: str
@@ -88,13 +86,13 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
 
-def search_youtube(query: str, limit: int = 5):
+def search_youtube(query: str, limit: int = 8): # تم زيادة عدد النتائج إلى 8 كخيارات تيليجرام
     opts = get_hardened_ydl_options()
     opts['extract_flat'] = True
     with yt_dlp.YoutubeDL(opts) as ydl: return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
 # ==========================================
-# الواجهة الاحترافية
+# الواجهة الاحترافية المتكاملة
 # ==========================================
 INDEX_HTML = f"""
 <!DOCTYPE html>
@@ -185,6 +183,7 @@ INDEX_HTML = f"""
 
     <main class="flex-1 h-full overflow-y-auto pb-28 relative scroll-smooth">
         
+        <!-- قسم البحث والنتائج -->
         <section id="searchView" class="view-section active p-4 md:p-8 max-w-4xl mx-auto">
             <div class="bg-panel rounded-3xl p-6 md:p-8 border border-panelBorder mb-6 relative overflow-hidden">
                 <div class="absolute top-0 left-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl"></div>
@@ -195,13 +194,22 @@ INDEX_HTML = f"""
                     <input type="text" id="url" placeholder="الرابط أو الكلمة البحثية..." class="modern-input flex-1">
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
-                <div id="searchResults" class="hidden mt-6 space-y-3 max-h-72 overflow-y-auto pr-2"></div>
+                
+                <!-- حاوية نتائج البحث (Telegram Style Options) -->
+                <div id="searchResults" class="hidden mt-6 bg-bgDark border border-panelBorder rounded-2xl p-4">
+                    <div class="flex justify-between items-center mb-4 border-b border-panelBorder pb-3">
+                        <h3 class="text-white font-bold text-lg"><i class="fas fa-list-ul text-accent ml-2"></i>نتائج البحث:</h3>
+                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 text-sm transition-colors"><i class="fas fa-times"></i> إغلاق</button>
+                    </div>
+                    <div id="searchResultsList" class="space-y-2 max-h-[400px] overflow-y-auto pr-1"></div>
+                </div>
             </div>
 
+            <!-- بطاقة المعاينة للتحميل -->
             <div id="previewBox" class="hidden bg-panel rounded-3xl p-6 border border-panelBorder">
                 <div class="flex flex-col md:flex-row gap-6 items-center">
                     <div class="w-full md:w-1/3">
-                        <img id="thumb" class="w-full rounded-xl object-cover aspect-video shadow-md">
+                        <img id="thumb" class="w-full rounded-xl object-cover aspect-video shadow-md border border-panelBorder">
                     </div>
                     <div class="w-full md:w-2/3 space-y-4">
                         <h3 id="title" class="font-bold text-lg text-white line-clamp-2"></h3>
@@ -242,6 +250,7 @@ INDEX_HTML = f"""
             </div>
         </section>
 
+        <!-- بقية الأقسام (المكتبة، الإعدادات، المشغل، ونافذة تيليجرام) تبقى كما هي للحفاظ على الكفاءة -->
         <section id="libraryView" class="view-section p-4 md:p-8 max-w-6xl mx-auto h-full flex flex-col">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <h2 class="text-2xl font-bold text-white">ملفاتي المحفوظة</h2>
@@ -440,6 +449,7 @@ INDEX_HTML = f"""
                             <p class="text-xs text-textMuted">${{isAudio ? 'ملف صوتي (MP3)' : 'مقطع فيديو (MP4)'}} • محفوظ</p>
                         </div>
                     </div>
+                    
                     <div class="flex items-center justify-between mt-1 pt-3 border-t border-panelBorder/50">
                         <div class="flex gap-2">
                             <button onclick="sendToTelegram('${{file.url}}', ${{isAudio}}, false, this)" class="btn bg-tgBlue/10 text-tgBlue py-1.5 px-3 text-xs rounded-xl hover:bg-tgBlue/20"><i class="fab fa-telegram-plane ml-1 text-sm"></i> إرسال</button>
@@ -476,6 +486,36 @@ INDEX_HTML = f"""
             myLibrary = myLibrary.filter(f => f.id !== id); localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
             if(currentPlaylist[currentAudioIndex] && currentPlaylist[currentAudioIndex].id === id) closePlayer();
             applyFilters(); showToast("تم الحذف بنجاح", "info");
+        }}
+
+        function formatTime(secs) {{ 
+            if(isNaN(secs)) return "0:00"; 
+            const m = Math.floor(secs / 60), s = Math.floor(secs % 60); 
+            return `${{m}}:${{s < 10 ? '0'+s : s}}`; 
+        }}
+
+        // تقنية التحميل الصامت للمتصفح (إجبار التحميل للجهاز بدل فتح التبويب)
+        async function forceDownload(url, title) {{
+            try {{
+                showToast("جاري التجهيز للتحميل لملفاتك ⏳...", "info");
+                const res = await fetch(url);
+                const blob = await res.blob();
+                const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                
+                const ext = url.split('.').pop();
+                const safeTitle = title.replace(/[\/\\\\?%*:|"<>]/g, '-');
+                a.download = safeTitle.endsWith('.' + ext) ? safeTitle : safeTitle + '.' + ext;
+                
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(blobUrl);
+                showToast("✅ بدأ التنزيل لجهازك!", "success");
+            }} catch(e) {{
+                showToast("❌ فشل التحميل لملفاتك، جرب متصفحاً آخر", "error");
+            }}
         }}
 
         function openTgModal(url, isAudio, isAuto) {{ pendingTgFileUrl = url; pendingTgIsAudio = isAudio; pendingIsAuto = isAuto; document.getElementById('tgModal').classList.replace('hidden', 'flex'); }}
@@ -520,7 +560,7 @@ INDEX_HTML = f"""
             const index = currentPlaylist.findIndex(f => f.id === fileId);
             if(index === -1) return; currentAudioIndex = index; const file = currentPlaylist[index];
             document.getElementById('playerTitle').innerText = file.title;
-            document.getElementById('playerThumbPlaceholder').innerHTML = `<img src="${{file.thumb}}" class="w-full h-full object-cover rounded-full">`;
+            document.getElementById('playerThumbPlaceholder').innerHTML = `<img src="${{file.thumb}}" class="w-full h-full object-cover rounded-full border border-panelBorder shadow">`;
             audioEl.src = file.url; audioEl.playbackRate = playbackSpeed;
             audioEl.play().then(() => {{ document.getElementById('musicPlayer').classList.add('active'); updatePlayBtn(true); }}).catch(e => {{ showToast("الملف محذوف من السيرفر", "error"); removeFile(fileId); closePlayer(); }});
         }}
@@ -548,7 +588,6 @@ INDEX_HTML = f"""
         function playPrev() {{ if(currentPlaylist.length) playGlobalAudio(currentPlaylist[(currentAudioIndex - 1 + currentPlaylist.length) % currentPlaylist.length].id); }}
         function handleAudioEnd() {{ playNext(); }}
         function closePlayer() {{ audioEl.pause(); document.getElementById('musicPlayer').classList.remove('active'); }}
-        function formatTime(secs) {{ if(isNaN(secs)) return "0:00"; const m = Math.floor(secs / 60), s = Math.floor(secs % 60); return `${{m}}:${{s < 10 ? '0'+s : s}}`; }}
         function updatePlayerProgress() {{
             if(!audioEl.duration) return;
             document.getElementById('audioProgressBar').style.width = ((audioEl.currentTime / audioEl.duration) * 100) + '%';
@@ -557,11 +596,12 @@ INDEX_HTML = f"""
         function seekAudio(e) {{ const rect = document.getElementById('progressContainer').getBoundingClientRect(); let percent = (e.clientX - rect.left) / rect.width; if(document.dir === 'rtl') percent = 1 - percent; audioEl.currentTime = percent * audioEl.duration; }}
         function changeVolume() {{ audioEl.volume = document.getElementById('volumeSlider').value; }}
 
+        // --- نظام البحث المطور بأسلوب قوائم تيليجرام ---
         let currentUrl = "", adWatched = false;
         async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
             if(!input) return;
-            const btn = document.getElementById('mainBtn'); btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البحث...'; btn.disabled = true;
+            const btn = document.getElementById('mainBtn'); btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> بحث...'; btn.disabled = true;
             
             if (input.startsWith('http')) await renderPreview(input);
             else {{
@@ -570,13 +610,32 @@ INDEX_HTML = f"""
                     if(!res.ok) throw new Error();
                     const data = await res.json();
                     if(data.success && data.entries.length) {{
-                        let box = document.getElementById('searchResults'); box.innerHTML = '';
-                        data.entries.forEach(v => {{
-                            if(v.id) box.innerHTML += `<div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="p-2 bg-bgDark hover:border-accent/40 rounded-xl interactive-card flex gap-3 items-center border border-panelBorder">
-                                <img src="${{v.thumbnails && v.thumbnails.length ? v.thumbnails[0].url : ''}}" class="w-20 h-12 rounded object-cover">
-                                <p class="font-bold text-sm text-white line-clamp-2">${{v.title}}</p></div>`;
+                        let box = document.getElementById('searchResultsList'); box.innerHTML = '';
+                        data.entries.forEach((v, idx) => {{
+                            if(v.id) {{
+                                const thumb = v.thumbnails && v.thumbnails.length ? v.thumbnails[0].url : 'https://via.placeholder.com/150';
+                                const duration = formatTime(v.duration || 0);
+                                const uploader = v.uploader || 'غير معروف';
+                                
+                                // تصميم الخيارات كقائمة مرقمة تفاعلية
+                                box.innerHTML += `
+                                <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="p-3 bg-panel hover:bg-panelBorder rounded-xl cursor-pointer flex gap-4 items-center border border-panelBorder hover:border-accent/50 transition-all mb-2">
+                                    <div class="w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center font-bold text-sm flex-shrink-0">${{idx + 1}}</div>
+                                    <img src="${{thumb}}" class="w-16 h-10 rounded-lg object-cover shadow-sm">
+                                    <div class="flex-1 overflow-hidden">
+                                        <p class="font-bold text-sm text-white line-clamp-1">${{v.title}}</p>
+                                        <p class="text-[10px] text-textMuted mt-1 flex items-center gap-2">
+                                            <span><i class="fas fa-user-circle"></i> ${{uploader}}</span>
+                                            <span><i class="far fa-clock"></i> ${{duration}}</span>
+                                        </p>
+                                    </div>
+                                    <div class="w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-textMuted flex-shrink-0">
+                                        <i class="fas fa-chevron-left text-xs"></i>
+                                    </div>
+                                </div>`;
+                            }}
                         }});
-                        box.classList.remove('hidden');
+                        document.getElementById('searchResults').classList.remove('hidden');
                     }} else showToast("لم يتم العثور على نتائج", "error");
                 }} catch(e) {{ showToast("خطأ بالاتصال", "error"); }}
             }}
@@ -692,7 +751,7 @@ async def home():
 
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
-    try: return {"success": True, "entries": search_youtube(req.query, limit=5).get("entries", [])}
+    try: return {"success": True, "entries": search_youtube(req.query, limit=8).get("entries", [])}
     except Exception as e: return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
@@ -772,11 +831,17 @@ async def send_to_telegram(req: TelegramRequest):
         api_method = "sendAudio" if req.is_audio else "sendVideo"
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         
-        # تنسيق رسالة تيليجرام لتتطابق تماماً مع صورتك
-        caption = f"- @{BOT_USERNAME}"
+        # --- تنسيق الوقت وتحويله من ثواني إلى (دقائق:ثواني) ---
+        dur = int(req.duration) if req.duration else 0
+        m, s = divmod(dur, 60)
+        h, m = divmod(m, 60)
+        time_str = f"{h:02d}:{m:02d}:{s:02d}" if h > 0 else f"{m:02d}:{s:02d}"
+        
+        # --- تنسيق الكابشن والزر كما في الصورة تماماً ---
+        caption = f"- @{BOT_USERNAME} , {time_str}"
         reply_markup = {
             "inline_keyboard": [
-                [{"text": "🌟 أعجبك البوت؟ شاركه ↗️", "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"}]
+                [{"text": "🌟 أعجبك البوت؟ شاركه", "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"}]
             ]
         }
         
@@ -794,20 +859,17 @@ async def send_to_telegram(req: TelegramRequest):
             data['supports_streaming'] = True
             data['duration'] = req.duration
 
-        # إرسال الملف الفعلي
         files = {}
         with open(file_path, 'rb') as f:
             file_content = f.read()
         files['audio' if req.is_audio else 'video'] = (filename, file_content)
         
-        # إرفاق غلاف المقطع (Thumbnail) ليظهر بشكل جميل كما في الصورة
         if req.thumb:
             try:
                 thumb_res = requests.get(req.thumb, timeout=5)
                 if thumb_res.status_code == 200:
                     files['thumb'] = ('thumb.jpg', thumb_res.content, 'image/jpeg')
-            except:
-                pass
+            except: pass
                 
         response = requests.post(url, data=data, files=files)
         res_data = response.json()
