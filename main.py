@@ -1,9 +1,7 @@
 import time
 import logging
 import asyncio
-from telegram import Update, BotCommand, BotCommandScopeChat, MenuButtonCommands
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-
+from telegram import Update, BotCommand, BotCommandScopeChat, MenuButtonCommands, InlineKeyboardMarkup, InlineKeyboardButton, CopyTextButtonfrom telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from core.config import TOKEN, LOCAL_API_URL
 import core.security as sec
 
