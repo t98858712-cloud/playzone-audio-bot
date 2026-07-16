@@ -9,7 +9,7 @@ import yt_dlp
 
 # --- إعدادات البوت والبيئة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot" # تم التثبيت يدوياً
+BOT_USERNAME = "MusicPlayZoneBot"
 # -------------------------------------------------------------
 
 # --- إعدادات البيئة الافتراضية ---
@@ -26,7 +26,7 @@ except ImportError:
     def cookie_file_is_usable(f): return False
 # -------------------------------------------------------------
 
-app = FastAPI(title="PlayZone Cloud Enterprise", description="منصة التحميل الذكية المربوطة بتيليجرام")
+app = FastAPI(title="PlayZone Cloud Enterprise", description="منصة التحميل الذكية والتحكم المتكامل")
 init_db()
 
 app.add_middleware(
@@ -44,31 +44,22 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 PROGRESS_CACHE = {}
 AD_LINK = HILLTOPADS_LINK if HILLTOPADS_LINK else (ADSTERRA_LINK or "#")
 
-# ==========================================
-# نظام التنظيف الذاتي لحماية السيرفر من الامتلاء (يعمل 24/7)
-# ==========================================
+# نظام التنظيف الذاتي لحماية السيرفر (24/7)
 def cleanup_daemon():
     while True:
         try:
             now = time.time()
-            # 1. مسح الملفات الأقدم من 24 ساعة (86400 ثانية)
             for file_path in WEB_DIR.glob("*"):
                 if file_path.is_file() and now - file_path.stat().st_mtime > 86400:
                     file_path.unlink(missing_ok=True)
-            
-            # 2. تنظيف الذاكرة المؤقتة للتقدم
             expired_jobs = [jid for jid, data in PROGRESS_CACHE.items() if now - data.get("timestamp", now) > 86400]
             for jid in expired_jobs:
                 del PROGRESS_CACHE[jid]
-                
         except Exception as e:
-            print(f"Cleanup error: {e}")
-        time.sleep(3600) # الفحص كل ساعة
+            pass
+        time.sleep(3600)
 
-# تشغيل منظف السيرفر في الخلفية عند بدء التشغيل
 threading.Thread(target=cleanup_daemon, daemon=True).start()
-
-# ==========================================
 
 class URLRequest(BaseModel):
     url: str
@@ -102,13 +93,16 @@ def search_youtube(query: str, limit: int = 5):
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
+# ==========================================
+# الواجهة الاحترافية (نظام التحكم المتكامل للمستخدم)
+# ==========================================
 INDEX_HTML = f"""
 <!DOCTYPE html>
 <html lang="ar" dir="rtl" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PlayZone | السحابة الذكية</title>
+    <title>PlayZone | التحكم الكامل</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -116,16 +110,11 @@ INDEX_HTML = f"""
     <script>
         tailwind.config={{
             darkMode:'class',
-            theme:{{
-                extend:{{
-                    fontFamily: {{ sans: ['Tajawal', 'sans-serif'] }},
-                    colors:{{ primary:'#10b981', darkBg:'#090f1a', panelBg:'#111827', accent:'#3b82f6' }}
-                }}
-            }}
+            theme:{{extend:{{fontFamily: {{ sans: ['Tajawal', 'sans-serif'] }}, colors:{{ primary:'#10b981', darkBg:'#090f1a', panelBg:'#111827', accent:'#3b82f6' }}}}}}
         }}
     </script>
     <style>
-        body {{ background-color: #090f1a; color: #f8fafc; transition: all 0.3s ease; padding-bottom: 100px; }}
+        body {{ background-color: #090f1a; color: #f8fafc; transition: all 0.3s ease; padding-bottom: 110px; }}
         .glass {{ background: rgba(17, 24, 39, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }}
         .modern-input {{ background: #1e293b; border: 1px solid #334155; color: white; border-radius: 0.75rem; padding: 0.8rem 1rem; outline: none; transition: all 0.3s; width: 100%; }}
         .modern-input:focus {{ border-color: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }}
@@ -150,11 +139,39 @@ INDEX_HTML = f"""
 <body class="antialiased">
     <div id="toast"></div>
 
+    <!-- نافذة إعدادات المستخدم الشاملة -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] hidden flex-col items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-700 p-6 rounded-3xl max-w-md w-full shadow-2xl transform transition-all scale-95 opacity-0" id="settingsContent">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-white"><i class="fas fa-cog text-primary ml-2"></i> إعدادات المستخدم</h3>
+                <button onclick="closeSettings()" class="text-slate-400 hover:text-red-400"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            
+            <div class="space-y-5">
+                <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700">
+                    <h4 class="font-bold text-sm text-slate-300 mb-2"><i class="fab fa-telegram text-blue-400 ml-1"></i> ارتباط تيليجرام</h4>
+                    <div class="flex gap-2">
+                        <input type="text" id="settingTgId" placeholder="الآي دي (ID) الخاص بك" class="modern-input text-sm font-mono py-2">
+                        <button onclick="updateTgId()" class="btn bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 text-sm whitespace-nowrap">حفظ</button>
+                    </div>
+                    <button onclick="clearTgId()" class="text-xs text-red-400 hover:text-red-300 mt-2"><i class="fas fa-unlink"></i> فك الارتباط</button>
+                </div>
+                
+                <div class="bg-slate-900/50 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
+                    <div>
+                        <h4 class="font-bold text-sm text-slate-300">مكتبة الملفات المحلية</h4>
+                        <p class="text-xs text-slate-500 mt-1" id="libCountStatus">يوجد 0 ملف محفوظ</p>
+                    </div>
+                    <button onclick="clearAllLibrary()" class="btn bg-red-500/20 text-red-400 hover:bg-red-500/40 py-2 px-4 text-sm"><i class="fas fa-trash-alt"></i> مسح السجل</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة تيليجرام الذكية (Zero-Intervention Fallback) -->
     <div id="tgModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] hidden flex-col items-center justify-center p-4">
         <div class="bg-slate-800 border border-slate-700 p-6 rounded-3xl max-w-sm w-full text-center shadow-2xl transform transition-all scale-95 opacity-0" id="tgModalContent">
-            <div class="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-[0_0_15px_rgba(59,130,246,0.5)]">
-                <i class="fab fa-telegram-plane"></i>
-            </div>
+            <div class="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl"><i class="fab fa-telegram-plane"></i></div>
             <h3 class="text-xl font-bold mb-2 text-white">ربط حساب تيليجرام</h3>
             <p class="text-slate-400 text-sm mb-6">لإرسال الملفات مباشرة لهاتفك، نحتاج للـ ID الخاص بك لمرة واحدة فقط.</p>
             <button onclick="window.open('https://t.me/{BOT_USERNAME}', '_blank')" class="btn bg-blue-600 hover:bg-blue-500 text-white w-full mb-4 shadow-lg"><i class="fas fa-robot"></i> 1. افتح البوت لنسخ الـ ID</button>
@@ -173,11 +190,13 @@ INDEX_HTML = f"""
                 <h1 class="text-2xl font-black tracking-wide text-white">Play<span class="text-primary">Zone</span></h1>
             </div>
             <div class="flex gap-2">
-                <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="w-10 h-10 rounded-xl bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 flex items-center justify-center transition-colors tooltip" title="التواصل مع البوت"><i class="fab fa-telegram-plane"></i></a>
+                <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="w-10 h-10 rounded-xl bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 flex items-center justify-center transition-colors tooltip" title="البوت"><i class="fab fa-telegram-plane"></i></a>
+                <button onclick="openSettings()" class="w-10 h-10 rounded-xl bg-slate-700/50 hover:bg-slate-600 text-slate-300 flex items-center justify-center transition-colors tooltip" title="الإعدادات"><i class="fas fa-cog"></i></button>
             </div>
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- قسم البحث والتحميل -->
             <div class="lg:col-span-1 space-y-6">
                 <section class="glass rounded-3xl p-6 shadow-xl relative overflow-hidden">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl"></div>
@@ -214,6 +233,7 @@ INDEX_HTML = f"""
                 </section>
             </div>
 
+            <!-- قسم المكتبة السحابية -->
             <div class="lg:col-span-2" id="librarySection">
                 <section class="glass rounded-3xl p-6 md:p-8 shadow-xl min-h-[500px] flex flex-col">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-slate-700 pb-4">
@@ -237,27 +257,39 @@ INDEX_HTML = f"""
         </div>
     </div>
 
+    <!-- مشغل الموسيقى الاحترافي مع أزرار التحكم المتكاملة -->
     <div id="musicPlayer" class="glass pb-2 pt-3 px-4 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
         <div class="progress-container" id="progressContainer" onclick="seekAudio(event)"><div class="progress-bar" id="audioProgressBar"></div></div>
-        <div class="max-w-6xl mx-auto flex items-center justify-between gap-4 mt-2">
-            <div class="flex items-center gap-3 w-1/3 overflow-hidden">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 mt-2">
+            
+            <div class="flex items-center gap-3 w-full md:w-1/3 overflow-hidden">
                 <img id="playerThumb" src="https://via.placeholder.com/50" class="w-12 h-12 rounded-lg object-cover shadow">
-                <div class="overflow-hidden"><p id="playerTitle" class="font-bold text-sm text-white truncate">لم يتم التحديد</p></div>
+                <div class="overflow-hidden">
+                    <p id="playerTitle" class="font-bold text-sm text-white truncate">لم يتم التحديد</p>
+                    <p id="playerTime" class="text-xs text-slate-400 font-mono mt-1">0:00 / 0:00</p>
+                </div>
             </div>
-            <div class="flex items-center justify-center gap-4 md:gap-6 w-1/3">
-                <button onclick="playPrev()" class="text-slate-400 hover:text-white text-xl transition-colors"><i class="fas fa-step-backward"></i></button>
-                <button onclick="togglePlay()" id="playPauseBtn" class="w-12 h-12 rounded-full bg-primary text-slate-900 hover:scale-105 flex items-center justify-center text-lg shadow-lg shadow-primary/30 transition-transform"><i class="fas fa-play ml-1"></i></button>
-                <button onclick="playNext()" class="text-slate-400 hover:text-white text-xl transition-colors"><i class="fas fa-step-forward"></i></button>
+            
+            <div class="flex items-center justify-center gap-5 md:gap-6 w-full md:w-1/3">
+                <button onclick="toggleShuffle()" id="shuffleBtn" class="text-slate-400 hover:text-white transition-colors tooltip" title="تبديل عشوائي"><i class="fas fa-random"></i></button>
+                <button onclick="playPrev()" class="text-slate-200 hover:text-white text-xl transition-colors"><i class="fas fa-step-backward"></i></button>
+                <button onclick="togglePlay()" id="playPauseBtn" class="w-14 h-14 rounded-full bg-primary text-slate-900 hover:scale-105 flex items-center justify-center text-xl shadow-lg shadow-primary/30 transition-transform"><i class="fas fa-play ml-1"></i></button>
+                <button onclick="playNext()" class="text-slate-200 hover:text-white text-xl transition-colors"><i class="fas fa-step-forward"></i></button>
+                <button onclick="toggleRepeat()" id="repeatBtn" class="text-slate-400 hover:text-white transition-colors relative tooltip" title="تكرار"><i class="fas fa-redo"></i></button>
             </div>
-            <div class="flex items-center justify-end gap-3 w-1/3">
-                <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-20 accent-primary hidden md:block">
+            
+            <div class="flex items-center justify-end gap-4 w-full md:w-1/3 hidden md:flex">
+                <button onclick="changeSpeed()" id="speedBtn" class="text-xs font-mono font-bold text-slate-400 hover:text-white border border-slate-600 rounded px-2 py-1 tooltip" title="سرعة التشغيل">1x</button>
+                <i class="fas fa-volume-up text-slate-400 text-sm"></i>
+                <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-20 accent-primary">
                 <button onclick="closePlayer()" class="text-slate-500 hover:text-red-400 p-2 ml-2 transition-colors"><i class="fas fa-times"></i></button>
             </div>
         </div>
-        <audio id="globalAudioElement" ontimeupdate="updatePlayerProgress()" onended="playNext()"></audio>
+        <audio id="globalAudioElement" ontimeupdate="updatePlayerProgress()" onended="handleAudioEnd()"></audio>
     </div>
 
     <script>
+        // --- التهيئة والتخزين ---
         document.addEventListener("DOMContentLoaded", () => {{
             const tgApp = window.Telegram?.WebApp;
             if (tgApp && tgApp.initDataUnsafe && tgApp.initDataUnsafe.user) {{
@@ -272,9 +304,13 @@ INDEX_HTML = f"""
         let currentPage = 1;
         const itemsPerPage = 8;
         
+        // --- إعدادات المشغل المتكاملة ---
         const audioEl = document.getElementById('globalAudioElement');
         let currentPlaylist = [];
         let currentAudioIndex = -1;
+        let isShuffle = false;
+        let repeatMode = 0; // 0: Off, 1: Repeat All, 2: Repeat One
+        let playbackSpeed = 1.0;
 
         let pendingTgFileUrl = "";
         let pendingTgIsAudio = false;
@@ -285,6 +321,63 @@ INDEX_HTML = f"""
             setTimeout(() => t.className = "", type==='warning' ? 5000 : 3000); 
         }}
 
+        // --- دوال لوحة إعدادات المستخدم ---
+        function openSettings() {{
+            document.getElementById('settingTgId').value = localStorage.getItem('pz_tg_chat_id') || '';
+            document.getElementById('libCountStatus').innerText = `يوجد ${{myLibrary.length}} ملف محفوظ محلياً`;
+            const modal = document.getElementById('settingsModal');
+            const content = document.getElementById('settingsContent');
+            modal.classList.remove('hidden'); modal.classList.add('flex');
+            setTimeout(() => {{ content.classList.remove('scale-95', 'opacity-0'); content.classList.add('scale-100', 'opacity-100'); }}, 10);
+        }}
+
+        function closeSettings() {{
+            const modal = document.getElementById('settingsModal');
+            const content = document.getElementById('settingsContent');
+            content.classList.remove('scale-100', 'opacity-100'); content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {{ modal.classList.add('hidden'); modal.classList.remove('flex'); }}, 200);
+        }}
+
+        function updateTgId() {{
+            const id = document.getElementById('settingTgId').value.trim();
+            if(id) {{ localStorage.setItem('pz_tg_chat_id', id); showToast("تم تحديث الآي دي بنجاح", "success"); }}
+            else {{ showToast("يرجى إدخال آي دي صحيح", "error"); }}
+        }}
+
+        function clearTgId() {{
+            localStorage.removeItem('pz_tg_chat_id');
+            document.getElementById('settingTgId').value = '';
+            showToast("تم فك الارتباط بتيليجرام", "info");
+        }}
+
+        function clearAllLibrary() {{
+            if(confirm("تحذير: هل أنت متأكد من حذف جميع الملفات من مكتبتك نهائياً؟")) {{
+                myLibrary = [];
+                localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+                closePlayer();
+                applyFilters();
+                closeSettings();
+                showToast("تم مسح المكتبة بالكامل", "success");
+            }}
+        }}
+
+        function renameFile(id) {{
+            const idx = myLibrary.findIndex(f => f.id === id);
+            if(idx > -1) {{
+                const newTitle = prompt("أدخل الاسم الجديد للملف:", myLibrary[idx].title);
+                if(newTitle && newTitle.trim() !== "") {{
+                    myLibrary[idx].title = newTitle.trim();
+                    localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+                    applyFilters();
+                    if(currentPlaylist[currentAudioIndex] && currentPlaylist[currentAudioIndex].id === id) {{
+                        document.getElementById('playerTitle').innerText = newTitle.trim();
+                    }}
+                    showToast("تم تعديل الاسم بنجاح ✏️", "success");
+                }}
+            }}
+        }}
+
+        // --- دوال المكتبة الأساسية ---
         function applyFilters() {{
             const query = document.getElementById('libSearch').value.toLowerCase();
             const filter = document.getElementById('libFilter').value;
@@ -322,15 +415,18 @@ INDEX_HTML = f"""
                 const favClass = file.favorite ? 'text-red-500' : 'text-slate-500 hover:text-red-400';
 
                 container.innerHTML += `
-                <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700 hover:border-primary/50 transition-all flex flex-col gap-3">
+                <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700 hover:border-primary/50 transition-all flex flex-col gap-3 group">
                     <div class="flex gap-3">
                         <div class="relative w-20 h-16 flex-shrink-0">
                             <img src="${{file.thumb}}" class="w-full h-full object-cover rounded-lg shadow">
-                            <div class="absolute top-1 right-1 bg-black/70 rounded text-[10px] px-1">${{isAudio ? '🎵' : '🎬'}}</div>
+                            <div class="absolute top-1 right-1 bg-black/70 rounded text-[10px] px-1 text-white">${{isAudio ? '🎵' : '🎬'}}</div>
                         </div>
                         <div class="flex-1 overflow-hidden pr-1 relative">
                             <p class="font-bold text-sm line-clamp-2 text-slate-200" title="${{file.title}}">${{file.title}}</p>
-                            <button onclick="toggleFavorite('${{file.id}}')" class="absolute left-0 bottom-0 p-1 ${{favClass}} transition-colors text-lg"><i class="fas fa-heart"></i></button>
+                            <div class="absolute left-0 bottom-0 flex gap-2">
+                                <button onclick="renameFile('${{file.id}}')" class="text-slate-500 hover:text-blue-400 transition-colors p-1 text-sm tooltip" title="تعديل الاسم"><i class="fas fa-pen"></i></button>
+                                <button onclick="toggleFavorite('${{file.id}}')" class="${{favClass}} transition-colors p-1 text-lg"><i class="fas fa-heart"></i></button>
+                            </div>
                         </div>
                     </div>
                     <div class="flex gap-2">
@@ -354,6 +450,7 @@ INDEX_HTML = f"""
             if(idx > -1) {{ myLibrary[idx].favorite = !myLibrary[idx].favorite; localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary)); applyFilters(); }}
         }}
 
+        // --- دوال تيليجرام ---
         function openTgModal(url, isAudio) {{
             pendingTgFileUrl = url; pendingTgIsAudio = isAudio;
             const modal = document.getElementById('tgModal');
@@ -387,9 +484,8 @@ INDEX_HTML = f"""
                 }});
                 const data = await res.json();
                 
-                if (data.success) {{
-                    showToast("✅ تم إرسال الملف بنجاح إلى حسابك!", "success");
-                }} else {{
+                if (data.success) {{ showToast("✅ تم إرسال الملف بنجاح إلى حسابك!", "success"); }} 
+                else {{
                     const isLimitError = data.error && data.error.includes("50");
                     showToast("❌ " + (data.error || "فشل الإرسال"), isLimitError ? "warning" : "error");
                     if(data.error && data.error.includes("chat not found")) localStorage.removeItem('pz_tg_chat_id');
@@ -409,23 +505,76 @@ INDEX_HTML = f"""
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
         }}
 
+        // --- التحكم المتكامل في المشغل (Pro Controls) ---
         function playGlobalAudio(fileId) {{
             const index = currentPlaylist.findIndex(f => f.id === fileId);
             if(index === -1) return; currentAudioIndex = index; const file = currentPlaylist[index];
             document.getElementById('playerTitle').innerText = file.title;
             document.getElementById('playerThumb').src = file.thumb;
-            audioEl.src = file.url; audioEl.play().catch(e => showToast("الملف لم يعد متاحاً على السيرفر (تم حذفه تلقائياً)", "warning"));
+            audioEl.src = file.url; audioEl.playbackRate = playbackSpeed;
+            audioEl.play().catch(e => showToast("الملف لم يعد متاحاً على السيرفر", "warning"));
             document.getElementById('musicPlayer').classList.add('active'); updatePlayBtn(true);
         }}
+
         function togglePlay() {{ audioEl.paused ? (audioEl.play(), updatePlayBtn(true)) : (audioEl.pause(), updatePlayBtn(false)); }}
         function updatePlayBtn(isPlay) {{ document.querySelector('#playPauseBtn i').className = isPlay ? 'fas fa-pause' : 'fas fa-play ml-1'; }}
-        function playNext() {{ if(currentPlaylist.length) playGlobalAudio(currentPlaylist[(currentAudioIndex + 1) % currentPlaylist.length].id); }}
-        function playPrev() {{ if(currentPlaylist.length) playGlobalAudio(currentPlaylist[(currentAudioIndex - 1 + currentPlaylist.length) % currentPlaylist.length].id); }}
+        
+        function toggleShuffle() {{
+            isShuffle = !isShuffle;
+            document.getElementById('shuffleBtn').className = isShuffle ? 'text-primary transition-colors' : 'text-slate-400 hover:text-white transition-colors';
+        }}
+
+        function toggleRepeat() {{
+            repeatMode = (repeatMode + 1) % 3;
+            const btn = document.getElementById('repeatBtn');
+            btn.className = repeatMode > 0 ? 'text-primary transition-colors relative' : 'text-slate-400 hover:text-white transition-colors relative';
+            btn.innerHTML = repeatMode === 2 ? '<i class="fas fa-redo"></i><span class="text-[9px] absolute -top-1 -right-2 bg-slate-900 rounded-full px-1 font-bold">1</span>' : '<i class="fas fa-redo"></i>';
+        }}
+
+        function changeSpeed() {{
+            const speeds = [1.0, 1.25, 1.5, 2.0];
+            let idx = speeds.indexOf(playbackSpeed);
+            playbackSpeed = speeds[(idx + 1) % speeds.length];
+            audioEl.playbackRate = playbackSpeed;
+            document.getElementById('speedBtn').innerText = playbackSpeed + 'x';
+            document.getElementById('speedBtn').className = playbackSpeed > 1.0 ? 'text-xs font-mono font-bold text-primary border border-primary rounded px-2 py-1' : 'text-xs font-mono font-bold text-slate-400 hover:text-white border border-slate-600 rounded px-2 py-1';
+        }}
+
+        function playNext() {{
+            if(currentPlaylist.length === 0) return;
+            if(repeatMode === 2) {{ audioEl.currentTime = 0; audioEl.play(); return; }} // تكرار نفس المقطع
+            if(isShuffle) {{
+                let nextIdx = Math.floor(Math.random() * currentPlaylist.length);
+                playGlobalAudio(currentPlaylist[nextIdx].id); return;
+            }}
+            // التشغيل العادي
+            if(repeatMode === 0 && currentAudioIndex === currentPlaylist.length - 1) {{ updatePlayBtn(false); return; }} // التوقف عند النهاية
+            currentAudioIndex = (currentAudioIndex + 1) % currentPlaylist.length;
+            playGlobalAudio(currentPlaylist[currentAudioIndex].id);
+        }}
+
+        function playPrev() {{
+            if(currentPlaylist.length === 0) return;
+            currentAudioIndex = (currentAudioIndex - 1 + currentPlaylist.length) % currentPlaylist.length;
+            playGlobalAudio(currentPlaylist[currentAudioIndex].id);
+        }}
+
+        function handleAudioEnd() {{ playNext(); }}
+
         function closePlayer() {{ audioEl.pause(); document.getElementById('musicPlayer').classList.remove('active'); }}
+        
+        function formatTime(secs) {{
+            if(isNaN(secs)) return "0:00";
+            const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
+            return `${{m}}:${{s < 10 ? '0'+s : s}}`;
+        }}
+
         function updatePlayerProgress() {{
             if(!audioEl.duration) return;
             document.getElementById('audioProgressBar').style.width = ((audioEl.currentTime / audioEl.duration) * 100) + '%';
+            document.getElementById('playerTime').innerText = `${{formatTime(audioEl.currentTime)}} / ${{formatTime(audioEl.duration)}}`;
         }}
+
         function seekAudio(e) {{
             const rect = document.getElementById('progressContainer').getBoundingClientRect();
             let percent = (e.clientX - rect.left) / rect.width;
@@ -434,6 +583,7 @@ INDEX_HTML = f"""
         }}
         function changeVolume() {{ audioEl.volume = document.getElementById('volumeSlider').value; }}
 
+        // --- دوال البحث والتحميل السحابي ---
         let currentUrl = "", adWatched = false;
         async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
@@ -557,12 +707,7 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
     def hook(d):
         if d['status'] == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate', 1)
-            # إضافة Timestamp هنا لتشغيل التنظيف التلقائي
-            PROGRESS_CACHE[job_id] = {
-                "status": "downloading", 
-                "percent": round((d.get('downloaded_bytes',0)/total)*100, 1),
-                "timestamp": time.time() 
-            }
+            PROGRESS_CACHE[job_id] = {"status": "downloading", "percent": round((d.get('downloaded_bytes',0)/total)*100, 1), "timestamp": time.time()}
         elif d['status'] == 'finished': 
             PROGRESS_CACHE[job_id] = {"status": "converting", "timestamp": time.time()}
 
@@ -595,15 +740,12 @@ async def send_to_telegram(req: TelegramRequest):
         
         if not file_path.exists():
             return {"success": False, "error": "عذراً، يبدو أن الملف قد تم مسحه من السيرفر. يرجى تحميله مجدداً."}
-
         if not TELEGRAM_TOKEN:
             return {"success": False, "error": "عذراً، خدمة البوت غير مفعلة حالياً في السيرفر."}
 
-        # --- حماية قيود تيليجرام (أهم فحص لمنع الانهيار) ---
         file_size_mb = file_path.stat().st_size / (1024 * 1024)
         if file_size_mb > 49.5:
             return {"success": False, "error": f"حجم الملف ({file_size_mb:.1f}MB) يتجاوز الحد المسموح في تيليجرام (50MB). يرجى الحفظ في جهازك بدلاً من ذلك."}
-        # ----------------------------------------------------
 
         api_method = "sendAudio" if req.is_audio else "sendVideo"
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
@@ -614,11 +756,8 @@ async def send_to_telegram(req: TelegramRequest):
             response = requests.post(url, data=data, files=files)
             
         res_data = response.json()
-        
-        if response.status_code == 200 and res_data.get("ok"):
-            return {"success": True}
-        else:
-            return {"success": False, "error": res_data.get("description", "تأكد من بدء المحادثة مع البوت أولاً.")}
+        if response.status_code == 200 and res_data.get("ok"): return {"success": True}
+        else: return {"success": False, "error": res_data.get("description", "تأكد من بدء المحادثة مع البوت أولاً.")}
             
     except Exception as e:
         return {"success": False, "error": str(e)}
