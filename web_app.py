@@ -8,11 +8,12 @@ from pydantic import BaseModel
 from jinja2 import Template
 import yt_dlp
 
-# استيراد إعدادات البوت وقاعدة البيانات
-from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK
+# استيراد إعدادات البوت وقاعدة البيانات والكوكيز
+from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
 from database.connection import init_db
 from database.operations import load_stats_sync, all_user_ids, get_active_users_48h, get_latest_users
 from services.downloader import extract_metadata, search_youtube
+from utils.helpers import cookie_file_is_usable
 
 app = FastAPI()
 init_db()
@@ -21,7 +22,6 @@ init_db()
 security = HTTPBasic()
 
 def check_admin(credentials: HTTPBasicCredentials = Depends(security)):
-    # ⚠️ يمكنك تغيير اسم المستخدم وكلمة المرور من هنا
     correct_user = secrets.compare_digest(credentials.username, "Tareqkash")
     correct_pass = secrets.compare_digest(credentials.password, "playzone2026")
     
@@ -47,7 +47,6 @@ class URLRequest(BaseModel):
 class SearchRequest(BaseModel):
     query: str
 
-# واجهة الموقع الرئيسية المحدثة (بالوضع الليلي والنهاري)
 INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl" class="dark">
@@ -130,6 +129,12 @@ INDEX_HTML = """
                     </div>
                 </div>
                 {% endfor %}
+                {% if not files %}
+                <div class="col-span-1 md:col-span-2 text-center py-10 text-gray-500">
+                    <i class="fas fa-folder-open text-4xl mb-3 opacity-50"></i>
+                    <p>المكتبة فارغة حالياً. ابدأ التحميل الآن لتظهر مقاطعك هنا!</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -241,14 +246,31 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
             }
         elif d['status'] == 'finished': PROGRESS_CACHE[job_id] = {"status": "converting"}
 
-    opts = {'outtmpl': str(WEB_DIR / f'{job_id}_%(title)s.%(ext)s'), 'quiet': True, 'progress_hooks': [hook]}
+    # الترقية المؤسسية: إضافة إعدادات تخطي الحماية واستخدام الكوكيز مثل البوت تماماً
+    opts = {
+        'outtmpl': str(WEB_DIR / f'{job_id}_%(title)s.%(ext)s'), 
+        'quiet': True, 
+        'progress_hooks': [hook],
+        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'tv'], 'player_skip': ['web', 'mweb']}},
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+    }
+    
+    # تفعيل ملف الكوكيز لتخطي حظر يوتيوب إذا كان صالحاً
+    if cookie_file_is_usable(COOKIES_FILE):
+        opts['cookiefile'] = str(COOKIES_FILE)
+
     if mode == 'audio': opts.update({'format': 'bestaudio/best', 'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '320'}]})
     else: opts.update({'format': f'bestvideo[height<={res}]+bestaudio/best', 'merge_output_format': 'mp4'})
     
     try:
         with yt_dlp.YoutubeDL(opts) as ydl: ydl.download([url])
         PROGRESS_CACHE[job_id] = {"status": "completed"}
-    except Exception: PROGRESS_CACHE[job_id] = {"status": "error"}
+    except Exception as e: 
+        print(f"Error downloading: {e}")
+        PROGRESS_CACHE[job_id] = {"status": "error"}
 
 @app.post("/api/download")
 async def start_download(req: URLRequest):
@@ -260,7 +282,6 @@ async def start_download(req: URLRequest):
 @app.get("/api/progress/{job_id}")
 async def get_progress(job_id: str): return PROGRESS_CACHE.get(job_id, {"status": "waiting"})
 
-# إضافة الحماية (Depends) للوحة التحكم
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_panel(admin: str = Depends(check_admin)):
     return Template(ADMIN_HTML).render(stats=load_stats_sync(), total_users=len(all_user_ids()), active=len(get_active_users_48h()))
