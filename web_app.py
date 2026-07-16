@@ -87,8 +87,8 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
 
-def search_youtube(query: str, limit: int = 30):
-    # السيرفر سيسحب 30 نتيجة لضمان وجود 5 فيديوهات صالحة بينها
+# جلب نتائج كافية لضمان تصفية 5 مقاطع فيديو صحيحة
+def search_youtube(query: str, limit: int = 15):
     opts = get_hardened_ydl_options()
     opts['extract_flat'] = True
     with yt_dlp.YoutubeDL(opts) as ydl: return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
@@ -185,6 +185,7 @@ INDEX_HTML = f"""
 
     <main class="flex-1 h-full overflow-y-auto pb-28 relative scroll-smooth">
         
+        <!-- قسم البحث والنتائج -->
         <section id="searchView" class="view-section active p-4 md:p-8 max-w-4xl mx-auto">
             <div class="bg-panel rounded-3xl p-6 md:p-8 border border-panelBorder mb-6 relative overflow-hidden">
                 <div class="absolute top-0 left-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl"></div>
@@ -196,14 +197,11 @@ INDEX_HTML = f"""
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 
-                <!-- حاوية نتائج البحث النصية بستايل البوت -->
-                <div id="searchResults" class="hidden mt-8 bg-[#18181b] border border-panelBorder rounded-3xl p-5 shadow-xl">
-                    <div class="mb-5 pb-4 border-b border-panelBorder flex justify-between items-start">
-                        <div>
-                            <h3 class="text-white font-bold text-lg mb-1 flex items-center gap-2"><span id="searchQueryTitle">🔎 نتائج البحث</span></h3>
-                            <p class="text-textMuted text-sm">اختر المقطع المناسب من الأزرار أدناه:</p>
-                        </div>
-                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2 bg-bgDark rounded-full transition-colors flex-shrink-0"><i class="fas fa-times"></i></button>
+                <!-- حاوية نتائج البحث المُعاد برمجتها (صور + نصوص بدون أرقام) -->
+                <div id="searchResults" class="hidden mt-8">
+                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-panelBorder">
+                        <h3 class="text-white font-bold text-lg flex items-center gap-2"><span id="searchQueryTitle">🔎 نتائج البحث:</span></h3>
+                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 text-sm transition-colors flex items-center gap-1"><i class="fas fa-times"></i> إغلاق</button>
                     </div>
                     <div id="searchResultsList" class="flex flex-col gap-3"></div>
                 </div>
@@ -583,7 +581,7 @@ INDEX_HTML = f"""
         function seekAudio(e) {{ const rect = document.getElementById('progressContainer').getBoundingClientRect(); let percent = (e.clientX - rect.left) / rect.width; if(document.dir === 'rtl') percent = 1 - percent; audioEl.currentTime = percent * audioEl.duration; }}
         function changeVolume() {{ audioEl.volume = document.getElementById('volumeSlider').value; }}
 
-        // --- نظام الفلترة الجديد في السيرفر ---
+        // --- نظام البحث المطور: إصلاح شامل وإرجاع الصور والمقاطع ---
         let currentUrl = "", adWatched = false;
         async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
@@ -593,39 +591,46 @@ INDEX_HTML = f"""
             if (input.startsWith('http')) await renderPreview(input);
             else {{
                 try {{
-                    // السيرفر الآن سيجلب 30 نتيجة ويصفيها لإرسال 5 نتائج صالحة فقط
                     const res = await fetch('/api/search', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{query:input}})}});
                     if(!res.ok) throw new Error();
                     const data = await res.json();
                     
                     if(data.success && data.entries.length) {{
                         let box = document.getElementById('searchResultsList'); box.innerHTML = '';
-                        document.getElementById('searchQueryTitle').innerText = `🔎 نتائج البحث لـ: ${{input}}`;
+                        document.getElementById('searchQueryTitle').innerText = `🔎 نتائج البحث`;
                         
-                        const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+                        const validVideos = data.entries.filter(v => v.id && v.duration).slice(0, 5);
+                        
+                        if(validVideos.length === 0) {{
+                            showToast("لم يتم العثور على مقاطع صالحة", "warning");
+                            btn.innerHTML = '<i class="fas fa-search"></i> بحث'; btn.disabled = false;
+                            return;
+                        }}
 
-                        data.entries.forEach((v, idx) => {{
+                        validVideos.forEach((v, idx) => {{
+                            const thumb = v.thumbnails && v.thumbnails.length ? v.thumbnails[v.thumbnails.length-1].url : `https://i.ytimg.com/vi/${{v.id}}/hqdefault.jpg`;
                             const duration = formatTime(v.duration || 0);
                             const uploader = v.uploader || 'غير معروف';
-                            const numEmoji = emojis[idx] || (idx + 1);
                             
                             box.innerHTML += `
-                            <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="p-4 bg-bgDark rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-sm relative group overflow-hidden mb-2 block">
-                                <div class="absolute right-0 top-0 bottom-0 w-1 bg-accent/20 group-hover:bg-accent transition-colors"></div>
-                                <div class="flex flex-col gap-2 pr-3">
-                                    <h4 class="text-white font-bold text-[15px] leading-relaxed" dir="auto" style="word-break: break-word;">
-                                        <span class="mr-1 text-lg">${{numEmoji}}</span> ${{v.title}}
-                                    </h4>
-                                    <div class="flex items-center gap-3 text-sm text-textMuted font-medium" dir="auto">
-                                        <span class="flex items-center gap-1.5 truncate max-w-[150px]"><span class="text-accent/70">👤</span> ${{uploader}}</span>
-                                        <span class="text-accent/30">•</span>
-                                        <span class="flex items-center gap-1.5 flex-shrink-0"><span class="text-accent/70">⏱</span> ${{duration}}</span>
+                            <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="p-3 bg-panel hover:bg-panelBorder rounded-2xl cursor-pointer flex gap-4 items-center border border-panelBorder hover:border-accent/50 transition-all mb-3 shadow-sm group">
+                                <div class="relative w-24 h-16 flex-shrink-0 rounded-xl overflow-hidden border border-panelBorder shadow-sm">
+                                    <img src="${{thumb}}" class="w-full h-full object-cover">
+                                    <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded-md font-mono">${{duration}}</div>
+                                </div>
+                                <div class="flex-1 min-w-0 flex flex-col justify-center">
+                                    <h4 class="text-white font-bold text-sm leading-snug mb-1 truncate w-full" dir="auto" title="${{v.title}}">${{v.title}}</h4>
+                                    <div class="flex items-center gap-2 text-xs text-textMuted w-full truncate" dir="auto">
+                                        <i class="fas fa-user-circle text-accent/70"></i> <span class="truncate">${{uploader}}</span>
                                     </div>
+                                </div>
+                                <div class="w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent flex-shrink-0 group-hover:bg-accent group-hover:text-white transition-colors">
+                                    <i class="fas fa-download text-sm"></i>
                                 </div>
                             </div>`;
                         }});
                         document.getElementById('searchResults').classList.remove('hidden');
-                    }} else showToast("لم يتم العثور على نتائج صالحة", "error");
+                    }} else showToast("لم يتم العثور على نتائج", "error");
                 }} catch(e) {{ showToast("خطأ بالاتصال", "error"); }}
             }}
             btn.innerHTML = '<i class="fas fa-search"></i> بحث'; btn.disabled = false;
@@ -742,24 +747,8 @@ async def home():
 
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
-    try:
-        # السيرفر يجلب 30 نتيجة لضمان الحصول على 5 فيديوهات صالحة
-        raw_results = search_youtube(req.query, limit=30)
-        entries = raw_results.get("entries", [])
-        
-        valid_videos = []
-        for entry in entries:
-            # تصفية صارمة: يجب أن يمتلك المقطع ID ومدة زمنية (لاستبعاد القنوات وقوائم التشغيل)
-            if entry.get("id") and entry.get("duration"):
-                valid_videos.append(entry)
-            
-            # التوقف فور جمع 5 فيديوهات نقية
-            if len(valid_videos) == 5:
-                break
-                
-        return {"success": True, "entries": valid_videos}
-    except Exception as e: 
-        return {"success": False, "error": str(e)}
+    try: return {"success": True, "entries": search_youtube(req.query, limit=15).get("entries", [])}
+    except Exception as e: return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
 async def get_preview(req: URLRequest):
