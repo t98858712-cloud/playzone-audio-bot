@@ -16,6 +16,18 @@ from handlers.user import start, toggle_lang_command, show_playzone_links, handl
 from handlers.admin import admin_panel
 from handlers.callbacks import handle_callbacks
 
+async def user_id(update: Update, context):
+    user = update.effective_user
+    username = f"@{user.username}" if user.username else "لا يوجد"
+
+    await update.message.reply_text(
+        f"🆔 ID: {user.id}\n👤 Username: {username}",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📋 Copy ID", copy_text=CopyTextButton(str(user.id)))],
+            [InlineKeyboardButton("👤 Copy User", copy_text=CopyTextButton(username))]
+        ])
+    )
+
 from services.downloader import youtube_health_monitor
 
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
@@ -54,7 +66,8 @@ async def post_init(app: Application):
     user_commands = [
         BotCommand("start", "بدء / Start"), 
         BotCommand("language", "تغيير اللغة / Toggle Language"), 
-        BotCommand("links", "الروابط / Links")
+        BotCommand("links", "الروابط / Links"),
+        BotCommand("id", "عرض المعرف")
     ]
     admin_commands = user_commands + [BotCommand("admin", "لوحة التحكم / Admin Panel")]
 
@@ -90,6 +103,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("language", toggle_lang_command))
     app.add_handler(CommandHandler("links", show_playzone_links))
+    app.add_handler(CommandHandler("id", user_id))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
