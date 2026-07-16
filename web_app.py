@@ -154,8 +154,22 @@ INDEX_HTML = f"""
         .view-section.active {{ display: block; }}
         @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
         
-        #musicPlayer {{ position: fixed; bottom: 0; left: 0; right: 0; z-index: 50; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-top: 1px solid #27272a; background: #18181b; }}
-        #musicPlayer.active {{ transform: translateY(0); }}
+        /* تعديل تموضع مشغل الموسيقى ليتوقف عند حدود القائمة الجانبية ولا يغطيها */
+        #musicPlayer {{ 
+            position: fixed; 
+            bottom: 0; 
+            left: 0; 
+            right: 5rem; /* مسافة 80px للهواتف لمنع التداخل مع القائمة */
+            z-index: 50; 
+            transform: translateY(100%); 
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
+            border-top: 1px solid #27272a; 
+            background: #18181b; 
+        }}
+        @media (min-width: 768px) {{
+            #musicPlayer {{ right: 16rem; }} /* مسافة 256px للشاشات الكبيرة */
+        }}
+        
         .progress-container {{ width: 100%; height: 4px; background: #27272a; cursor: pointer; position: absolute; top: -2px; left: 0; transition: height 0.2s; }}
         .progress-container:hover {{ height: 8px; top: -4px; }}
         .progress-bar {{ height: 100%; background: #8b5cf6; width: 0%; position: relative; transition: width 0.3s ease-out; }}
@@ -164,10 +178,11 @@ INDEX_HTML = f"""
         #toast.show {{ transform: translateX(-50%) translateY(0); opacity: 1; }}
     </style>
 </head>
-<body class="antialiased flex h-screen w-full">
+<body class="antialiased flex h-[100dvh] w-full">
     <div id="toast"></div>
 
-    <aside class="w-20 md:w-64 bg-panel border-l border-panelBorder flex flex-col justify-between h-full z-40">
+    <!-- تحديث شريط القائمة الجانبية لمنع التداخل وترتيب العناصر بشكل مثالي ومربع على الهاتف -->
+    <aside class="w-20 md:w-64 bg-panel border-l border-panelBorder flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
         <div>
             <div class="h-20 flex items-center justify-center md:justify-start md:px-6 border-b border-panelBorder">
                 <div class="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center text-accent text-xl flex-shrink-0">
@@ -176,26 +191,30 @@ INDEX_HTML = f"""
                 <h1 class="text-xl font-black text-white mr-3 hidden md:block">Play<span class="text-accent">Zone</span></h1>
             </div>
 
-            <nav class="mt-6 px-3 space-y-2">
-                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl bg-panelBorder text-accent font-bold">
-                    <i class="fas fa-search text-xl"></i><span class="hidden md:block">البحث والتحميل</span>
+            <!-- أزرار القائمة الجانبية بهوامش محسنة تناسب العرض الصغير -->
+            <nav class="mt-6 px-2 md:px-3 space-y-2">
+                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 p-3 md:px-4 md:py-3 rounded-xl bg-panelBorder text-accent font-bold">
+                    <i class="fas fa-search text-xl flex-shrink-0"></i><span class="hidden md:block">البحث والتحميل</span>
                 </button>
-                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted hover:bg-panelBorder hover:text-white bg-transparent">
-                    <i class="fas fa-folder text-xl"></i><span class="hidden md:block">ملفاتي المحفوظة</span>
+                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 p-3 md:px-4 md:py-3 rounded-xl text-textMuted hover:bg-panelBorder hover:text-white bg-transparent">
+                    <i class="fas fa-folder text-xl flex-shrink-0"></i><span class="hidden md:block">ملفاتي المحفوظة</span>
                 </button>
-                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted hover:bg-panelBorder hover:text-white bg-transparent">
-                    <i class="fas fa-cog text-xl"></i><span class="hidden md:block">الإعدادات</span>
+                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 p-3 md:px-4 md:py-3 rounded-xl text-textMuted hover:bg-panelBorder hover:text-white bg-transparent">
+                    <i class="fas fa-cog text-xl flex-shrink-0"></i><span class="hidden md:block">الإعدادات</span>
                 </button>
             </nav>
         </div>
-        <div class="p-4 border-t border-panelBorder">
-            <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="btn w-full flex items-center justify-center md:justify-start gap-3 px-4 py-3 rounded-xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20">
-                <i class="fab fa-telegram-plane text-xl"></i><span class="hidden md:block font-bold text-sm" dir="ltr">@{BOT_USERNAME}</span>
+        
+        <!-- زر تيليجرام السفلية بهوامش مصغرة ومحمية تماماً من القص أو التداخل -->
+        <div class="p-2 md:p-4 border-t border-panelBorder">
+            <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="btn w-full flex items-center justify-center md:justify-start gap-3 p-3 md:px-4 md:py-3 rounded-xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20">
+                <i class="fab fa-telegram-plane text-xl flex-shrink-0"></i><span class="hidden md:block font-bold text-sm truncate" dir="ltr">@{BOT_USERNAME}</span>
             </a>
         </div>
     </aside>
 
-    <main class="flex-1 h-full overflow-y-auto pb-28 relative scroll-smooth">
+    <!-- تعديل مساحة المحتوى لتفادي المشغل السفلي بهوامش سفلية أوسع -->
+    <main class="flex-1 h-[100dvh] overflow-y-auto pb-36 md:pb-28 relative scroll-smooth">
         
         <!-- قسم البحث والنتائج -->
         <section id="searchView" class="view-section active p-4 md:p-8 max-w-4xl mx-auto">
