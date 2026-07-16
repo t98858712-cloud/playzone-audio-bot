@@ -9,7 +9,7 @@ import yt_dlp
 
 # --- إعدادات البوت والبيئة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي 
+BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي بناءً على طلبك
 # -------------------------------------------------------------
 
 try:
@@ -87,13 +87,14 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
 
-def search_youtube(query: str, limit: int = 5):
+# زيادة الحد إلى 8 لضمان العثور على 5 خيارات فيديو صالحة
+def search_youtube(query: str, limit: int = 8):
     opts = get_hardened_ydl_options()
     opts['extract_flat'] = True
     with yt_dlp.YoutubeDL(opts) as ydl: return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
 # ==========================================
-# الواجهة الاحترافية المتكاملة
+# الواجهة الاحترافية المتكاملة (مع إصلاح الموبايل)
 # ==========================================
 INDEX_HTML = f"""
 <!DOCTYPE html>
@@ -196,13 +197,14 @@ INDEX_HTML = f"""
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 
-                <!-- حاوية نتائج البحث المُحسّنة (قائمة من 5 خيارات عمودية) -->
+                <!-- حاوية نتائج البحث المُصلحة (5 خيارات عمودية) -->
                 <div id="searchResults" class="hidden mt-6 bg-bgDark border border-panelBorder rounded-3xl p-4 md:p-5">
-                    <div class="flex justify-between items-center mb-4 border-b border-panelBorder pb-3">
+                    <div class="flex justify-between items-center mb-5 border-b border-panelBorder pb-3">
                         <h3 class="text-white font-bold text-lg flex items-center gap-2"><i class="fas fa-list-ol text-accent"></i>اختر المقطع المطلوب:</h3>
                         <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 text-sm transition-colors flex items-center gap-1"><i class="fas fa-times"></i> إغلاق</button>
                     </div>
-                    <div id="searchResultsList" class="flex flex-col gap-3"></div>
+                    <!-- تم إزالة flex-col وتوحيد المسافات لضمان عدم التداخل -->
+                    <div id="searchResultsList" class="w-full"></div>
                 </div>
             </div>
 
@@ -578,7 +580,7 @@ INDEX_HTML = f"""
         function seekAudio(e) {{ const rect = document.getElementById('progressContainer').getBoundingClientRect(); let percent = (e.clientX - rect.left) / rect.width; if(document.dir === 'rtl') percent = 1 - percent; audioEl.currentTime = percent * audioEl.duration; }}
         function changeVolume() {{ audioEl.volume = document.getElementById('volumeSlider').value; }}
 
-        // --- نظام البحث المطور لتجنب أخطاء العرض (التداخل) ---
+        // --- نظام البحث المُصلح (5 خيارات عمودية لا تختفي) ---
         let currentUrl = "", adWatched = false;
         async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
@@ -594,30 +596,30 @@ INDEX_HTML = f"""
                     if(data.success && data.entries.length) {{
                         let box = document.getElementById('searchResultsList'); box.innerHTML = '';
                         
-                        // عرض 5 خيارات كحد أقصى بتصميم متجاوب
+                        // عرض 5 خيارات كحد أقصى بتصميم متجاوب تماماً للموبايل
                         data.entries.slice(0, 5).forEach((v, idx) => {{
                             if(v.id) {{
                                 const thumb = v.thumbnails && v.thumbnails.length ? v.thumbnails[0].url : 'https://via.placeholder.com/150';
                                 const duration = formatTime(v.duration || 0);
                                 const uploader = v.uploader || 'غير معروف';
                                 
-                                // إصلاح تداخل النصوص باستخدام min-w-0 و flex-shrink-0
+                                // استخدام flex-none و min-w-0 لضمان عدم اختفاء النصوص في الشاشات الصغيرة
                                 box.innerHTML += `
-                                <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full flex items-center gap-3 p-3 bg-panel rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all shadow-sm">
-                                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center text-accent font-bold text-sm">
+                                <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full flex items-center p-3 bg-panel rounded-xl border border-panelBorder mb-3 cursor-pointer hover:border-accent/50 transition-all active:scale-95 shadow-sm">
+                                    <div class="flex-none w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center font-bold text-sm ml-3">
                                         ${{idx + 1}}
                                     </div>
-                                    <div class="flex-shrink-0 relative w-20 h-14 rounded-lg overflow-hidden border border-panelBorder/50">
+                                    <div class="flex-none w-20 h-14 rounded-lg overflow-hidden border border-panelBorder ml-3">
                                         <img src="${{thumb}}" class="w-full h-full object-cover">
                                     </div>
-                                    <div class="flex-1 min-w-0 flex flex-col justify-center">
-                                        <p class="text-white font-bold text-sm truncate w-full" dir="auto">${{v.title}}</p>
-                                        <p class="text-textMuted text-xs mt-1 truncate w-full" dir="auto">
+                                    <div class="flex-1 overflow-hidden text-right" style="min-width: 0;">
+                                        <h4 class="text-white font-bold text-sm truncate w-full mb-1" dir="auto">${{v.title}}</h4>
+                                        <p class="text-textMuted text-xs truncate w-full" dir="auto">
                                             <i class="fas fa-user-circle"></i> ${{uploader}} • <i class="far fa-clock"></i> ${{duration}}
                                         </p>
                                     </div>
-                                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent">
-                                        <i class="fas fa-download text-xs"></i>
+                                    <div class="flex-none w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent mr-2">
+                                        <i class="fas fa-download text-sm"></i>
                                     </div>
                                 </div>`;
                             }}
@@ -738,7 +740,7 @@ async def home():
 
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
-    try: return {"success": True, "entries": search_youtube(req.query, limit=5).get("entries", [])}
+    try: return {"success": True, "entries": search_youtube(req.query, limit=8).get("entries", [])}
     except Exception as e: return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
