@@ -42,7 +42,7 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 PROGRESS_CACHE = {}
 AD_LINK = HILLTOPADS_LINK if HILLTOPADS_LINK else (ADSTERRA_LINK or "#")
 
-# نظام التنظيف الذاتي لحماية مساحة السيرفر - مصلح بالكامل
+# نظام التنظيف الذاتي لحماية مساحة السيرفر - آمن من الانهيارات
 def cleanup_daemon():
     while True:
         try:
@@ -51,7 +51,7 @@ def cleanup_daemon():
                 if file_path.is_file() and now - file_path.stat().st_mtime > 86400:
                     file_path.unlink(missing_ok=True)
             
-            # تم إصلاح التكرار هنا لمنع الانهيار
+            # معالجة القاموس بشكل آمن لتجنب RuntimeError أثناء التكرار
             expired_jobs = [jid for jid, data in list(PROGRESS_CACHE.items()) if now - data.get("timestamp", now) > 86400]
             for jid in expired_jobs:
                 PROGRESS_CACHE.pop(jid, None)
@@ -61,7 +61,6 @@ def cleanup_daemon():
 
 threading.Thread(target=cleanup_daemon, daemon=True).start()
 
-# تم تصحيح صياغة كلاس Pydantic
 class URLRequest(BaseModel):
     url: str
     mode: str = "video"
@@ -92,10 +91,19 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
 
+# دالة البحث المعدلة: نقوم بحذف محددات الـ playlist_items للسماح بجلب نتائج البحث كاملة
 def search_youtube(query: str, limit: int = 25):
     opts = get_hardened_ydl_options()
     opts['extract_flat'] = True
-    with yt_dlp.YoutubeDL(opts) as ydl: return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+    
+    # حذف القيود التي تمنع جلب القوائم والبحث المتعدد
+    if 'playlist_items' in opts:
+        del opts['playlist_items']
+    if 'noplaylist' in opts:
+        del opts['noplaylist']
+        
+    with yt_dlp.YoutubeDL(opts) as ydl: 
+        return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
 # ==========================================
 # الواجهة المتجاوبة والمصححة كلياً للهواتف
@@ -169,13 +177,13 @@ INDEX_HTML = f"""
             </div>
 
             <nav class="mt-6 px-3 space-y-2">
-                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted bg-transparent">
+                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl bg-panelBorder text-accent font-bold">
                     <i class="fas fa-search text-xl"></i><span class="hidden md:block">البحث والتحميل</span>
                 </button>
-                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted bg-transparent">
+                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted hover:bg-panelBorder hover:text-white bg-transparent">
                     <i class="fas fa-folder text-xl"></i><span class="hidden md:block">ملفاتي المحفوظة</span>
                 </button>
-                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted bg-transparent">
+                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted hover:bg-panelBorder hover:text-white bg-transparent">
                     <i class="fas fa-cog text-xl"></i><span class="hidden md:block">الإعدادات</span>
                 </button>
             </nav>
@@ -201,11 +209,13 @@ INDEX_HTML = f"""
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 
+                <!-- حاوية نتائج البحث المُعاد برمجتها (إظهار 5 خيارات تحميل عمودية بالكامل) -->
                 <div id="searchResults" class="hidden mt-8 bg-[#18181b] border border-panelBorder rounded-3xl p-4 md:p-5 shadow-xl">
                     <div class="mb-4 pb-3 border-b border-panelBorder flex justify-between items-center">
                         <h3 class="text-white font-bold text-base md:text-lg flex items-center gap-2">🎬 اختر المقطع المطلوب:</h3>
                         <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2 bg-bgDark rounded-full transition-colors flex-shrink-0"><i class="fas fa-times"></i></button>
                     </div>
+                    <!-- قائمة الـ 5 مقاطع المحمية من الانضغاط وبدون أرقام -->
                     <div id="searchResultsList" class="flex flex-col gap-3 w-full"></div>
                 </div>
             </div>
@@ -348,7 +358,7 @@ INDEX_HTML = f"""
         </div>
     </div>
 
-    <!-- كود JavaScript تم إعادة كتابته وإصلاحه كلياً لمنع الانهيار وربط الواجهات -->
+    <!-- كود JavaScript آمن كلياً ضد تعارض الـ f-string وملفات البحث والتحكم -->
     <script>
         // المتغيرات العامة
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
@@ -369,7 +379,7 @@ INDEX_HTML = f"""
                 const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
                 if (tgUser && tgUser.id) {{
                     localStorage.setItem('pz_tg_id', tgUser.id);
-                    showToast(`تم ربط حساب تيليجرام (${{tgUser.first_name}}) تلقائياً 🛡️`, "success");
+                    showToast("تم ربط حساب تيليجرام تلقائياً 🛡️", "success");
                 }}
             }}
             
@@ -387,7 +397,7 @@ INDEX_HTML = f"""
         function formatTime(secs) {{ 
             if(isNaN(secs) || secs === null) return "0:00"; 
             const m = Math.floor(secs / 60), s = Math.floor(secs % 60); 
-            return `${{m}}:${{s < 10 ? '0'+s : s}}`; 
+            return m + ":" + (s < 10 ? '0' + s : s); 
         }}
 
         // نظام التنبيهات المنبثقة
@@ -465,7 +475,6 @@ INDEX_HTML = f"""
                 const favClass = item.favorite ? 'fas fa-heart text-red-500' : 'far fa-heart';
                 const icon = item.is_audio ? '<i class="fas fa-music text-accent"></i>' : '<i class="fas fa-video text-tgBlue"></i>';
                 
-                // استخدام دمج النصوص المباشر الآمن لحماية f-string
                 container.innerHTML += `
                     <div class="bg-panel rounded-2xl p-4 border border-panelBorder flex gap-4 items-center relative group">
                         <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder flex-shrink-0 cursor-pointer" onclick="${{item.is_audio ? `playAudioTrack(${{actualIndex}})` : `watchVideo('${{item.url}}')`}}">
@@ -497,22 +506,18 @@ INDEX_HTML = f"""
             renderPagination(totalPages);
         }}
 
+        // دالة عرض الصفحات الآمنة من تداخل أقواس بايثون
         function renderPagination(totalPages) {{
             const pagBox = document.getElementById('pagination');
             pagBox.innerHTML = "";
             if (totalPages <= 1) return;
 
-            let html = `
-                <button onclick="changePage(${{libraryPage - 1}})" ${{libraryPage === 1 ? 'disabled' : ''}} class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">السابق</button>
-            `;
+            let html = '<button onclick="changePage(' + (libraryPage - 1) + ')" ' + (libraryPage === 1 ? 'disabled' : '') + ' class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">السابق</button>';
             for (let i = 1; i <= totalPages; i++) {{
-                html += `
-                    <button onclick="changePage(${{i}})" class="btn px-3 py-1.5 ${{libraryPage === i ? 'bg-accent text-white' : 'bg-panel border border-panelBorder text-textMuted'}} text-xs font-mono">${{i}}</button>
-                `;
+                const activeClass = (libraryPage === i) ? 'bg-accent text-white' : 'bg-panel border border-panelBorder text-textMuted';
+                html += '<button onclick="changePage(' + i + ')" class="btn px-3 py-1.5 ' + activeClass + ' text-xs font-mono">' + i + '</button>';
             }}
-            html += `
-                <button onclick="changePage(${{libraryPage + 1}})" ${{libraryPage === totalPages ? 'disabled' : ''}} class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">التالي</button>
-            `;
+            html += '<button onclick="changePage(' + (libraryPage + 1) + ')" ' + (libraryPage === totalPages ? 'disabled' : '') + ' class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">التالي</button>';
             pagBox.innerHTML = html;
         }}
 
@@ -532,7 +537,7 @@ INDEX_HTML = f"""
         }}
 
         function deleteFromLibrary(id) {{
-            if (confirm("هل أنت متأكد من حذف هذا الملف من قائمتك؟ (لن يتم حذفه من خوادمنا تلقائياً)")) {{
+            if (confirm("هل أنت متأكد من حذف هذا الملف من قائمتك؟")) {{
                 myLibrary = myLibrary.filter(i => i.id !== id);
                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                 applyFilters();
@@ -543,11 +548,11 @@ INDEX_HTML = f"""
 
         function updateLibraryCount() {{
             const count = myLibrary.length;
-            document.getElementById('libCountStatus').innerText = `السجل (${{count}})`;
+            document.getElementById('libCountStatus').innerText = "السجل (" + count + ")";
         }}
 
         function clearAllLibrary() {{
-            if (confirm("تحذير: هل أنت متأكد من مسح جميع الملفات المحفوظة من المتصفح؟ لا يمكن التراجع!")) {{
+            if (confirm("هل أنت متأكد من مسح السجل بالكامل؟")) {{
                 myLibrary = [];
                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                 applyFilters();
@@ -556,7 +561,6 @@ INDEX_HTML = f"""
             }}
         }}
 
-        // تعديل بيانات تيليجرام بالإعدادات
         function updateTgId() {{
             const tgId = document.getElementById('settingTgId').value.trim();
             if (!tgId) {{
@@ -611,11 +615,11 @@ INDEX_HTML = f"""
             }}
         }}
 
-        // دالة الإرسال الفعلي لتيليجرام (ربط مع الـ API)
+        // دالة الإرسال لتيليجرام
         async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {{
             const chatId = localStorage.getItem('pz_tg_id');
             if (!chatId) {{
-                if (auto) showToast("فشل الإرسال التلقائي: لم تقم بربط تيليجرام بعد.", "error");
+                if (auto) showToast("لم يتم ربط حساب تيليجرام بعد", "error");
                 return;
             }}
 
@@ -642,7 +646,7 @@ INDEX_HTML = f"""
                 if (data.success) {{
                     showToast("تم إرسال الملف بنجاح إلى حسابك! 🎉", "success");
                 }} else {{
-                    showToast(`خطأ بالإرسال: ${{data.error}}`, "error");
+                    showToast("خطأ بالإرسال: " + data.error, "error");
                 }}
             }} catch(e) {{
                 showToast("خطأ أثناء الاتصال بالبوت", "error");
@@ -718,8 +722,8 @@ INDEX_HTML = f"""
                     vBtn.disabled = true; vBtn.onclick = null;
                     vBtn.className = "btn bg-panel text-textMuted flex-1 cursor-not-allowed border border-panelBorder";
                     vBtn.innerHTML = '<i class="fas fa-lock"></i> 2. التحقق للتحميل'; adWatched = false;
-                }} else showToast("الرابط محمي أو غير متاح", "error");
-            }} catch(e) {{ showToast("حدث خطأ في جلب بيانات الرابط", "error"); }}
+                }} else showToast("الرابط محمي أو غير متاح حالياً", "error");
+            }} catch(e) {{ showToast("حدث خطأ", "error"); }}
         }}
 
         function toggleRes() {{ 
@@ -729,10 +733,10 @@ INDEX_HTML = f"""
         function startAdTimer() {{
             if(adWatched) return;
             let btn = document.getElementById('verifyBtn'); let timeLeft = 5;
-            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> جاري التحقق (${{timeLeft}})...`;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق (' + timeLeft + ')...';
             let timer = setInterval(() => {{
                 timeLeft--;
-                if(timeLeft > 0) btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> جاري التحقق (${{timeLeft}})...`; 
+                if(timeLeft > 0) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق (' + timeLeft + ')...'; 
                 else {{
                     clearInterval(timer); btn.disabled = false; btn.onclick = unlockDownload; 
                     btn.className = "btn bg-green-600 text-white hover:bg-green-500 shadow-lg shadow-green-500/30 flex-1";
@@ -789,7 +793,7 @@ INDEX_HTML = f"""
                                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                                 
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
-                                showToast("تمت الإضافة لقائمة ملفاتي 🎉", "success");
+                                showToast("أضيف إلى ملفاتي", "success");
 
                                 if(localStorage.getItem('pz_auto_tg') !== 'false') {{
                                     sendToTelegram(prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
@@ -804,7 +808,7 @@ INDEX_HTML = f"""
         }}
 
         // =====================================
-        // مشغل الصوتيات الشامل
+        // مشغل الصوتيات المصحح والآمن كلياً
         // =====================================
         function playAudioTrack(index) {{
             currentPlayingIndex = index;
@@ -813,24 +817,24 @@ INDEX_HTML = f"""
             
             audioEl.src = track.url;
             audioEl.play().catch(e => {{
-                showToast("لا يمكن تشغيل الملف الصوتي حالياً", "error");
+                showToast("لا يمكن تشغيل هذا الملف الصوتي", "error");
             }});
             
             document.getElementById('playerTitle').innerText = track.title;
-            document.getElementById('playerThumbPlaceholder').innerHTML = `<img src="${{track.thumb || 'https://via.placeholder.com/150'}}" class="w-full h-full object-cover rounded-full">`;
+            document.getElementById('playerThumbPlaceholder').innerHTML = '<img src="' + (track.thumb || 'https://via.placeholder.com/150') + '" class="w-full h-full object-cover rounded-full">';
             
             document.getElementById('musicPlayer').classList.add('active');
-            document.getElementById('playPauseBtn').innerHTML = `<i class="fas fa-pause"></i>`;
+            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
         }}
 
         function togglePlay() {{
             if (audioEl.paused) {{
                 audioEl.play().then(() => {{
-                    document.getElementById('playPauseBtn').innerHTML = `<i class="fas fa-pause"></i>`;
+                    document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
                 }}).catch(e => {{}});
             }} else {{
                 audioEl.pause();
-                document.getElementById('playPauseBtn').innerHTML = `<i class="fas fa-play ml-1"></i>`;
+                document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-1"></i>';
             }}
         }}
 
@@ -882,13 +886,14 @@ INDEX_HTML = f"""
             if (isRepeat) {{
                 btn.classList.remove('text-textMuted');
                 btn.classList.add('text-accent');
-                showToast("تم تفعيل تكرار الملف 🔁", "success");
+                showToast("تم تفعيل التكرار 🔁", "success");
             }} else {{
                 btn.classList.remove('text-accent');
                 btn.classList.add('text-textMuted');
             }}
         }}
 
+        // تعديل السطر المسبب لمشكلة الـ NameError بالكامل هنا
         function updatePlayerProgress() {{
             const cur = audioEl.currentTime;
             const dur = audioEl.duration;
@@ -896,7 +901,7 @@ INDEX_HTML = f"""
             
             const pct = (cur / dur) * 100;
             document.getElementById('audioProgressBar').style.width = pct + '%';
-            document.getElementById('playerTime').innerText = `${formatTime(cur)} / ${formatTime(dur)}`;
+            document.getElementById('playerTime').innerText = formatTime(cur) + ' / ' + formatTime(dur);
         }}
 
         function seekAudio(e) {{
