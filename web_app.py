@@ -9,7 +9,7 @@ import yt_dlp
 
 # --- إعدادات البوت والبيئة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي 
+BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت للبوت الخاص بك
 # -------------------------------------------------------------
 
 try:
@@ -42,7 +42,7 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 PROGRESS_CACHE = {}
 AD_LINK = HILLTOPADS_LINK if HILLTOPADS_LINK else (ADSTERRA_LINK or "#")
 
-# نظام التنظيف الذاتي
+# نظام التنظيف الذاتي لحماية مساحة السيرفر
 def cleanup_daemon():
     while True:
         try:
@@ -87,14 +87,14 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
 
-# جلب نتائج كافية لضمان تصفية 5 مقاطع فيديو صحيحة
-def search_youtube(query: str, limit: int = 15):
+# جلب نتائج كافية (40 نتيجة) ليقوم السيرفر بتصفيتها بدقة
+def search_youtube(query: str, limit: int = 40):
     opts = get_hardened_ydl_options()
     opts['extract_flat'] = True
     with yt_dlp.YoutubeDL(opts) as ydl: return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
 # ==========================================
-# الواجهة الاحترافية المتكاملة
+# الواجهة المتجاوبة المصلحة بالكامل للموبايل
 # ==========================================
 INDEX_HTML = f"""
 <!DOCTYPE html>
@@ -155,6 +155,7 @@ INDEX_HTML = f"""
 <body class="antialiased flex h-screen w-full">
     <div id="toast"></div>
 
+    <!-- القائمة الجانبية -->
     <aside class="w-20 md:w-64 bg-panel border-l border-panelBorder flex flex-col justify-between h-full z-40">
         <div>
             <div class="h-20 flex items-center justify-center md:justify-start md:px-6 border-b border-panelBorder">
@@ -197,18 +198,21 @@ INDEX_HTML = f"""
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 
-                <!-- حاوية نتائج البحث المُعاد برمجتها (صور + نصوص بدون أرقام) -->
-                <div id="searchResults" class="hidden mt-8">
-                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-panelBorder">
-                        <h3 class="text-white font-bold text-lg flex items-center gap-2"><span id="searchQueryTitle">🔎 نتائج البحث:</span></h3>
-                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 text-sm transition-colors flex items-center gap-1"><i class="fas fa-times"></i> إغلاق</button>
+                <!-- حاوية خيارات البحث الـ 5 (تم إصلاح العرض تماماً للمواصفات المطلوبة) -->
+                <div id="searchResults" class="hidden mt-8 bg-[#18181b] border border-panelBorder rounded-3xl p-4 md:p-5 shadow-xl">
+                    <div class="mb-4 pb-3 border-b border-panelBorder flex justify-between items-center">
+                        <div>
+                            <h3 class="text-white font-bold text-base md:text-lg flex items-center gap-2">🎬 اختر المقطع المطلوب:</h3>
+                        </div>
+                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2 bg-bgDark rounded-full transition-colors flex-shrink-0"><i class="fas fa-times"></i></button>
                     </div>
-                    <div id="searchResultsList" class="flex flex-col gap-3"></div>
+                    <!-- قائمة الـ 5 مقاطع العمودية النظيفة بدون أرقام ومع المعاينة المحمية من الانضغاط -->
+                    <div id="searchResultsList" class="flex flex-col gap-3 w-full"></div>
                 </div>
             </div>
 
-            <!-- بطاقة المعاينة للتحميل -->
-            <div id="previewBox" class="hidden bg-panel rounded-3xl p-6 border border-panelBorder">
+            <!-- بطاقة المعاينة والتحكم بعد اختيار مقطع -->
+            <div id="previewBox" class="hidden bg-panel rounded-3xl p-6 border border-panelBorder mb-6">
                 <div class="flex flex-col md:flex-row gap-6 items-center">
                     <div class="w-full md:w-1/3">
                         <img id="thumb" class="w-full rounded-xl object-cover aspect-video shadow-md border border-panelBorder">
@@ -252,7 +256,7 @@ INDEX_HTML = f"""
             </div>
         </section>
 
-        <!-- بقية الأقسام -->
+        <!-- الأقسام الأخرى المحفوظة -->
         <section id="libraryView" class="view-section p-4 md:p-8 max-w-6xl mx-auto h-full flex flex-col">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <h2 class="text-2xl font-bold text-white">ملفاتي المحفوظة</h2>
@@ -303,6 +307,7 @@ INDEX_HTML = f"""
         </section>
     </main>
 
+    <!-- مشغل الموسيقى السفلي المريح -->
     <div id="musicPlayer" class="pb-safe">
         <div class="progress-container" id="progressContainer" onclick="seekAudio(event)"><div class="progress-bar" id="audioProgressBar"></div></div>
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 p-3 md:px-6">
@@ -330,6 +335,7 @@ INDEX_HTML = f"""
         <audio id="globalAudioElement" ontimeupdate="updatePlayerProgress()" onended="handleAudioEnd()"></audio>
     </div>
 
+    <!-- نافذة ربط تيليجرام -->
     <div id="tgModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] hidden flex-col items-center justify-center p-4">
         <div class="bg-panel border border-panelBorder p-6 rounded-3xl max-w-sm w-full text-center shadow-2xl" id="tgModalContent">
             <div class="w-14 h-14 bg-tgBlue/20 text-tgBlue rounded-full flex items-center justify-center mx-auto mb-4 text-2xl"><i class="fab fa-telegram-plane"></i></div>
@@ -490,6 +496,7 @@ INDEX_HTML = f"""
             applyFilters(); showToast("تم الحذف بنجاح", "info");
         }}
 
+        // دالة الحفظ الكلاسيكية الثابتة التي تقوم بالتحميل المباشر للجهاز
         function forceDownload(url, title) {{
             const a = document.createElement('a');
             a.href = url;
@@ -581,12 +588,15 @@ INDEX_HTML = f"""
         function seekAudio(e) {{ const rect = document.getElementById('progressContainer').getBoundingClientRect(); let percent = (e.clientX - rect.left) / rect.width; if(document.dir === 'rtl') percent = 1 - percent; audioEl.currentTime = percent * audioEl.duration; }}
         function changeVolume() {{ audioEl.volume = document.getElementById('volumeSlider').value; }}
 
-        // --- نظام البحث المطور: إصلاح شامل وإرجاع الصور والمقاطع ---
+        // --- نظام معالجة وعرض الـ 5 خيارات النظيفة بدون أرقام ومع صورة المعاينة ---
         let currentUrl = "", adWatched = false;
         async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
             if(!input) return;
             const btn = document.getElementById('mainBtn'); btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> بحث...'; btn.disabled = true;
+            
+            // تنظيف وإخفاء المعاينة القديمة فوراً عند القيام ببحث جديد لمنع التداخل
+            document.getElementById('previewBox').classList.add('hidden');
             
             if (input.startsWith('http')) await renderPreview(input);
             else {{
@@ -597,41 +607,34 @@ INDEX_HTML = f"""
                     
                     if(data.success && data.entries.length) {{
                         let box = document.getElementById('searchResultsList'); box.innerHTML = '';
-                        document.getElementById('searchQueryTitle').innerText = `🔎 نتائج البحث`;
                         
-                        const validVideos = data.entries.filter(v => v.id && v.duration).slice(0, 5);
-                        
-                        if(validVideos.length === 0) {{
-                            showToast("لم يتم العثور على مقاطع صالحة", "warning");
-                            btn.innerHTML = '<i class="fas fa-search"></i> بحث'; btn.disabled = false;
-                            return;
-                        }}
-
-                        validVideos.forEach((v, idx) => {{
+                        // الواجهة تعرض الآن المقاطع النظيفة الـ 5 المضمونة والقادمة من السيرفر
+                        data.entries.forEach((v) => {{
                             const thumb = v.thumbnails && v.thumbnails.length ? v.thumbnails[v.thumbnails.length-1].url : `https://i.ytimg.com/vi/${{v.id}}/hqdefault.jpg`;
                             const duration = formatTime(v.duration || 0);
                             const uploader = v.uploader || 'غير معروف';
                             
+                            // هيكلة كتلية مستقلة تحمي الصورة والنص والزر من التداخل والقص في الهواتف
                             box.innerHTML += `
-                            <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="p-3 bg-panel hover:bg-panelBorder rounded-2xl cursor-pointer flex gap-4 items-center border border-panelBorder hover:border-accent/50 transition-all mb-3 shadow-sm group">
-                                <div class="relative w-24 h-16 flex-shrink-0 rounded-xl overflow-hidden border border-panelBorder shadow-sm">
+                            <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full flex items-center p-3 bg-panel rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-sm mb-1">
+                                <div class="flex-none w-24 h-14 rounded-xl overflow-hidden border border-panelBorder shadow-sm relative ml-3">
                                     <img src="${{thumb}}" class="w-full h-full object-cover">
                                     <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded-md font-mono">${{duration}}</div>
                                 </div>
-                                <div class="flex-1 min-w-0 flex flex-col justify-center">
-                                    <h4 class="text-white font-bold text-sm leading-snug mb-1 truncate w-full" dir="auto" title="${{v.title}}">${{v.title}}</h4>
-                                    <div class="flex items-center gap-2 text-xs text-textMuted w-full truncate" dir="auto">
-                                        <i class="fas fa-user-circle text-accent/70"></i> <span class="truncate">${{uploader}}</span>
-                                    </div>
+                                <div class="flex-1 min-w-0 flex flex-col justify-center text-right">
+                                    <h4 class="text-white font-bold text-sm truncate w-full mb-1" dir="auto" title="${{v.title}}">${{v.title}}</h4>
+                                    <p class="text-textMuted text-xs truncate w-full" dir="auto">
+                                        <i class="fas fa-user-circle text-accent/70"></i> ${{uploader}}
+                                    </p>
                                 </div>
-                                <div class="w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent flex-shrink-0 group-hover:bg-accent group-hover:text-white transition-colors">
-                                    <i class="fas fa-download text-sm"></i>
+                                <div class="flex-none w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent mr-2">
+                                    <i class="fas fa-download text-xs"></i>
                                 </div>
                             </div>`;
                         }});
                         document.getElementById('searchResults').classList.remove('hidden');
-                    }} else showToast("لم يتم العثور على نتائج", "error");
-                }} catch(e) {{ showToast("خطأ بالاتصال", "error"); }}
+                    }} else showToast("لم يتم العثور على نتائج متوافقة", "error");
+                }} catch(e) {{ showToast("خطأ بالاتصال بالخادم", "error"); }}
             }}
             btn.innerHTML = '<i class="fas fa-search"></i> بحث'; btn.disabled = false;
         }}
@@ -745,10 +748,31 @@ INDEX_HTML = f"""
 async def home():
     return HTMLResponse(content=INDEX_HTML)
 
+# ههنا تمت معالجة الفلترة بشكل صارم وصحيح داخل السيرفر لمنع أي أخطاء في العرض
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
-    try: return {"success": True, "entries": search_youtube(req.query, limit=15).get("entries", [])}
-    except Exception as e: return {"success": False, "error": str(e)}
+    try:
+        # السيرفر يسحب 40 نتيجة مخفية ويصفيها بالكامل قبل إرسالها للمتصفح
+        raw_results = search_youtube(req.query, limit=40)
+        entries = raw_results.get("entries", [])
+        
+        valid_videos = []
+        for entry in entries:
+            if not entry:
+                continue
+            
+            # فلترة صارمة: يجب أن يكون المقطع فيديو حقيقي يحتوي على معرف، عنوان، ومدة زمنية (تجاهل القنوات واللايف المكسور)
+            is_video = entry.get("id") and entry.get("title") and entry.get("duration")
+            if is_video and entry.get("_type", "video") in ["video", "url"]:
+                valid_videos.append(entry)
+            
+            # التوقف فور تجميع 5 فيديوهات صالحة 100%
+            if len(valid_videos) == 5:
+                break
+                
+        return {"success": True, "entries": valid_videos}
+    except Exception as e: 
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
 async def get_preview(req: URLRequest):
