@@ -9,7 +9,7 @@ import yt_dlp
 
 # --- إعدادات البوت والبيئة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي للبوت الخاص بك
+BOT_USERNAME = "MusicPlayZoneBot"  # اليوزر الثابت اليدوي للبوت الخاص بك
 # -------------------------------------------------------------
 
 try:
@@ -42,7 +42,7 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 PROGRESS_CACHE = {}
 AD_LINK = HILLTOPADS_LINK if HILLTOPADS_LINK else (ADSTERRA_LINK or "#")
 
-# نظام التنظيف الذاتي لحماية مساحة السيرفر
+# نظام التنظيف الذاتي لحماية مساحة السيرفر - مصلح بالكامل
 def cleanup_daemon():
     while True:
         try:
@@ -50,17 +50,22 @@ def cleanup_daemon():
             for file_path in WEB_DIR.glob("*"):
                 if file_path.is_file() and now - file_path.stat().st_mtime > 86400:
                     file_path.unlink(missing_ok=True)
-            expired_jobs = [jid for jid, data in PROGRESS_CACHE.items() if now - data.get("timestamp", now) > 86400]
+            
+            # تم إصلاح التكرار هنا لمنع الانهيار
+            expired_jobs = [jid for jid, data in list(PROGRESS_CACHE.items()) if now - data.get("timestamp", now) > 86400]
             for jid in expired_jobs:
-                del PROGRESS_CACHE[jid]
+                PROGRESS_CACHE.pop(jid, None)
         except Exception as e:
             pass
         time.sleep(3600)
 
 threading.Thread(target=cleanup_daemon, daemon=True).start()
 
+# تم تصحيح صياغة كلاس Pydantic
 class URLRequest(BaseModel):
-    url: str; mode: str = "video"; resolution: str = "720"
+    url: str
+    mode: str = "video"
+    resolution: str = "720"
 
 class SearchRequest(BaseModel):
     query: str
@@ -164,13 +169,13 @@ INDEX_HTML = f"""
             </div>
 
             <nav class="mt-6 px-3 space-y-2">
-                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl bg-panelBorder text-accent font-bold">
+                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted bg-transparent">
                     <i class="fas fa-search text-xl"></i><span class="hidden md:block">البحث والتحميل</span>
                 </button>
-                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted hover:bg-panelBorder hover:text-white bg-transparent">
+                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted bg-transparent">
                     <i class="fas fa-folder text-xl"></i><span class="hidden md:block">ملفاتي المحفوظة</span>
                 </button>
-                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted hover:bg-panelBorder hover:text-white bg-transparent">
+                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 px-4 py-3 rounded-xl text-textMuted bg-transparent">
                     <i class="fas fa-cog text-xl"></i><span class="hidden md:block">الإعدادات</span>
                 </button>
             </nav>
@@ -196,13 +201,11 @@ INDEX_HTML = f"""
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 
-                <!-- حاوية نتائج البحث المُعاد برمجتها (إظهار 5 خيارات تحميل عمودية بالكامل) -->
                 <div id="searchResults" class="hidden mt-8 bg-[#18181b] border border-panelBorder rounded-3xl p-4 md:p-5 shadow-xl">
                     <div class="mb-4 pb-3 border-b border-panelBorder flex justify-between items-center">
                         <h3 class="text-white font-bold text-base md:text-lg flex items-center gap-2">🎬 اختر المقطع المطلوب:</h3>
                         <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2 bg-bgDark rounded-full transition-colors flex-shrink-0"><i class="fas fa-times"></i></button>
                     </div>
-                    <!-- قائمة الـ 5 مقاطع المحمية من الانضغاط وبدون أرقام -->
                     <div id="searchResultsList" class="flex flex-col gap-3 w-full"></div>
                 </div>
             </div>
@@ -345,9 +348,312 @@ INDEX_HTML = f"""
         </div>
     </div>
 
+    <!-- كود JavaScript تم إعادة كتابته وإصلاحه كلياً لمنع الانهيار وربط الواجهات -->
     <script>
-        function formatTime(secs) {{ if(isNaN(secs)) return "0:00"; const m = Math.floor(secs / 60), s = Math.floor(secs % 60); return `${{m}}:${{s < 10 ? '0'+s : s}}`; }}
+        // المتغيرات العامة
+        let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
+        let currentUrl = "";
+        let adWatched = false;
+        let currentPlayingIndex = -1;
+        let isShuffle = false;
+        let isRepeat = false;
+        let libraryPage = 1;
+        const itemsPerPage = 6;
+        const audioEl = document.getElementById('globalAudioElement');
 
+        // التهيية عند تشغيل الصفحة
+        window.addEventListener('DOMContentLoaded', () => {{
+            if (window.Telegram && window.Telegram.WebApp) {{
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
+                const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+                if (tgUser && tgUser.id) {{
+                    localStorage.setItem('pz_tg_id', tgUser.id);
+                    showToast(`تم ربط حساب تيليجرام (${{tgUser.first_name}}) تلقائياً 🛡️`, "success");
+                }}
+            }}
+            
+            const savedId = localStorage.getItem('pz_tg_id') || "";
+            document.getElementById('settingTgId').value = savedId;
+            document.getElementById('tgIdInput').value = savedId;
+            
+            const autoFwd = localStorage.getItem('pz_auto_tg') !== 'false';
+            document.getElementById('autoForwardToggle').checked = autoFwd;
+
+            updateLibraryCount();
+            switchView('searchView');
+        }});
+
+        function formatTime(secs) {{ 
+            if(isNaN(secs) || secs === null) return "0:00"; 
+            const m = Math.floor(secs / 60), s = Math.floor(secs % 60); 
+            return `${{m}}:${{s < 10 ? '0'+s : s}}`; 
+        }}
+
+        // نظام التنبيهات المنبثقة
+        function showToast(message, type = "success") {{
+            const toast = document.getElementById('toast');
+            toast.innerText = message;
+            toast.className = "show";
+            if (type === "error") {{
+                toast.style.background = "linear-gradient(135deg, #f43f5e, #e11d48)";
+            }} else {{
+                toast.style.background = "linear-gradient(135deg, #10b981, #059669)";
+            }}
+            setTimeout(() => {{ toast.className = ""; }}, 3000);
+        }}
+
+        // التنقل التفاعلي بين الصفحات
+        function switchView(viewId) {{
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {{
+                btn.classList.remove('bg-panelBorder', 'text-accent', 'font-bold');
+                btn.classList.add('text-textMuted', 'hover:bg-panelBorder', 'hover:text-white', 'bg-transparent');
+            }});
+            
+            const activeBtn = document.getElementById('nav-' + viewId);
+            if (activeBtn) {{
+                activeBtn.classList.remove('text-textMuted', 'hover:bg-panelBorder', 'hover:text-white', 'bg-transparent');
+                activeBtn.classList.add('bg-panelBorder', 'text-accent', 'font-bold');
+            }}
+            
+            if (viewId === 'libraryView') {{
+                applyFilters();
+            }}
+        }}
+
+        // نظام تصفية وعرض ملفات المكتبة
+        function applyFilters() {{
+            const query = document.getElementById('libSearch').value.toLowerCase();
+            const filter = document.getElementById('libFilter').value;
+            
+            let filtered = myLibrary.filter(item => {{
+                const matchesSearch = item.title.toLowerCase().includes(query) || (item.uploader && item.uploader.toLowerCase().includes(query));
+                let matchesType = true;
+                if (filter === 'favorites') matchesType = item.favorite;
+                else if (filter === 'audio') matchesType = item.is_audio;
+                else if (filter === 'video') matchesType = !item.is_audio;
+                return matchesSearch && matchesType;
+            }});
+
+            const totalItems = filtered.length;
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            if (libraryPage > totalPages) libraryPage = Math.max(1, totalPages);
+            
+            const start = (libraryPage - 1) * itemsPerPage;
+            const pageItems = filtered.slice(start, start + itemsPerPage);
+            
+            const container = document.getElementById('libraryContainer');
+            container.innerHTML = "";
+            
+            if (pageItems.length === 0) {{
+                container.innerHTML = `
+                    <div class="col-span-full py-12 text-center text-textMuted">
+                        <i class="fas fa-folder-open text-5xl mb-3 block"></i>
+                        لا توجد ملفات محفوظة حالياً مطابقة للتصفية.
+                    </div>
+                `;
+                document.getElementById('pagination').innerHTML = "";
+                return;
+            }}
+
+            pageItems.forEach((item) => {{
+                const actualIndex = myLibrary.findIndex(i => i.id === item.id);
+                const durationStr = formatTime(item.duration || 0);
+                const favClass = item.favorite ? 'fas fa-heart text-red-500' : 'far fa-heart';
+                const icon = item.is_audio ? '<i class="fas fa-music text-accent"></i>' : '<i class="fas fa-video text-tgBlue"></i>';
+                
+                // استخدام دمج النصوص المباشر الآمن لحماية f-string
+                container.innerHTML += `
+                    <div class="bg-panel rounded-2xl p-4 border border-panelBorder flex gap-4 items-center relative group">
+                        <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder flex-shrink-0 cursor-pointer" onclick="${{item.is_audio ? `playAudioTrack(${{actualIndex}})` : `watchVideo('${{item.url}}')`}}">
+                            <img src="${{item.thumb || 'https://via.placeholder.com/150'}}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150'">
+                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i class="fas ${{item.is_audio ? 'fa-play' : 'fa-external-link-alt'}} text-white text-lg"></i>
+                            </div>
+                            <div class="absolute bottom-1 right-1 bg-black/80 text-[10px] px-1 font-mono rounded text-white">${{durationStr}}</div>
+                        </div>
+                        <div class="flex-1 min-w-0 text-right">
+                            <h4 class="text-white font-bold text-sm truncate cursor-pointer" onclick="${{item.is_audio ? `playAudioTrack(${{actualIndex}})` : `watchVideo('${{item.url}}')`}}">${{item.title}}</h4>
+                            <p class="text-textMuted text-xs mt-1 truncate">${{icon}} ${{item.uploader || 'غير معروف'}}</p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-row-reverse">
+                            <button onclick="deleteFromLibrary('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-400 active:scale-95 transition-transform">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                            <button onclick="triggerSendToTelegram('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-tgBlue active:scale-95 transition-transform">
+                                <i class="fab fa-telegram-plane"></i>
+                            </button>
+                            <button onclick="toggleFavorite('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-500 active:scale-95 transition-transform">
+                                <i class="${{favClass}}"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }});
+
+            renderPagination(totalPages);
+        }}
+
+        function renderPagination(totalPages) {{
+            const pagBox = document.getElementById('pagination');
+            pagBox.innerHTML = "";
+            if (totalPages <= 1) return;
+
+            let html = `
+                <button onclick="changePage(${{libraryPage - 1}})" ${{libraryPage === 1 ? 'disabled' : ''}} class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">السابق</button>
+            `;
+            for (let i = 1; i <= totalPages; i++) {{
+                html += `
+                    <button onclick="changePage(${{i}})" class="btn px-3 py-1.5 ${{libraryPage === i ? 'bg-accent text-white' : 'bg-panel border border-panelBorder text-textMuted'}} text-xs font-mono">${{i}}</button>
+                `;
+            }}
+            html += `
+                <button onclick="changePage(${{libraryPage + 1}})" ${{libraryPage === totalPages ? 'disabled' : ''}} class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">التالي</button>
+            `;
+            pagBox.innerHTML = html;
+        }}
+
+        function changePage(page) {{
+            libraryPage = page;
+            applyFilters();
+        }}
+
+        function toggleFavorite(id) {{
+            const index = myLibrary.findIndex(i => i.id === id);
+            if (index !== -1) {{
+                myLibrary[index].favorite = !myLibrary[index].favorite;
+                localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+                applyFilters();
+                showToast(myLibrary[index].favorite ? "تمت الإضافة للمفضلة ❤️" : "تمت الإزالة من المفضلة", "success");
+            }}
+        }}
+
+        function deleteFromLibrary(id) {{
+            if (confirm("هل أنت متأكد من حذف هذا الملف من قائمتك؟ (لن يتم حذفه من خوادمنا تلقائياً)")) {{
+                myLibrary = myLibrary.filter(i => i.id !== id);
+                localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+                applyFilters();
+                updateLibraryCount();
+                showToast("تم الحذف بنجاح", "success");
+            }}
+        }}
+
+        function updateLibraryCount() {{
+            const count = myLibrary.length;
+            document.getElementById('libCountStatus').innerText = `السجل (${{count}})`;
+        }}
+
+        function clearAllLibrary() {{
+            if (confirm("تحذير: هل أنت متأكد من مسح جميع الملفات المحفوظة من المتصفح؟ لا يمكن التراجع!")) {{
+                myLibrary = [];
+                localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+                applyFilters();
+                updateLibraryCount();
+                showToast("تم مسح السجل بالكامل", "success");
+            }}
+        }}
+
+        // تعديل بيانات تيليجرام بالإعدادات
+        function updateTgId() {{
+            const tgId = document.getElementById('settingTgId').value.trim();
+            if (!tgId) {{
+                localStorage.removeItem('pz_tg_id');
+                showToast("تم إزالة معرف تيليجرام", "success");
+            }} else {{
+                localStorage.setItem('pz_tg_id', tgId);
+                showToast("تم حفظ معرف تيليجرام بنجاح", "success");
+            }}
+        }}
+
+        function toggleAutoForward() {{
+            const val = document.getElementById('autoForwardToggle').checked;
+            localStorage.setItem('pz_auto_tg', val ? 'true' : 'false');
+            showToast(val ? "تم تفعيل الإرسال التلقائي" : "تم إيقاف الإرسال التلقائي", "success");
+        }}
+
+        // إدارة الـ Modal لتيليجرام
+        let pendingTgItem = null;
+        function triggerSendToTelegram(id) {{
+            const item = myLibrary.find(i => i.id === id);
+            if (!item) return;
+            
+            const tgId = localStorage.getItem('pz_tg_id');
+            if (!tgId) {{
+                pendingTgItem = item;
+                document.getElementById('tgIdInput').value = "";
+                document.getElementById('tgModal').classList.remove('hidden');
+                document.getElementById('tgModal').classList.add('flex');
+            }} else {{
+                sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
+            }}
+        }}
+
+        function closeTgModal() {{
+            document.getElementById('tgModal').classList.add('hidden');
+            document.getElementById('tgModal').classList.remove('flex');
+            pendingTgItem = null;
+        }}
+
+        function saveTgIdFromModal() {{
+            const val = document.getElementById('tgIdInput').value.trim();
+            if (!val) return showToast("الرجاء إدخال ID صالح", "error");
+            
+            localStorage.setItem('pz_tg_id', val);
+            document.getElementById('settingTgId').value = val;
+            closeTgModal();
+            showToast("تم الحفظ بنجاح", "success");
+            
+            if (pendingTgItem) {{
+                sendToTelegram(pendingTgItem.url, pendingTgItem.is_audio, false, pendingTgItem.title, pendingTgItem.uploader, pendingTgItem.duration, pendingTgItem.thumb);
+            }}
+        }}
+
+        // دالة الإرسال الفعلي لتيليجرام (ربط مع الـ API)
+        async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {{
+            const chatId = localStorage.getItem('pz_tg_id');
+            if (!chatId) {{
+                if (auto) showToast("فشل الإرسال التلقائي: لم تقم بربط تيليجرام بعد.", "error");
+                return;
+            }}
+
+            if (auto) showToast("جاري إرسال الملف تلقائياً للبوت... 🚀", "success");
+            else showToast("جاري إرسال الملف لبوت تيليجرام الخاص بك... 🚀", "success");
+
+            try {{
+                const payload = {{
+                    file_url: fileUrl,
+                    chat_id: chatId.toString(),
+                    is_audio: isAudio,
+                    title: title,
+                    performer: performer,
+                    duration: duration || 0,
+                    thumb: thumb || ""
+                }};
+
+                const res = await fetch('/api/send_telegram', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify(payload)
+                }});
+                const data = await res.json();
+                if (data.success) {{
+                    showToast("تم إرسال الملف بنجاح إلى حسابك! 🎉", "success");
+                }} else {{
+                    showToast(`خطأ بالإرسال: ${{data.error}}`, "error");
+                }}
+            }} catch(e) {{
+                showToast("خطأ أثناء الاتصال بالبوت", "error");
+            }}
+        }}
+
+        function watchVideo(url) {{
+            window.open(url, '_blank');
+        }}
+
+        // معالجة البحث والتحقق من الروابط
         async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
             if(!input) return;
@@ -355,8 +661,9 @@ INDEX_HTML = f"""
             
             document.getElementById('previewBox').classList.add('hidden');
             
-            if (input.startsWith('http')) await renderPreview(input);
-            else {{
+            if (input.startsWith('http')) {{
+                await renderPreview(input);
+            }} else {{
                 try {{
                     const res = await fetch('/api/search', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{query:input}})}});
                     if(!res.ok) throw new Error();
@@ -367,8 +674,6 @@ INDEX_HTML = f"""
                         
                         data.entries.forEach((v) => {{
                             const duration = formatTime(v.duration || 0);
-                            
-                            // تعديل الـ HTML ليعرض صورة المعاينة مع الوقت بداخلها وبدون ترقيم، وبحماية تامة ضد التداخل
                             box.innerHTML += `
                             <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full flex items-center p-3 bg-panel rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-sm mb-1">
                                 <div class="flex-shrink-0 w-24 h-14 rounded-xl overflow-hidden border border-panelBorder shadow-sm relative ml-3">
@@ -413,11 +718,13 @@ INDEX_HTML = f"""
                     vBtn.disabled = true; vBtn.onclick = null;
                     vBtn.className = "btn bg-panel text-textMuted flex-1 cursor-not-allowed border border-panelBorder";
                     vBtn.innerHTML = '<i class="fas fa-lock"></i> 2. التحقق للتحميل'; adWatched = false;
-                }} else showToast("الرابط محمي", "error");
-            }} catch(e) {{ showToast("حدث خطأ", "error"); }}
+                }} else showToast("الرابط محمي أو غير متاح", "error");
+            }} catch(e) {{ showToast("حدث خطأ في جلب بيانات الرابط", "error"); }}
         }}
 
-        function toggleRes() {{ document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; }}
+        function toggleRes() {{ 
+            document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; 
+        }}
 
         function startAdTimer() {{
             if(adWatched) return;
@@ -482,9 +789,11 @@ INDEX_HTML = f"""
                                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                                 
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
-                                showToast("أضيف إلى ملفاتي", "success");
+                                showToast("تمت الإضافة لقائمة ملفاتي 🎉", "success");
 
-                                if(localStorage.getItem('pz_auto_tg') !== 'false') sendToTelegram(prog.url, prog.is_audio, true);
+                                if(localStorage.getItem('pz_auto_tg') !== 'false') {{
+                                    sendToTelegram(prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
+                                }}
                             }} 
                             else if(prog.status === 'error') {{ clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; }}
                         }} catch(err) {{}}
@@ -492,6 +801,141 @@ INDEX_HTML = f"""
                 }}
             }} catch(e) {{ showToast("فشل الاتصال", "error"); }}
             btn.innerHTML = original; btn.disabled = false;
+        }}
+
+        // =====================================
+        // مشغل الصوتيات الشامل
+        // =====================================
+        function playAudioTrack(index) {{
+            currentPlayingIndex = index;
+            const track = myLibrary[index];
+            if (!track || !track.is_audio) return;
+            
+            audioEl.src = track.url;
+            audioEl.play().catch(e => {{
+                showToast("لا يمكن تشغيل الملف الصوتي حالياً", "error");
+            }});
+            
+            document.getElementById('playerTitle').innerText = track.title;
+            document.getElementById('playerThumbPlaceholder').innerHTML = `<img src="${{track.thumb || 'https://via.placeholder.com/150'}}" class="w-full h-full object-cover rounded-full">`;
+            
+            document.getElementById('musicPlayer').classList.add('active');
+            document.getElementById('playPauseBtn').innerHTML = `<i class="fas fa-pause"></i>`;
+        }}
+
+        function togglePlay() {{
+            if (audioEl.paused) {{
+                audioEl.play().then(() => {{
+                    document.getElementById('playPauseBtn').innerHTML = `<i class="fas fa-pause"></i>`;
+                }}).catch(e => {{}});
+            }} else {{
+                audioEl.pause();
+                document.getElementById('playPauseBtn').innerHTML = `<i class="fas fa-play ml-1"></i>`;
+            }}
+        }}
+
+        function playNext() {{
+            const audioTracks = myLibrary.map((t, idx) => ({{t, idx}})).filter(x => x.t.is_audio);
+            if (audioTracks.length === 0) return;
+
+            if (isShuffle) {{
+                const rand = Math.floor(Math.random() * audioTracks.length);
+                playAudioTrack(audioTracks[rand].idx);
+            }} else {{
+                const currentPosition = audioTracks.findIndex(x => x.idx === currentPlayingIndex);
+                if (currentPosition !== -1 && currentPosition < audioTracks.length - 1) {{
+                    playAudioTrack(audioTracks[currentPosition + 1].idx);
+                }} else if (audioTracks.length > 0) {{
+                    playAudioTrack(audioTracks[0].idx);
+                }}
+            }}
+        }}
+
+        function playPrev() {{
+            const audioTracks = myLibrary.map((t, idx) => ({{t, idx}})).filter(x => x.t.is_audio);
+            if (audioTracks.length === 0) return;
+
+            const currentPosition = audioTracks.findIndex(x => x.idx === currentPlayingIndex);
+            if (currentPosition > 0) {{
+                playAudioTrack(audioTracks[currentPosition - 1].idx);
+            }} else if (audioTracks.length > 0) {{
+                playAudioTrack(audioTracks[audioTracks.length - 1].idx);
+            }}
+        }}
+
+        function toggleShuffle() {{
+            isShuffle = !isShuffle;
+            const btn = document.getElementById('shuffleBtn');
+            if (isShuffle) {{
+                btn.classList.remove('text-textMuted');
+                btn.classList.add('text-accent');
+                showToast("تم تفعيل التشغيل العشوائي 🔀", "success");
+            }} else {{
+                btn.classList.remove('text-accent');
+                btn.classList.add('text-textMuted');
+            }}
+        }}
+
+        function toggleRepeat() {{
+            isRepeat = !isRepeat;
+            const btn = document.getElementById('repeatBtn');
+            if (isRepeat) {{
+                btn.classList.remove('text-textMuted');
+                btn.classList.add('text-accent');
+                showToast("تم تفعيل تكرار الملف 🔁", "success");
+            }} else {{
+                btn.classList.remove('text-accent');
+                btn.classList.add('text-textMuted');
+            }}
+        }}
+
+        function updatePlayerProgress() {{
+            const cur = audioEl.currentTime;
+            const dur = audioEl.duration;
+            if (isNaN(dur)) return;
+            
+            const pct = (cur / dur) * 100;
+            document.getElementById('audioProgressBar').style.width = pct + '%';
+            document.getElementById('playerTime').innerText = `${formatTime(cur)} / ${formatTime(dur)}`;
+        }}
+
+        function seekAudio(e) {{
+            const container = document.getElementById('progressContainer');
+            const rect = container.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const pct = clickX / rect.width;
+            if (!isNaN(audioEl.duration)) {{
+                audioEl.currentTime = pct * audioEl.duration;
+            }}
+        }}
+
+        function changeVolume() {{
+            const val = document.getElementById('volumeSlider').value;
+            audioEl.volume = val;
+        }}
+
+        let currentSpeed = 1;
+        function changeSpeed() {{
+            const speeds = [1, 1.25, 1.5, 1.75, 2];
+            let idx = speeds.indexOf(currentSpeed);
+            idx = (idx + 1) % speeds.length;
+            currentSpeed = speeds[idx];
+            audioEl.playbackRate = currentSpeed;
+            document.getElementById('speedBtn').innerText = currentSpeed + 'x';
+        }}
+
+        function handleAudioEnd() {{
+            if (isRepeat) {{
+                audioEl.currentTime = 0;
+                audioEl.play().catch(e => {{}});
+            }} else {{
+                playNext();
+            }}
+        }}
+
+        function closePlayer() {{
+            audioEl.pause();
+            document.getElementById('musicPlayer').classList.remove('active');
         }}
     </script>
 </body>
@@ -502,12 +946,12 @@ INDEX_HTML = f"""
 async def home():
     return HTMLResponse(content=INDEX_HTML)
 
-# هنا التحديث الجوهري والمصلح بالكامل لتجميع الـ 5 خيارات دون الاعتماد على شروط صارمة تعطل البحث
+# مصلح لمنع حدوث خطأ NoneType وحماية الفهرس
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
     try:
-        raw_results = search_youtube(req.query, limit=25)
-        entries = raw_results.get("entries", [])
+        raw_results = search_youtube(req.query, limit=25) or {}
+        entries = raw_results.get("entries") or []
         
         valid_videos = []
         for entry in entries:
@@ -517,7 +961,6 @@ async def api_search(req: SearchRequest):
             video_id = entry.get("id")
             title = entry.get("title")
             
-            # فحص مرن وآمن: نكتفي بالـ ID والـ Title لضمان عدم إقصاء أي نتيجة من نتائج يوتيوب الـ 5 المطلوبة
             if video_id and title:
                 thumb_url = entry.get("thumbnail")
                 if not thumb_url and entry.get("thumbnails"):
@@ -534,7 +977,6 @@ async def api_search(req: SearchRequest):
                 }
                 valid_videos.append(clean_entry)
             
-            # التوقف الفوري بمجرد تجميع 5 خيارات تحميل صالحة تماماً
             if len(valid_videos) == 5:
                 break
                 
