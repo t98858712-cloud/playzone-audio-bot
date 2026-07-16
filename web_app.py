@@ -4,10 +4,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from jinja2 import Template
 import yt_dlp
 
-# استيراد إعدادات البوت وقاعدة البيانات
+# استيراد إعدادات البوت الأساسية لتخطي الحظر والسرعة
 from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
 from database.connection import init_db
 from services.downloader import extract_metadata, search_youtube
@@ -16,12 +15,14 @@ from utils.helpers import cookie_file_is_usable
 app = FastAPI(title="PlayZone Cloud")
 init_db()
 
-# مجلد المكتبة الدائم
+# مجلد المكتبة السحابية في السيرفر
 WEB_DIR = BASE_DOWNLOAD_DIR / "web_library"
 WEB_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
 PROGRESS_CACHE = {}
+# استخدام الرابط المعتمد من الإعدادات
+AD_LINK = HILLTOPADS_LINK if HILLTOPADS_LINK else ADSTERRA_LINK
 
 class URLRequest(BaseModel):
     url: str
@@ -31,278 +32,255 @@ class URLRequest(BaseModel):
 class SearchRequest(BaseModel):
     query: str
 
-# واجهة الموقع الحديثة والمطورة (UI/UX)
-INDEX_HTML = """
+# ==========================================
+# الواجهة الحديثة (مدمجة هنا لتفادي أخطاء السيرفر)
+# تعتمد بالكامل على متصفح المستخدم (Local Storage)
+# ==========================================
+INDEX_HTML = f"""
 <!DOCTYPE html>
 <html lang="ar" dir="rtl" class="dark">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PlayZone | السحابة الذكية</title>
     <script src="https://cdn.tailwindcss.com"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{primary:'#10b981',primaryDark:'#059669',bgDark:'#0f172a',cardDark:'#1e293b',bgLight:'#f8fafc',cardLight:'#ffffff'}}}}</script>
+    <script>tailwind.config={{darkMode:'class',theme:{{extend:{{colors:{{primary:'#10b981',bgDark:'#0f172a',cardDark:'#1e293b'}}}}}}}}</script>
     <style>
-        body { transition: background-color 0.3s, color 0.3s; }
-        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
-        .light .glass-panel { background: rgba(255, 255, 255, 0.8); border: 1px solid rgba(0,0,0,0.05); }
-        .modern-input { width: 100%; padding: 1rem 1.5rem; border-radius: 1rem; outline: none; transition: all 0.3s; }
-        .dark .modern-input { background: #0f172a; border: 1px solid #334155; color: white; }
-        .light .modern-input { background: #f1f5f9; border: 1px solid #e2e8f0; color: #0f172a; }
-        .modern-input:focus { border-color: #10b981; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1); }
-        .modern-btn { padding: 1rem 2rem; border-radius: 1rem; font-weight: bold; transition: all 0.3s; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; }
-        .btn-primary { background: #10b981; color: white; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); }
-        .btn-primary:hover { background: #059669; transform: translateY(-2px); }
-        .btn-secondary { background: #3b82f6; color: white; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3); }
-        .btn-secondary:hover { background: #2563eb; transform: translateY(-2px); }
-        
-        #toast { visibility: hidden; min-width: 250px; background: #10b981; color: white; text-align: center; border-radius: 99px; padding: 12px 24px; position: fixed; z-index: 50; left: 50%; bottom: 40px; font-size: 15px; font-weight: bold; transform: translateX(-50%) translateY(20px); transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); opacity: 0; box-shadow: 0 10px 25px rgba(16,185,129,0.4); }
-        #toast.show { visibility: visible; opacity: 1; transform: translateX(-50%) translateY(0); }
-        .fade-in { animation: fadeIn 0.4s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        body {{ background-color: #0f172a; color: white; transition: background-color 0.3s; }}
+        .glass-panel {{ background: #1e293b; border: 1px solid #334155; }}
+        .modern-input {{ background: #0f172a; border: 1px solid #334155; color: white; width: 100%; padding: 1rem; border-radius: 1rem; outline: none; transition: all 0.3s; }}
+        .modern-input:focus {{ border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }}
+        .modern-btn {{ padding: 1rem; border-radius: 1rem; font-weight: bold; transition: all 0.3s; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 0.5rem; }}
+        #toast {{ visibility: hidden; min-width: 250px; background: #10b981; color: #000; text-align: center; border-radius: 99px; padding: 12px 24px; position: fixed; z-index: 50; left: 50%; bottom: 30px; font-weight: bold; transform: translateX(-50%) translateY(20px); transition: all 0.4s; opacity: 0; box-shadow: 0 10px 25px rgba(16,185,129,0.3); }}
+        #toast.show {{ visibility: visible; opacity: 1; transform: translateX(-50%) translateY(0); }}
     </style>
 </head>
-<body class="bg-bgDark text-white dark:bg-bgDark dark:text-white light:bg-bgLight light:text-slate-900 min-h-screen pb-10">
+<body class="font-sans p-4 pb-10">
     <div id="toast"></div>
 
-    <!-- النافذة العلوية -->
-    <header class="p-6 flex justify-between items-center max-w-5xl mx-auto">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-blue-500 flex items-center justify-center shadow-lg">
-                <i class="fas fa-play text-white text-lg ml-1"></i>
-            </div>
-            <h1 class="text-2xl font-extrabold tracking-tight">Play<span class="text-primary">Zone</span></h1>
-        </div>
-        <button onclick="toggleTheme()" class="w-12 h-12 rounded-full glass-panel flex items-center justify-center hover:scale-110 transition-transform">
-            <i id="themeIcon" class="fas fa-moon text-xl"></i>
-        </button>
-    </header>
-
-    <main class="max-w-5xl mx-auto px-4 space-y-8">
-        
-        <!-- منطقة البحث الذكية -->
-        <section class="glass-panel rounded-3xl p-6 md:p-10 text-center shadow-2xl relative overflow-hidden">
-            <div class="absolute top-0 right-0 w-64 h-64 bg-primary rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-blob"></div>
+    <div class="max-w-4xl mx-auto space-y-8 mt-4">
+        <!-- قسم البحث والتحميل -->
+        <section class="glass-panel rounded-3xl p-6 md:p-8 text-center shadow-xl">
+            <h1 class="text-3xl font-extrabold mb-2">Play<span class="text-primary">Zone</span> 📥</h1>
+            <p class="text-slate-400 mb-6 font-medium">أرسل رابط المقطع، أو ابحث عن الأغنية مباشرة 🎧</p>
             
-            <h2 class="text-3xl md:text-4xl font-bold mb-3">ما الذي تود تحميله اليوم؟</h2>
-            <p class="text-slate-400 dark:text-slate-400 light:text-slate-500 mb-8 font-medium">ضع رابط المقطع هنا، أو ابحث باسم الأغنية مباشرة 🎧</p>
-            
-            <div class="flex flex-col md:flex-row gap-4 max-w-3xl mx-auto relative z-10">
-                <input type="text" id="url" placeholder="https://youtube.com/... أو اكتب كلمة للبحث" class="modern-input flex-1 text-lg">
-                <button onclick="processInput()" id="mainBtn" class="modern-btn btn-secondary w-full md:w-auto text-lg px-8">
-                    <i class="fas fa-search"></i> ابدأ الآن
-                </button>
-            </div>
-        </section>
-
-        <!-- منطقة العمليات الديناميكية (نتائج، معاينة، إعلان، تحميل) -->
-        <section id="dynamicArea" class="max-w-3xl mx-auto"></section>
-
-        <!-- مكتبة الوسائط -->
-        <section class="pt-8">
-            <div class="flex justify-between items-center mb-6 px-2">
-                <h2 class="text-2xl font-bold flex items-center gap-2"><i class="fas fa-cloud text-primary"></i> ملفاتي المحفوظة</h2>
-                <button onclick="location.reload()" class="text-sm font-bold text-slate-400 hover:text-primary transition-colors"><i class="fas fa-sync-alt ml-1"></i> تحديث القائمة</button>
+            <div class="flex flex-col md:flex-row gap-3">
+                <input type="text" id="url" placeholder="الرابط أو اسم المقطع..." class="modern-input">
+                <button onclick="processInput()" id="mainBtn" class="modern-btn bg-blue-600 hover:bg-blue-500 text-white md:w-48"><i class="fas fa-search"></i> فحص / بحث</button>
             </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {% for file in files %}
-                <div class="glass-panel rounded-2xl p-5 hover:border-primary transition-all group shadow-lg flex flex-col h-full">
-                    <div class="flex gap-3 mb-4 items-start">
-                        <div class="w-12 h-12 rounded-full bg-slate-800 dark:bg-slate-800 light:bg-slate-200 flex items-center justify-center flex-shrink-0 text-primary">
-                            <i class="fas {% if file.is_audio %}fa-music{% else %}fa-video{% endif %} text-xl"></i>
-                        </div>
-                        <p class="font-bold text-sm line-clamp-2 pt-1 flex-1" dir="ltr" title="{{ file.name }}">{{ file.name }}</p>
-                    </div>
+            <div id="searchResults" class="hidden mt-6 text-right space-y-2"></div>
+
+            <div id="previewBox" class="hidden mt-6 p-4 bg-slate-800 rounded-2xl text-right flex flex-col md:flex-row gap-4 items-center border border-slate-700">
+                <img id="thumb" class="w-full md:w-40 rounded-xl object-cover shadow-md">
+                <div class="flex-1 w-full">
+                    <h3 id="title" class="font-bold text-lg text-primary truncate mb-2"></h3>
                     
-                    <div class="mt-auto">
-                        {% if file.is_audio %}
-                        <audio controls class="w-full h-12 rounded-lg mb-4 opacity-90 hover:opacity-100 transition-opacity"><source src="{{ file.url }}" type="audio/mpeg"></audio>
-                        {% else %}
-                        <video controls class="w-full h-40 bg-black rounded-xl mb-4 object-cover"><source src="{{ file.url }}" type="video/mp4"></video>
-                        {% endif %}
-                        
-                        <div class="flex gap-2">
-                            <a href="{{ file.url }}" download class="modern-btn btn-primary flex-1 py-2 text-sm"><i class="fas fa-download"></i> حفظ</a>
-                            <button onclick="shareLink('{{ file.url }}')" class="modern-btn bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 text-sm"><i class="fas fa-share-alt"></i></button>
+                    <div id="adGate" class="bg-primary/10 border border-primary/30 p-4 rounded-xl text-center mb-4">
+                        <p class="text-sm mb-3">لدعمنا، يرجى تصفح الإعلان لثوانٍ لفك القفل ❤️</p>
+                        <div class="flex flex-col sm:flex-row gap-2 justify-center">
+                            <a href="{AD_LINK}" target="_blank" onclick="startAdTimer()" class="modern-btn bg-primary text-slate-900 py-2 px-4 text-sm"><i class="fas fa-eye"></i> زيارة الراعي</a>
+                            <button id="verifyBtn" disabled class="modern-btn bg-slate-700 text-slate-500 py-2 px-4 text-sm cursor-not-allowed border border-slate-600"><i class="fas fa-lock"></i> مقفول</button>
                         </div>
                     </div>
-                </div>
-                {% endfor %}
-                
-                {% if not files %}
-                <div class="col-span-full text-center py-16 glass-panel rounded-3xl">
-                    <div class="w-24 h-24 bg-slate-800 dark:bg-slate-800 light:bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-                        <i class="fas fa-box-open text-4xl"></i>
+
+                    <div id="dlOptions" class="hidden space-y-3">
+                        <div class="grid grid-cols-2 gap-2">
+                            <select id="mode" onchange="toggleRes()" class="modern-input py-2 px-3 text-sm"><option value="video">🎬 فيديو (MP4)</option><option value="audio">🎵 صوت (MP3)</option></select>
+                            <select id="resolution" class="modern-input py-2 px-3 text-sm"><option value="480">عادية 480p</option><option value="720" selected>عالية 720p</option><option value="best">أفضل جودة</option></select>
+                        </div>
+                        <button onclick="startDownload()" class="modern-btn bg-primary text-slate-900 w-full hover:bg-green-500"><i class="fas fa-cloud-download-alt"></i> ابدأ التحميل الآن</button>
                     </div>
-                    <h3 class="text-xl font-bold mb-2">المكتبة فارغة حالياً</h3>
-                    <p class="text-slate-400">أي مقطع تقوم بتحميله سيتم حفظه هنا لتتمكن من الرجوع إليه لاحقاً.</p>
                 </div>
-                {% endif %}
+            </div>
+
+            <!-- شريط التقدم -->
+            <div id="progressBox" class="hidden mt-6 text-right bg-slate-800 p-5 rounded-2xl border border-slate-700">
+                <div class="flex justify-between text-sm mb-2 font-bold"><span id="progStatus" class="text-primary">جاري التجهيز...</span><span id="progPercent">0%</span></div>
+                <div class="w-full bg-slate-700 rounded-full h-3 mb-2 overflow-hidden"><div id="progBar" class="bg-gradient-to-r from-primary to-blue-500 h-full transition-all duration-300" style="width: 0%"></div></div>
+                <div class="flex justify-between text-xs text-slate-400"><span id="progSize">0 MB</span><span id="progSpeed">0 MB/s</span></div>
             </div>
         </section>
-    </main>
+
+        <!-- مكتبة الوسائط الشخصية (تعتمد على المتصفح) -->
+        <section class="glass-panel rounded-3xl p-6 shadow-xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold flex items-center gap-2"><i class="fas fa-history text-primary"></i> سجل تحميلاتي</h2>
+                <button onclick="renderLibrary()" class="text-sm font-bold text-slate-400 hover:text-white"><i class="fas fa-sync-alt"></i> تحديث</button>
+            </div>
+            
+            <!-- حاوية الملفات المحفوظة -->
+            <div id="libraryContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </section>
+    </div>
     
     <script>
-        // نظام الوضع الليلي/النهاري الذكي
-        const body = document.body;
-        function toggleTheme() {
-            body.classList.toggle('light'); document.documentElement.classList.toggle('light');
-            const isLight = body.classList.contains('light');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
-            document.getElementById('themeIcon').className = isLight ? 'fas fa-sun text-yellow-500 text-xl' : 'fas fa-moon text-slate-300 text-xl';
-        }
-        if (localStorage.getItem('theme') === 'light') { toggleTheme(); }
-
-        function showToast(msg) { const t = document.getElementById("toast"); t.innerText = msg; t.className = "show"; setTimeout(() => t.className = "", 3000); }
-        function shareLink(url) { navigator.clipboard.writeText(window.location.origin + url).then(() => showToast("🔗 تم نسخ الرابط للحافظة")); }
+        function showToast(msg) {{ const t = document.getElementById("toast"); t.innerText = msg; t.className = "show"; setTimeout(() => t.className = "", 3000); }}
         
-        let currentUrl = "";
-        const dynamicArea = document.getElementById('dynamicArea');
+        // ==========================================
+        // نظام المكتبة السحابية الآمن (حفظ في المتصفح)
+        // ==========================================
+        let myLibrary = JSON.parse(localStorage.getItem('pz_library')) || [];
 
-        async function processInput() {
+        function renderLibrary() {{
+            const container = document.getElementById('libraryContainer');
+            if(myLibrary.length === 0) {{
+                container.innerHTML = '<div class="col-span-full text-center py-10 text-slate-500">لا توجد ملفات في سجلك. ابدأ التحميل لتظهر مقاطعك هنا!</div>';
+                return;
+            }}
+            let html = '';
+            // عرض الملفات الأحدث أولاً
+            myLibrary.slice().reverse().forEach(file => {{
+                const mediaTag = file.is_audio ?
+                    `<audio controls class="w-full h-12 mt-3 outline-none rounded-lg"><source src="${{file.url}}" type="audio/mpeg"></audio>` :
+                    `<video controls class="w-full h-40 mt-3 bg-black rounded-xl outline-none object-cover"><source src="${{file.url}}" type="video/mp4"></video>`;
+
+                html += `
+                <div class="bg-slate-800 p-4 rounded-2xl shadow-lg border border-slate-700">
+                    <div class="flex justify-between items-start">
+                        <div class="flex gap-3 items-center w-4/5">
+                            <img src="${{file.thumb}}" class="w-12 h-12 rounded-lg object-cover">
+                            <p class="font-bold text-sm truncate" dir="ltr" title="${{file.title}}">${{file.title}}</p>
+                        </div>
+                        <button onclick="removeFile('${{file.id}}')" class="text-red-500 p-2 hover:bg-slate-700 rounded-lg"><i class="fas fa-trash"></i></button>
+                    </div>
+                    ${{mediaTag}}
+                    <button onclick="forceDownload('${{file.url}}', '${{file.title}}')" class="w-full mt-4 modern-btn bg-slate-700 hover:bg-slate-600 text-white py-2 text-sm"><i class="fas fa-download"></i> حفظ في جهازي مجدداً</button>
+                </div>`;
+            }});
+            container.innerHTML = html;
+        }}
+        
+        function removeFile(id) {{
+            myLibrary = myLibrary.filter(f => f.id !== id);
+            localStorage.setItem('pz_library', JSON.stringify(myLibrary));
+            renderLibrary();
+            showToast("🗑️ تم الحذف من السجل");
+        }}
+
+        // دالة التنزيل الإجباري لهاتف المستخدم
+        function forceDownload(url, title) {{
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = title;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            showToast("📥 جاري الحفظ في هاتفك...");
+        }}
+
+        // تشغيل المكتبة فور فتح الموقع
+        window.onload = renderLibrary;
+
+        // ==========================================
+        // عمليات البحث والتحميل
+        // ==========================================
+        let currentUrl = "", adWatched = false;
+
+        async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
-            if(!input) return showToast("⚠️ يرجى إدخال الرابط أولاً");
+            if(!input) return showToast("⚠️ أدخل الرابط أو الكلمة");
             
             document.getElementById('mainBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            dynamicArea.innerHTML = ''; // تنظيف المنطقة
-            
-            if (input.startsWith('http')) {
+            if (input.startsWith('http')) {{
                 await renderPreview(input);
-            } else {
-                const res = await fetch('/api/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:input})});
+            }} else {{
+                const res = await fetch('/api/search', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{query:input}})}});
                 const data = await res.json();
-                if(data.success) {
-                    let html = `<div class="glass-panel rounded-2xl p-4 fade-in"><h3 class="font-bold mb-4 text-primary"><i class="fas fa-list-ul ml-2"></i> نتائج البحث:</h3><div class="space-y-2">`;
-                    data.entries.forEach(v => {
-                        html += `<div onclick="renderPreview('https://youtube.com/watch?v=${v.id}')" class="p-3 bg-slate-800/50 hover:bg-slate-800 rounded-xl cursor-pointer flex justify-between items-center border border-transparent hover:border-primary transition-all">
-                            <p class="font-bold text-sm truncate flex-1 ml-3">${v.title}</p>
-                            <span class="text-xs bg-slate-700 px-3 py-1 rounded-full whitespace-nowrap">⏱ ${v.duration} ثانية</span>
+                if(data.success) {{
+                    let box = document.getElementById('searchResults');
+                    box.innerHTML = '<h3 class="font-bold mb-3 text-primary">🔎 اختر המقطع:</h3><div class="space-y-2">';
+                    data.entries.forEach(v => {{
+                        box.innerHTML += `<div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="p-3 bg-slate-800 hover:bg-slate-700 rounded-xl cursor-pointer flex justify-between items-center border border-slate-700">
+                            <p class="font-bold text-sm truncate flex-1 ml-3">${{v.title}}</p><span class="text-xs bg-slate-900 px-3 py-1 rounded-full">⏱ ${{v.duration}} ث</span>
                         </div>`;
-                    });
-                    html += `</div></div>`;
-                    dynamicArea.innerHTML = html;
-                } else showToast("❌ لا توجد نتائج");
-            }
-            document.getElementById('mainBtn').innerHTML = '<i class="fas fa-search"></i> ابدأ الآن';
-        }
+                    }});
+                    box.innerHTML += '</div>';
+                    box.classList.remove('hidden');
+                }} else showToast("❌ لا توجد نتائج");
+            }}
+            document.getElementById('mainBtn').innerHTML = '<i class="fas fa-search"></i> فحص / بحث';
+        }}
 
-        async function renderPreview(url) {
-            currentUrl = url;
-            dynamicArea.innerHTML = `<div class="text-center py-10 fade-in"><i class="fas fa-circle-notch fa-spin text-4xl text-primary mb-4"></i><p>جاري جلب بيانات المقطع...</p></div>`;
-            
-            const res = await fetch('/api/preview', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:url})});
+        async function renderPreview(url) {{
+            currentUrl = url; document.getElementById('searchResults').classList.add('hidden');
+            const res = await fetch('/api/preview', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{url:url}})}});
             const data = await res.json();
             
-            if(data.success) {
-                dynamicArea.innerHTML = `
-                <div class="glass-panel rounded-3xl p-6 fade-in shadow-xl">
-                    <div class="flex flex-col md:flex-row gap-6 items-center">
-                        <img src="${data.thumb}" class="w-full md:w-48 rounded-2xl shadow-md object-cover aspect-video">
-                        <div class="flex-1 w-full text-center md:text-right">
-                            <h3 class="font-bold text-xl mb-2 line-clamp-2">${data.title}</h3>
-                            <p class="text-slate-400 text-sm mb-6"><i class="far fa-clock ml-1"></i> المدة: ${data.duration || 'غير معروف'} ثانية</p>
-                            
-                            <div class="grid grid-cols-2 gap-3 mb-6">
-                                <select id="mode" onchange="toggleRes()" class="modern-input py-3 text-sm">
-                                    <option value="video">🎬 مقطع فيديو (مرئي)</option>
-                                    <option value="audio">🎵 مقطع صوتي فقط (MP3)</option>
-                                </select>
-                                <select id="resolution" class="modern-input py-3 text-sm">
-                                    <option value="480">دقة عادية</option>
-                                    <option value="720" selected>دقة عالية (HD)</option>
-                                    <option value="best">أفضل دقة</option>
-                                </select>
-                            </div>
-                            <button onclick="requestDownload()" class="modern-btn btn-primary w-full text-lg"><i class="fas fa-magic"></i> تجهيز الملف</button>
-                        </div>
-                    </div>
-                </div>`;
-            } else {
-                dynamicArea.innerHTML = ''; showToast("❌ الرابط غير مدعوم أو المقطع محذوف");
-            }
-        }
-
-        function toggleRes() { document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; }
-
-        // نظام البوابة الإعلانية السلس (Ad-Gate)
-        function requestDownload() {
-            const adLink = "{{ ad_link }}";
-            dynamicArea.innerHTML = `
-            <div class="glass-panel rounded-3xl p-8 text-center fade-in border border-primary/50 bg-primary/5 shadow-2xl">
-                <div class="w-16 h-16 bg-primary/20 text-primary rounded-full flex items-center justify-center mx-auto mb-4 text-2xl"><i class="fas fa-heart"></i></div>
-                <h3 class="text-2xl font-bold mb-2">خطوة واحدة فقط!</h3>
-                <p class="text-slate-400 mb-6 font-medium leading-relaxed">لضمان استمرار خدمتنا مجانية وسريعة، يرجى دعمنا عبر زيارة الراعي الإعلاني لمدة 10 ثوانٍ فقط وسيبدأ التحميل تلقائياً.</p>
+            if(data.success) {{
+                document.getElementById('previewBox').classList.remove('hidden');
+                document.getElementById('thumb').src = data.thumb;
+                document.getElementById('title').innerText = data.title;
                 
-                <div class="flex flex-col gap-3 max-w-sm mx-auto">
-                    <a href="${adLink}" target="_blank" onclick="startTimer()" class="modern-btn bg-blue-600 hover:bg-blue-500 text-white w-full"><i class="fas fa-external-link-alt"></i> 1. زيارة الراعي الإعلاني</a>
-                    <button id="verifyBtn" disabled class="modern-btn bg-slate-700 text-slate-400 w-full cursor-not-allowed border border-slate-600"><i class="fas fa-lock"></i> 2. التحقق من الزيارة</button>
-                </div>
-            </div>`;
-        }
+                document.getElementById('adGate').classList.remove('hidden');
+                document.getElementById('dlOptions').classList.add('hidden');
+                const vBtn = document.getElementById('verifyBtn');
+                vBtn.disabled = true; vBtn.className = "modern-btn bg-slate-700 text-slate-500 py-2 px-4 text-sm cursor-not-allowed border border-slate-600";
+                vBtn.innerHTML = '<i class="fas fa-lock"></i> مقفول'; adWatched = false;
+            }} else showToast("❌ تعذر قراءة الرابط");
+        }}
 
-        function startTimer() {
-            showToast("⏳ يرجى البقاء في صفحة الإعلان 10 ثوانٍ...");
+        function toggleRes() {{ document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; }}
+
+        function startAdTimer() {{
+            showToast("⏳ يرجى البقاء في الإعلان 10 ثوانٍ");
             let btn = document.getElementById('verifyBtn');
             let timeLeft = 10;
-            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> جاري التحقق (${timeLeft})...`;
-            
-            let timer = setInterval(() => {
+            let timer = setInterval(() => {{
                 timeLeft--;
-                if(timeLeft > 0) { btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> جاري التحقق (${timeLeft})...`; }
-                else {
-                    clearInterval(timer);
-                    btn.disabled = false;
-                    btn.className = "modern-btn btn-primary w-full";
-                    btn.innerHTML = "<i class="fas fa-check-circle"></i> بدء التحميل الفعلي";
-                    btn.onclick = startActualDownload;
-                    showToast("🔓 شكراً لك! يمكنك بدء التحميل الآن.");
-                }
-            }, 1000);
-        }
+                if(timeLeft > 0) {{ btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> تحقق (${{timeLeft}})...`; }}
+                else {{
+                    clearInterval(timer); btn.disabled = false;
+                    btn.className = "modern-btn bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 text-sm";
+                    btn.innerHTML = "<i class='fas fa-unlock'></i> افتح القفل"; adWatched = true;
+                }}
+            }}, 1000);
+        }}
 
-        async function startActualDownload() {
-            const mode = document.getElementById('mode') ? document.getElementById('mode').value : 'video';
-            const resVal = document.getElementById('resolution') ? document.getElementById('resolution').value : '720';
+        function unlockDownload() {{
+            if(!adWatched) return showToast("⚠️ زر الراعي الإعلاني أولاً");
+            document.getElementById('adGate').classList.add('hidden');
+            document.getElementById('dlOptions').classList.remove('hidden');
+        }}
+
+        async function startDownload() {{
+            document.getElementById('dlOptions').classList.add('hidden');
+            document.getElementById('progressBox').classList.remove('hidden');
             
-            dynamicArea.innerHTML = `
-            <div class="glass-panel rounded-3xl p-8 fade-in shadow-xl text-center">
-                <h3 id="progStatus" class="text-xl font-bold mb-6 text-primary"><i class="fas fa-cloud-download-alt animate-bounce"></i> جاري سحب الملف...</h3>
-                <div class="flex justify-between text-sm mb-2 font-bold px-1"><span id="progSpeed" class="text-slate-400">يتم الحساب</span><span id="progPercent" class="text-xl">0%</span></div>
-                <div class="w-full bg-slate-800 rounded-full h-5 mb-3 overflow-hidden shadow-inner p-1">
-                    <div id="progBar" class="bg-gradient-to-r from-primary to-blue-500 h-full rounded-full transition-all duration-300 relative" style="width: 0%">
-                        <div class="absolute inset-0 bg-white/20 w-full h-full animate-pulse"></div>
-                    </div>
-                </div>
-                <p id="progSize" class="text-slate-400 text-sm font-medium">0 MB / 0 MB</p>
-            </div>`;
+            const mode = document.getElementById('mode').value;
+            const resVal = document.getElementById('resolution').value;
 
-            const res = await fetch('/api/download', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:currentUrl, mode:mode, resolution:resVal})});
+            const res = await fetch('/api/download', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{url:currentUrl, mode:mode, resolution:resVal}})}});
             const data = await res.json();
             
-            if(data.success) {
-                const interval = setInterval(async ()=>{
-                    const progRes = await fetch(`/api/progress/${data.job_id}`); const prog = await progRes.json();
+            if(data.success) {{
+                const interval = setInterval(async ()=>{{
+                    const progRes = await fetch(`/api/progress/${{data.job_id}}`); const prog = await progRes.json();
                     
-                    if(prog.status === 'downloading') {
+                    if(prog.status === 'downloading') {{
                         document.getElementById('progPercent').innerText = prog.percent + '%';
                         document.getElementById('progBar').style.width = prog.percent + '%';
-                        document.getElementById('progSize').innerText = prog.downloaded + ' من ' + prog.total;
+                        document.getElementById('progSize').innerText = prog.downloaded + ' / ' + prog.total;
                         document.getElementById('progSpeed').innerText = prog.speed;
-                    } 
-                    else if(prog.status === 'converting') {
-                        document.getElementById('progStatus').innerHTML = '⚙️ جاري دمج الصوت والصورة (FFmpeg)...';
+                    }} 
+                    else if(prog.status === 'converting') {{
+                        document.getElementById('progStatus').innerHTML = '⚙️ جاري دمج المقطع...';
                         document.getElementById('progBar').style.width = '100%'; document.getElementById('progPercent').innerText = '100%';
-                    } 
-                    else if(prog.status === 'completed') {
+                    }} 
+                    else if(prog.status === 'completed') {{
                         clearInterval(interval);
-                        document.getElementById('progStatus').innerHTML = '✅ تم الحفظ في مكتبتك بنجاح!';
-                        showToast("🎉 اكتمل التحميل!");
-                        setTimeout(() => location.reload(), 2000);
-                    } 
-                    else if(prog.status === 'error') {
-                        clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">❌ تعذر التحميل</span>'; showToast("❌ حدث خطأ من المصدر");
-                    }
-                }, 1000);
-            }
-        }
+                        document.getElementById('progStatus').innerHTML = '✅ اكتمل التحميل!';
+                        
+                        // 1. الإضافة لسجل المستخدم المحلي (المكتبة)
+                        myLibrary.push({{ id: Date.now().toString(), title: prog.title, url: prog.url, thumb: prog.thumb, is_audio: prog.is_audio }});
+                        localStorage.setItem('pz_library', JSON.stringify(myLibrary));
+                        renderLibrary(); // تحديث المكتبة فوراً في الواجهة
+                        
+                        // 2. الحفظ التلقائي في جهاز المستخدم مباشرة
+                        forceDownload(prog.url, prog.title);
+                    }} 
+                    else if(prog.status === 'error') {{ clearInterval(interval); document.getElementById('progStatus').innerText = '❌ تعذر التحميل'; showToast("❌ فشل سحب المقطع"); }}
+                }}, 1500);
+            }}
+        }}
     </script>
 </body>
 </html>
@@ -310,9 +288,7 @@ INDEX_HTML = """
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
-    files = [{"name": i.name, "url": f"/files/{i.name}", "is_audio": i.suffix=='.mp3'} for i in WEB_DIR.glob("*") if i.is_file() and i.suffix in ['.mp4','.mp3']]
-    ad = HILLTOPADS_LINK if HILLTOPADS_LINK else ADSTERRA_LINK
-    return Template(INDEX_HTML).render(files=files, ad_link=ad)
+    return HTMLResponse(content=INDEX_HTML)
 
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
@@ -323,7 +299,7 @@ async def api_search(req: SearchRequest):
 async def get_preview(req: URLRequest):
     try:
         info = extract_metadata(req.url)
-        return {"success": True, "title": info.get("title"), "thumb": info.get("thumbnail"), "duration": info.get("duration")}
+        return {"success": True, "title": info.get("title", "بدون اسم"), "thumb": info.get("thumbnail", "https://via.placeholder.com/150")}
     except Exception as e: return {"success": False, "error": str(e)}
 
 def bg_download(job_id: str, url: str, mode: str, res: str):
@@ -335,7 +311,10 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
                 "downloaded": f"{round(d.get('downloaded_bytes',0)/1048576, 1)} MB", "total": f"{round(total/1048576, 1)} MB",
                 "speed": f"{round(d.get('speed',0)/1048576, 1)} MB/s" if d.get('speed') else "0 MB/s"
             }
-        elif d['status'] == 'finished': PROGRESS_CACHE[job_id] = {"status": "converting"}
+        elif d['status'] == 'finished':
+            prev = PROGRESS_CACHE.get(job_id, {})
+            prev["status"] = "converting"
+            PROGRESS_CACHE[job_id] = prev
 
     opts = {
         'outtmpl': str(WEB_DIR / f'{job_id}_%(title)s.%(ext)s'), 
@@ -343,7 +322,7 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
         'progress_hooks': [hook],
         'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'tv'], 'player_skip': ['web', 'mweb']}},
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
         }
     }
@@ -355,10 +334,20 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
     else: opts.update({'format': f'bestvideo[height<={res}]+bestaudio/best', 'merge_output_format': 'mp4'})
     
     try:
-        with yt_dlp.YoutubeDL(opts) as ydl: ydl.download([url])
-        PROGRESS_CACHE[job_id] = {"status": "completed"}
+        with yt_dlp.YoutubeDL(opts) as ydl: 
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            if mode == 'audio': filename = filename.rsplit('.', 1)[0] + '.mp3'
+            
+            PROGRESS_CACHE[job_id] = {
+                "status": "completed",
+                "url": f"/files/{Path(filename).name}",
+                "title": info.get('title', 'مقطع PlayZone'),
+                "thumb": info.get('thumbnail', 'https://via.placeholder.com/150'),
+                "is_audio": mode == 'audio'
+            }
     except Exception as e: 
-        PROGRESS_CACHE[job_id] = {"status": "error"}
+        PROGRESS_CACHE[job_id] = {"status": "error", "error": str(e)}
 
 @app.post("/api/download")
 async def start_download(req: URLRequest):
