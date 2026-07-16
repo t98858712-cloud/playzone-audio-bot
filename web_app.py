@@ -9,7 +9,7 @@ import yt_dlp
 
 # --- إعدادات البوت والبيئة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي كما طلبت
+BOT_USERNAME = "MusicPlayZoneBot" # اليوزر الثابت اليدوي 
 # -------------------------------------------------------------
 
 try:
@@ -87,14 +87,14 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
 
-# زيادة الحد إلى 20 لضمان استخراج 5 مقاطع فيديو صحيحة تماماً وتجاهل القنوات
-def search_youtube(query: str, limit: int = 20):
+def search_youtube(query: str, limit: int = 30):
+    # السيرفر سيسحب 30 نتيجة لضمان وجود 5 فيديوهات صالحة بينها
     opts = get_hardened_ydl_options()
     opts['extract_flat'] = True
     with yt_dlp.YoutubeDL(opts) as ydl: return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
 # ==========================================
-# الواجهة الاحترافية المتكاملة (إصلاح شامل لمشكلة الموبايل)
+# الواجهة الاحترافية المتكاملة
 # ==========================================
 INDEX_HTML = f"""
 <!DOCTYPE html>
@@ -185,7 +185,6 @@ INDEX_HTML = f"""
 
     <main class="flex-1 h-full overflow-y-auto pb-28 relative scroll-smooth">
         
-        <!-- قسم البحث والنتائج -->
         <section id="searchView" class="view-section active p-4 md:p-8 max-w-4xl mx-auto">
             <div class="bg-panel rounded-3xl p-6 md:p-8 border border-panelBorder mb-6 relative overflow-hidden">
                 <div class="absolute top-0 left-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl"></div>
@@ -197,17 +196,16 @@ INDEX_HTML = f"""
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 
-                <!-- حاوية نتائج البحث المُصلحة كلياً (Block Buttons) لمنع التداخل -->
-                <div id="searchResults" class="hidden mt-8 bg-panel border border-panelBorder rounded-3xl p-5 shadow-xl">
+                <!-- حاوية نتائج البحث النصية بستايل البوت -->
+                <div id="searchResults" class="hidden mt-8 bg-[#18181b] border border-panelBorder rounded-3xl p-5 shadow-xl">
                     <div class="mb-5 pb-4 border-b border-panelBorder flex justify-between items-start">
                         <div>
                             <h3 class="text-white font-bold text-lg mb-1 flex items-center gap-2"><span id="searchQueryTitle">🔎 نتائج البحث</span></h3>
                             <p class="text-textMuted text-sm">اختر المقطع المناسب من الأزرار أدناه:</p>
                         </div>
-                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2 bg-bgDark rounded-full transition-colors"><i class="fas fa-times"></i></button>
+                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2 bg-bgDark rounded-full transition-colors flex-shrink-0"><i class="fas fa-times"></i></button>
                     </div>
-                    <!-- قائمة النتائج العمودية الصارمة -->
-                    <div id="searchResultsList" class="block w-full"></div>
+                    <div id="searchResultsList" class="flex flex-col gap-3"></div>
                 </div>
             </div>
 
@@ -497,7 +495,9 @@ INDEX_HTML = f"""
         function forceDownload(url, title) {{
             const a = document.createElement('a');
             a.href = url;
-            a.download = title;
+            const ext = url.split('.').pop() || 'mp4';
+            const safeTitle = title.replace(/[\/\\\\?%*:|"<>]/g, '-');
+            a.download = safeTitle.endsWith('.' + ext) ? safeTitle : safeTitle + '.' + ext;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -583,7 +583,7 @@ INDEX_HTML = f"""
         function seekAudio(e) {{ const rect = document.getElementById('progressContainer').getBoundingClientRect(); let percent = (e.clientX - rect.left) / rect.width; if(document.dir === 'rtl') percent = 1 - percent; audioEl.currentTime = percent * audioEl.duration; }}
         function changeVolume() {{ audioEl.volume = document.getElementById('volumeSlider').value; }}
 
-        // --- نظام البحث المطور: إصلاح جذري بأسلوب الأزرار المنفصلة (Block Buttons) ---
+        // --- نظام الفلترة الجديد في السيرفر ---
         let currentUrl = "", adWatched = false;
         async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
@@ -593,6 +593,7 @@ INDEX_HTML = f"""
             if (input.startsWith('http')) await renderPreview(input);
             else {{
                 try {{
+                    // السيرفر الآن سيجلب 30 نتيجة ويصفيها لإرسال 5 نتائج صالحة فقط
                     const res = await fetch('/api/search', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{query:input}})}});
                     if(!res.ok) throw new Error();
                     const data = await res.json();
@@ -601,38 +602,30 @@ INDEX_HTML = f"""
                         let box = document.getElementById('searchResultsList'); box.innerHTML = '';
                         document.getElementById('searchQueryTitle').innerText = `🔎 نتائج البحث لـ: ${{input}}`;
                         
-                        const validVideos = data.entries.filter(v => v.id && v.duration).slice(0, 5);
-                        
-                        if(validVideos.length === 0) {{
-                            showToast("لم يتم العثور على مقاطع صالحة", "warning");
-                            btn.innerHTML = '<i class="fas fa-search"></i> بحث'; btn.disabled = false;
-                            return;
-                        }}
-
                         const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
 
-                        validVideos.forEach((v, idx) => {{
+                        data.entries.forEach((v, idx) => {{
                             const duration = formatTime(v.duration || 0);
                             const uploader = v.uploader || 'غير معروف';
                             const numEmoji = emojis[idx] || (idx + 1);
                             
-                            // التصميم السحري: استخدام زر <button> يمنع الانضغاط نهائياً في الموبايل
                             box.innerHTML += `
-                            <button onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full text-right p-4 bg-bgDark rounded-2xl border border-panelBorder hover:border-accent/50 active:scale-95 transition-all mb-3 block shadow-sm">
-                                <h4 class="text-white font-bold text-[15px] leading-relaxed mb-2" style="word-break: break-word;" dir="auto">
-                                    <span class="ml-1 text-lg">${{numEmoji}}</span> ${{v.title}}
-                                </h4>
-                                <div class="flex items-center gap-2 text-sm text-textMuted font-medium" dir="auto">
-                                    <i class="fas fa-user-circle text-accent/70 text-xs"></i> 
-                                    <span class="truncate max-w-[120px] md:max-w-[200px]">${{uploader}}</span>
-                                    <span class="text-accent/30 mx-1">•</span>
-                                    <i class="far fa-clock text-accent/70 text-xs"></i> 
-                                    <span>${{duration}}</span>
+                            <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="p-4 bg-bgDark rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-sm relative group overflow-hidden mb-2 block">
+                                <div class="absolute right-0 top-0 bottom-0 w-1 bg-accent/20 group-hover:bg-accent transition-colors"></div>
+                                <div class="flex flex-col gap-2 pr-3">
+                                    <h4 class="text-white font-bold text-[15px] leading-relaxed" dir="auto" style="word-break: break-word;">
+                                        <span class="mr-1 text-lg">${{numEmoji}}</span> ${{v.title}}
+                                    </h4>
+                                    <div class="flex items-center gap-3 text-sm text-textMuted font-medium" dir="auto">
+                                        <span class="flex items-center gap-1.5 truncate max-w-[150px]"><span class="text-accent/70">👤</span> ${{uploader}}</span>
+                                        <span class="text-accent/30">•</span>
+                                        <span class="flex items-center gap-1.5 flex-shrink-0"><span class="text-accent/70">⏱</span> ${{duration}}</span>
+                                    </div>
                                 </div>
-                            </button>`;
+                            </div>`;
                         }});
                         document.getElementById('searchResults').classList.remove('hidden');
-                    }} else showToast("لم يتم العثور على نتائج", "error");
+                    }} else showToast("لم يتم العثور على نتائج صالحة", "error");
                 }} catch(e) {{ showToast("خطأ بالاتصال", "error"); }}
             }}
             btn.innerHTML = '<i class="fas fa-search"></i> بحث'; btn.disabled = false;
@@ -749,8 +742,24 @@ async def home():
 
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
-    try: return {"success": True, "entries": search_youtube(req.query, limit=20).get("entries", [])}
-    except Exception as e: return {"success": False, "error": str(e)}
+    try:
+        # السيرفر يجلب 30 نتيجة لضمان الحصول على 5 فيديوهات صالحة
+        raw_results = search_youtube(req.query, limit=30)
+        entries = raw_results.get("entries", [])
+        
+        valid_videos = []
+        for entry in entries:
+            # تصفية صارمة: يجب أن يمتلك المقطع ID ومدة زمنية (لاستبعاد القنوات وقوائم التشغيل)
+            if entry.get("id") and entry.get("duration"):
+                valid_videos.append(entry)
+            
+            # التوقف فور جمع 5 فيديوهات نقية
+            if len(valid_videos) == 5:
+                break
+                
+        return {"success": True, "entries": valid_videos}
+    except Exception as e: 
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
 async def get_preview(req: URLRequest):
