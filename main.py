@@ -95,7 +95,7 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
     logger.info("⏳ انتظار 5 ثوانٍ قبل بدء تشغيل البوت...")
-    time.sleep(5)
+    time.sleep(10)
     logger.info("🚀 تم تشغيل البوت بنظام الإدارة المؤسسية (Enterprise Control Center) بنجاح.")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
