@@ -66,7 +66,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     return opts
 
 def extract_metadata(url: str):
-    opts = get_ydl_options(mode="video")
+    opts = get_ydl_options(mode="video", url=url)
     opts["skip_download"] = True
     opts["extract_flat"] = False
     opts.pop("format", None) 
@@ -132,7 +132,7 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
-    opts = get_ydl_options(job_dir, progress_data, mode, resolution)
+    opts = get_ydl_options(job_dir, progress_data, mode, resolution, url=url)
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
