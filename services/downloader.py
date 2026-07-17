@@ -7,13 +7,14 @@ import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
 from telegram.ext import Application
-from core.config import COOKIES_FILE, LOCAL_API_URL, PROGRESS_UPDATE_SECONDS, EXECUTOR
-from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progress_bar, format_size
+from core.config import COOKIES_FILE, LOCAL_API_URL, PROGRESS_UPDATE_SECONDS, EXECUTOR, COOKIES_YOUTUBE
+from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progress_bar, format_size, get_cookie_file_for_url
 from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
+# أضفنا url: str | None = None هنا ليستقبل الرابط
+def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720", url: str | None = None):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
@@ -36,10 +37,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # 🌟 الاستراتيجية الذكية للدقة الحقيقية:
-        # 1. نحاول أولاً سحب جودة H.264 (avc1) المتوافقة كلياً مع التليجرام بالدقة المطلوبة لتجنب استهلاك السيرفر.
-        # 2. إذا لم تتوفر، نسحب أفضل جودة فيديو متاحة بالدقة المطلوبة (حتى لو كانت VP9/AV1) لضمان الدقة الحقيقية.
-        # 3. ندمج الفيديو مع الصوت ونخرجهما داخل حاوية mp4 القياسية.
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
@@ -54,13 +51,15 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             )
             
         opts["merge_output_format"] = "mp4"
-        # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
-    from utils.helpers import get_cookie_file_for_url
+    # 🌟 الاستعانة بنظام الكوكيز الديناميكي حسب الرابط
     cookie_path = get_cookie_file_for_url(url) if url else None
-    if cookie_path:
+    if cookie_path and cookie_file_is_usable(cookie_path):
         opts["cookiefile"] = str(cookie_path)
+    elif cookie_file_is_usable(COOKIES_FILE): # الاحتياطي
+        opts["cookiefile"] = str(COOKIES_FILE)
+
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
@@ -87,9 +86,13 @@ def search_youtube(query: str, limit: int = 30):
             }
         }
     }
-    from core.config import COOKIES_YOUTUBE
+    
+    # البحث دائماً يوتيوب، لذلك نعطيه كوكيز يوتيوب مباشرة
     if cookie_file_is_usable(COOKIES_YOUTUBE):
         opts["cookiefile"] = str(COOKIES_YOUTUBE)
+    elif cookie_file_is_usable(COOKIES_FILE):
+        opts["cookiefile"] = str(COOKIES_FILE)
+
     combined_entries = []
     seen_ids = set()
     try:
@@ -153,14 +156,13 @@ async def youtube_health_monitor(app: Application):
     while True:
         await asyncio.sleep(6 * 3600)
         try:
-            from core.config import COOKIES_YOUTUBE
             if not cookie_file_is_usable(COOKIES_YOUTUBE):
-                await alert_admins_live(app.bot, "⚠️ تنبيه من السيرفر:\nملف cookies_youtube.txt الخاص بيوتيوب غير صالح...")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies_youtube.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر إرساله للبوت لمنع توقف التحميل.")
                 continue
             opts = {
                 "quiet": True, 
                 "extract_flat": True, 
-                "cookiefile": str(COOKIES_FILE),
+                "cookiefile": str(COOKIES_YOUTUBE),
                 "extractor_args": {
                     "youtube": {
                         "player_client": ["android", "ios", "tv"],
