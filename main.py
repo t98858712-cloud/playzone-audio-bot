@@ -1,7 +1,7 @@
 import subprocess
-from site import app  # استيراد تطبيق الويب من ملف site.py الخاص بك
+from server import app  # استدعاء آمن ونظيف تماماً من ملفك بعد تغيير اسمه
 
 @app.on_event("startup")
 async def launch_bot_background():
-    # تشغيل البوت في عملية منفصلة بالخلفية فوراً عند انطلاق السيرفر
+    # تشغيل ملف البوت في عملية منفصلة بالخلفية فور انطلاق خادم الويب
     subprocess.Popen(["python", "bot.py"])
