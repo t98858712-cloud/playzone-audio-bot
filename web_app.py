@@ -231,6 +231,7 @@ async def get_progress(job_id: str): return PROGRESS_CACHE.get(job_id, {"status"
 @app.post("/api/send_telegram")
 def send_to_telegram(req: TelegramRequest):
     try:
+        import subprocess # استدعاء المكتبة هنا لضمان عملها
         filename = req.file_url.split("/")[-1]
         file_path = WEB_DIR / filename
         if not file_path.exists(): return {"success": False, "error": "الملف غير موجود."}
@@ -245,14 +246,29 @@ def send_to_telegram(req: TelegramRequest):
         reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]]}
         
         data = {'chat_id': req.chat_id, 'caption': caption, 'reply_markup': json.dumps(reply_markup)}
-        if req.is_audio: data.update({'title': req.title, 'performer': req.performer, 'duration': req.duration})
-        else: data.update({'supports_streaming': True, 'duration': req.duration})
+        
+        if req.is_audio: 
+            data.update({'title': req.title, 'performer': req.performer, 'duration': req.duration})
+        else: 
+            data.update({'supports_streaming': True, 'duration': req.duration})
+            # --- الحل الجذري: استخراج القياسات الأصلية للفيديو وإجبار تيليجرام عليها ---
+            try:
+                cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
+                res = subprocess.run(cmd, capture_output=True, text=True)
+                probe_data = json.loads(res.stdout)
+                w = probe_data['streams'][0]['width']
+                h = probe_data['streams'][0]['height']
+                data.update({'width': w, 'height': h})
+            except Exception as e:
+                pass
+            # -------------------------------------------------------------------
 
         with open(file_path, 'rb') as f:
             file_data = f.read()
             
         files = {'audio' if req.is_audio else 'video': (filename, file_data)}
         
+        # إرسال الصورة المصغرة للصوتيات فقط لمنع تيليجرام من تحويل الفيديو إلى مربع
         if req.thumb and req.is_audio:
             try:
                 t_res = requests.get(req.thumb, timeout=4)
