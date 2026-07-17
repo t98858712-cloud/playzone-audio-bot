@@ -1,5 +1,5 @@
 # main.py
-import os, threading, uuid, time, requests, json
+import os, threading, uuid, time, requests, json, subprocess
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -12,14 +12,11 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = "MusicPlayZoneBot"
 
 try:
-    from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
+    from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK
 except ImportError:
     BASE_DOWNLOAD_DIR = Path("./downloads")
     HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z"
     ADSTERRA_LINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
-    COOKIES_FILE = Path("cookies.txt")
-    def init_db(): pass
-    def cookie_file_is_usable(f): return False
 
 app = FastAPI(title="PlayZone Dashboard")
 
@@ -55,7 +52,7 @@ def cleanup_daemon():
             expired_ads = [cid for cid, data in list(AD_VERIFICATIONS.items()) if now - data.get("created_at", now) > 3600]
             for cid in expired_ads:
                 AD_VERIFICATIONS.pop(cid, None)
-        except Exception as e:
+        except Exception:
             pass
         time.sleep(3600)
 
@@ -82,15 +79,24 @@ class TelegramRequest(BaseModel):
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
-        "retries": 10, "fragment_retries": 10, "socket_timeout": 30, "cachedir": False,
-        "no_check_certificate": True,
+        "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
+        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv"], "player_skip": ["web", "mweb"]}},
-        "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept-Language": "ar-SA,ar;q=0.9"}
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
     }
+    
+    # --- قراءة الكوكيز بشكل إجباري ومباشر ---
     try:
-        from utils.helpers import cookie_file_is_usable
-        if cookie_file_is_usable(COOKIES_FILE): opts["cookiefile"] = str(COOKIES_FILE)
-    except: pass
+        cookie_path = Path("cookies.txt")
+        if cookie_path.exists() and cookie_path.stat().st_size > 0:
+            opts["cookiefile"] = str(cookie_path)
+    except Exception:
+        pass
+    # ----------------------------------------
+    
     if outtmpl_path: opts["outtmpl"] = str(outtmpl_path)
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
@@ -194,8 +200,35 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
             PROGRESS_CACHE[job_id] = {"status": "converting", "timestamp": time.time()}
 
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
-    if mode == 'audio': opts.update({'format': 'bestaudio/best', 'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]})
-    else: opts.update({'format': f'bestvideo[height<={res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 'merge_output_format': 'mp4'})
+    
+    if mode == 'audio': 
+        opts.update({
+            'format': 'bestaudio/best', 
+            'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]
+        })
+    else: 
+        max_fs = "49M" # حد أمان لتليجرام
+        if res == "best":
+            opts.update({
+                'format': (
+                    f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                    f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                    f"best"
+                )
+            })
+        else:
+            opts.update({
+                'format': (
+                    f"bestvideo[vcodec^=avc1][height<={res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                    f"bestvideo[height<={res}][filesize<?{max_fs}]+bestaudio/"
+                    f"best"
+                )
+            })
+            
+        opts.update({
+            'merge_output_format': 'mp4',
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
+        })
     
     try:
         with yt_dlp.YoutubeDL(opts) as ydl: 
@@ -231,7 +264,6 @@ async def get_progress(job_id: str): return PROGRESS_CACHE.get(job_id, {"status"
 @app.post("/api/send_telegram")
 def send_to_telegram(req: TelegramRequest):
     try:
-        import subprocess # استدعاء المكتبة هنا لضمان عملها
         filename = req.file_url.split("/")[-1]
         file_path = WEB_DIR / filename
         if not file_path.exists(): return {"success": False, "error": "الملف غير موجود."}
@@ -251,7 +283,7 @@ def send_to_telegram(req: TelegramRequest):
             data.update({'title': req.title, 'performer': req.performer, 'duration': req.duration})
         else: 
             data.update({'supports_streaming': True, 'duration': req.duration})
-            # --- الحل الجذري: استخراج القياسات الأصلية للفيديو وإجبار تيليجرام عليها ---
+            # استخراج القياسات الأصلية للفيديو وإجبار تيليجرام عليها
             try:
                 cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
                 res = subprocess.run(cmd, capture_output=True, text=True)
@@ -259,16 +291,15 @@ def send_to_telegram(req: TelegramRequest):
                 w = probe_data['streams'][0]['width']
                 h = probe_data['streams'][0]['height']
                 data.update({'width': w, 'height': h})
-            except Exception as e:
+            except Exception:
                 pass
-            # -------------------------------------------------------------------
 
         with open(file_path, 'rb') as f:
             file_data = f.read()
             
         files = {'audio' if req.is_audio else 'video': (filename, file_data)}
         
-        # إرسال الصورة المصغرة للصوتيات فقط لمنع تيليجرام من تحويل الفيديو إلى مربع
+        # إرسال الصورة المصغرة للصوتيات فقط
         if req.thumb and req.is_audio:
             try:
                 t_res = requests.get(req.thumb, timeout=4)
