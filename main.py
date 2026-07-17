@@ -89,6 +89,7 @@ async def post_init(app: Application):
     admin_commands = user_commands + [BotCommand("admin", "لوحة التحكم / Admin Panel")]
 
     try:
+        # 1. تهيئة أوامر البوت العادية والأدمن
         await app.bot.set_my_commands(user_commands)
         for admin_id in parse_admin_ids():
             try:
@@ -96,14 +97,19 @@ async def post_init(app: Application):
             except Exception:
                 pass
 
+        # 2. الحفاظ على زر قائمة السلاش الافتراضي في الزاوية الداخلية دون تداخل
         await app.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-        
-        # تشغيل المهام في الخلفية
-        asyncio.create_task(youtube_health_monitor(app))
-        asyncio.create_task(start_health_check_server())
-        
+        logger.info("✅ تم تثبيت زر السلاش والمينيو الداخلي بنجاح.")
+
     except Exception as e:
         logger.warning(f"فشل تهيئة الأوامر: {e}")
+
+    # تشغيل المهام الخلفية
+    try:
+        asyncio.create_task(youtube_health_monitor(app))
+        asyncio.create_task(start_health_check_server())
+    except Exception as e:
+        logger.error(f"فشل تشغيل المهام الخلفية: {e}")
 
 
 def main():
