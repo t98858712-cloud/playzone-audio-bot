@@ -178,34 +178,31 @@ async def send_preview(update: Update, thumb: str, caption: str, keyboard: Inlin
     )
 
 def get_cookie_file_for_url(url: str) -> Path | None:
-    """تحديد ملف الكوكيز المناسب ديناميكياً بناءً على دومين الرابط"""
+    """بحث ذكي وآلي: يقرأ الرابط ويبحث في مجلد السيرفر عن أي ملف نصي يحتوي على اسم المنصة"""
     if not url:
         return None
     
     url_lower = url.lower()
-    from core.config import (
-        COOKIES_YOUTUBE, COOKIES_TIKTOK, COOKIES_INSTAGRAM, 
-        COOKIES_FACEBOOK, COOKIES_X, COOKIES_SPOTIFY, COOKIES_FILE
-    )
+    from core.config import COOKIES_DIR, COOKIES_FILE
     
-    selected_cookie = None
-    
-    if "youtube.com" in url_lower or "youtu.be" in url_lower:
-        selected_cookie = COOKIES_YOUTUBE
-    elif "tiktok.com" in url_lower:
-        selected_cookie = COOKIES_TIKTOK
-    elif "instagram.com" in url_lower:
-        selected_cookie = COOKIES_INSTAGRAM
-    elif "facebook.com" in url_lower or "fb.watch" in url_lower or "fb.com" in url_lower:
-        selected_cookie = COOKIES_FACEBOOK
-    elif "x.com" in url_lower or "twitter.com" in url_lower:
-        selected_cookie = COOKIES_X
-    elif "spotify.com" in url_lower:
-        selected_cookie = COOKIES_SPOTIFY
+    # 1. تحديد الكلمة المفتاحية (اسم المنصة) بناءً على الرابط
+    target = None
+    if "youtube.com" in url_lower or "youtu.be" in url_lower: target = "youtube"
+    elif "tiktok.com" in url_lower: target = "tiktok"
+    elif "instagram.com" in url_lower: target = "instagram"
+    elif "facebook.com" in url_lower or "fb.watch" in url_lower or "fb.com" in url_lower: target = "facebook"
+    elif "x.com" in url_lower or "twitter.com" in url_lower: target = "twitter"
+    elif "spotify.com" in url_lower: target = "spotify"
 
-    if selected_cookie and cookie_file_is_usable(selected_cookie):
-        return selected_cookie
-        
+    # 2. فحص مجلد الكوكيز آلياً والبحث عن أي ملف يحمل هذه الكلمة
+    if target and COOKIES_DIR.exists():
+        for file_path in COOKIES_DIR.glob("*.txt"):
+            file_name = file_path.name.lower()
+            if target in file_name or (target == "facebook" and "fb" in file_name) or (target == "twitter" and "x.com" in file_name):
+                if cookie_file_is_usable(file_path):
+                    return file_path
+
+    # 3. خطة بديلة (Fallback): استخدم ملف الكوكيز العام إذا وُجد
     if cookie_file_is_usable(COOKIES_FILE):
         return COOKIES_FILE
         
