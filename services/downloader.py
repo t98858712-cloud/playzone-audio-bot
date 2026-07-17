@@ -3,7 +3,6 @@ import shutil
 import logging
 import asyncio
 import urllib.request
-import requests
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
@@ -14,45 +13,20 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-def fallback_cobalt_download(url: str, mode: str = "video"):
-    """الخطة ب (السلاح السري): استخدام Cobalt API للتحميل بدون كوكيز عند فشل المحرك الأساسي"""
-    api_url = "https://api.cobalt.tools/api/json"
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": "PlayZoneBot/1.0"
-    }
-    payload = {
-        "url": url,
-        "vQuality": "720",
-        "isAudioOnly": True if mode == "audio" else False,
-        "isNoTTWatermark": True, 
-    }
-    try:
-        response = requests.post(api_url, json=payload, headers=headers, timeout=20)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("status") in ["stream", "redirect"]:
-                return data.get("url")
-    except Exception as e:
-        logger.error(f"Cobalt API Fallback failed: {e}")
-    return None
-
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720", url: str | None = None):
+    # رجعنا للإعدادات الأصلية 100% كما طلبت
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
-        "retries": 15, "fragment_retries": 15, "socket_timeout": 30, "cachedir": False,
-        "no_check_certificate": True,
-        "source_address": "0.0.0.0",
-        "force_ipv4": True, 
+        "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
+        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv", "mweb"],
-                "player_skip": ["web"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
@@ -64,9 +38,17 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
         if resolution == "best":
-            opts["format"] = f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/bestvideo[filesize<?{max_fs}]+bestaudio/best"
+            opts["format"] = (
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"best"
+            )
         else:
-            opts["format"] = f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/best"
+            opts["format"] = (
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
+                f"best"
+            )
             
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
@@ -85,20 +67,12 @@ def extract_metadata(url: str):
     opts = get_ydl_options(mode="video", url=url)
     opts["skip_download"] = True
     opts["extract_flat"] = False
+    
     opts["format"] = "best"
     opts.pop("merge_output_format", None)
     
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            return ydl.extract_info(url, download=False)
-    except Exception as e:
-        logger.warning(f"yt-dlp metadata failed, using fallback for: {url}. Error: {e}")
-        return {
-            "title": "مقطع وسائط (تم التخطي بالسيرفر البديل)",
-            "thumbnail": "https://via.placeholder.com/640x360.png?text=PlayZone+Media",
-            "duration": 0,
-            "uploader": "PlayZone Network"
-        }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        return ydl.extract_info(url, download=False)
 
 def search_youtube(query: str, limit: int = 30):
     opts = {
@@ -163,28 +137,8 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
     opts = get_ydl_options(job_dir, progress_data, mode, resolution, url=url)
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            return ydl.extract_info(url, download=True)
-    except Exception as e:
-        error_str = str(e).lower()
-        if "sign in" in error_str or "cookie" in error_str or "bot" in error_str or "unavailable" in error_str:
-            lang = progress_data.get("lang", "ar")
-            progress_data["text"] = "🔄 <b>فشل السيرفر الأساسي. جاري التحويل للملاذ الآمن والتحميل المباشر...</b>"
-            
-            direct_url = fallback_cobalt_download(url, mode)
-            if direct_url:
-                try:
-                    filename = f"fallback_dl.mp3" if mode == 'audio' else f"fallback_dl.mp4"
-                    file_path = job_dir / filename
-                    response = requests.get(direct_url, stream=True)
-                    with open(file_path, 'wb') as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                    return {"title": "تم التحميل بنجاح", "duration": 0, "uploader": "PlayZone Fallback"}
-                except Exception:
-                    pass
-        raise e
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        return ydl.extract_info(url, download=True)
 
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
