@@ -91,12 +91,11 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
 
-# دالة البحث المعدلة: نقوم بحذف محددات الـ playlist_items للسماح بجلب نتائج البحث كاملة
+# دالة البحث المعدلة لطلب 25 خيار بحث لجلب نتائج متعددة ونظيفة
 def search_youtube(query: str, limit: int = 25):
     opts = get_hardened_ydl_options()
     opts['extract_flat'] = True
     
-    # حذف القيود التي تمنع جلب القوائم والبحث المتعدد
     if 'playlist_items' in opts:
         del opts['playlist_items']
     if 'noplaylist' in opts:
@@ -105,183 +104,237 @@ def search_youtube(query: str, limit: int = 25):
     with yt_dlp.YoutubeDL(opts) as ydl: 
         return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
-# ==========================================
-# الواجهة المتجاوبة والمصححة كلياً للهواتف
-# ==========================================
-INDEX_HTML = f"""
+
+# ==========================================================
+# قالب الـ HTML (استخدام نص عادي لمنع تداخل أقواس الـ CSS مع Python)
+# ==========================================================
+INDEX_HTML = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PlayZone | السحابة الشخصية</title>
+    <title>PlayZone Cloud | سينما وساحة ألعابك المتكاملة</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script>
-        tailwind.config={{
+        tailwind.config={
             darkMode:'class',
-            theme:{{
-                extend:{{
-                    fontFamily: {{ sans: ['Tajawal', 'sans-serif'] }}, 
-                    colors:{{ 
-                        accent:'#8b5cf6', accentHover:'#7c3aed', 
-                        bgDark:'#09090b', panel:'#18181b', panelBorder:'#27272a',
-                        textMuted:'#a1a1aa', tgBlue: '#3b82f6'
-                    }}
-                }}
-            }}
-        }}
+            theme:{
+                extend:{
+                    fontFamily: { sans: ['Tajawal', 'sans-serif'] }, 
+                    colors:{ 
+                        accent:'#a855f7', accentHover:'#9333ea', 
+                        bgDark:'#030303', panel:'#0b0b0f', panelBorder:'#1f1f2e',
+                        textMuted:'#8e8e9f', tgBlue: '#0088cc'
+                    }
+                }
+            }
+        }
     </script>
     <style>
-        body {{ background-color: #09090b; color: #f4f4f5; transition: all 0.3s ease; overflow: hidden; }}
-        ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
-        ::-webkit-scrollbar-track {{ background: transparent; }}
-        ::-webkit-scrollbar-thumb {{ background: #3f3f46; border-radius: 4px; }}
+        body { background-color: #030303; color: #f4f4f5; transition: all 0.3s ease; overflow: hidden; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1f1f2e; border-radius: 10px; }
         
-        .modern-input {{ background: #09090b; border: 1px solid #27272a; color: white; border-radius: 0.75rem; padding: 0.8rem 1rem; outline: none; transition: border-color 0.3s, box-shadow 0.3s; width: 100%; }}
-        .modern-input:focus {{ border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15); }}
+        .modern-input { background: #07070a; border: 1px solid #1f1f2e; color: white; border-radius: 1rem; padding: 0.8rem 1.2rem; outline: none; transition: all 0.3s; width: 100%; }
+        .modern-input:focus { border-color: #a855f7; box-shadow: 0 0 15px rgba(168, 85, 247, 0.2); }
         
-        .btn {{ padding: 0.8rem 1.5rem; border-radius: 0.75rem; font-weight: bold; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; cursor: pointer; user-select: none; position: relative; overflow: hidden; }}
-        .btn:disabled {{ opacity: 0.6; cursor: not-allowed; transform: none !important; }}
-        .btn:active:not(:disabled) {{ transform: scale(0.96); }}
+        .btn { padding: 0.8rem 1.5rem; border-radius: 1rem; font-weight: bold; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; cursor: pointer; user-select: none; position: relative; overflow: hidden; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+        .btn:active:not(:disabled) { transform: scale(0.95); }
         
-        @keyframes shimmer {{ 0% {{ transform: translateX(100%); }} 100% {{ transform: translateX(-100%); }} }}
-        .shimmer-bg {{ position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); animation: shimmer 1.5s infinite linear; }}
+        @keyframes shimmer { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+        .shimmer-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); animation: shimmer 1.5s infinite linear; }
 
-        .view-section {{ display: none; animation: fadeIn 0.3s ease-out; }}
-        .view-section.active {{ display: block; }}
-        @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
+        .view-section { display: none; animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
         
-        /* تعديل تموضع مشغل الموسيقى ليتوقف عند حدود القائمة الجانبية ولا يغطيها */
-        #musicPlayer {{ 
-            position: fixed; 
-            bottom: 0; 
-            left: 0; 
-            right: 5rem; /* مسافة 80px للهواتف لمنع التداخل مع القائمة */
-            z-index: 50; 
-            transform: translateY(100%); 
-            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
-            border-top: 1px solid #27272a; 
-            background: #18181b; 
-        }}
-        @media (min-width: 768px) {{
-            #musicPlayer {{ right: 16rem; }} /* مسافة 256px للشاشات الكبيرة */
-        }}
+        /* -------------------------------------------------- */
+        /* تصميم مشغل الوسائط العائم والتفاعلي الجديد كلياً */
+        /* -------------------------------------------------- */
+        #floatingPlayer {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            width: 350px;
+            max-width: calc(100vw - 40px);
+            background: rgba(11, 11, 15, 0.85);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8), 0 0 20px rgba(168, 85, 247, 0.1);
+            z-index: 100;
+            overflow: hidden;
+            transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), height 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
+            display: none;
+        }
         
-        .progress-container {{ width: 100%; height: 4px; background: #27272a; cursor: pointer; position: absolute; top: -2px; left: 0; transition: height 0.2s; }}
-        .progress-container:hover {{ height: 8px; top: -4px; }}
-        .progress-bar {{ height: 100%; background: #8b5cf6; width: 0%; position: relative; transition: width 0.3s ease-out; }}
-        
-        #toast {{ position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100%); opacity: 0; z-index: 1000; padding: 12px 24px; border-radius: 50px; font-weight: bold; color: white; transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); box-shadow: 0 10px 25px rgba(0,0,0,0.5); pointer-events: none; }}
-        #toast.show {{ transform: translateX(-50%) translateY(0); opacity: 1; }}
+        .drag-handle {
+            cursor: move;
+            user-select: none;
+            touch-action: none;
+        }
+
+        /* دوران صورة الألبوم عند تشغيل الموسيقى */
+        @keyframes spinDisk {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .album-spin {
+            animation: spinDisk 15s linear infinite;
+        }
+        .album-paused {
+            animation-play-state: paused;
+        }
+
+        /* مؤشر حركة الصوت التفاعلي الموهوم */
+        .wave-bar {
+            width: 3px;
+            height: 15px;
+            background-color: #a855f7;
+            border-radius: 3px;
+            animation: bounceWave 1.2s ease-in-out infinite alternate;
+        }
+        @keyframes bounceWave {
+            0% { height: 5px; }
+            100% { height: 35px; }
+        }
+        .wave-bar:nth-child(2) { animation-delay: 0.15s; }
+        .wave-bar:nth-child(3) { animation-delay: 0.3s; }
+        .wave-bar:nth-child(4) { animation-delay: 0.45s; }
+        .wave-bar:nth-child(5) { animation-delay: 0.6s; }
+
+        /* حالة المشغل المصغر جداً */
+        #floatingPlayer.compact {
+            width: 320px;
+            height: 70px;
+        }
+
+        /* -------------------------------------------------- */
+
+        #toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100%); opacity: 0; z-index: 1000; padding: 12px 24px; border-radius: 50px; font-weight: bold; color: white; transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); box-shadow: 0 10px 25px rgba(0,0,0,0.5); pointer-events: none; }
+        #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
     </style>
 </head>
 <body class="antialiased flex h-[100dvh] w-full">
     <div id="toast"></div>
 
-    <!-- تحديث شريط القائمة الجانبية لمنع التداخل وترتيب العناصر بشكل مثالي ومربع على الهاتف -->
-    <aside class="w-20 md:w-64 bg-panel border-l border-panelBorder flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
+    <!-- الشريط الجانبي الأيمن: تم تصغيره بالكامل ليصبح شريطاً نحيفاً وأنيقاً لا يستهلك المساحة -->
+    <aside class="w-16 md:w-20 bg-panel border-l border-panelBorder flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
         <div>
-            <div class="h-20 flex items-center justify-center md:justify-start md:px-6 border-b border-panelBorder">
-                <div class="w-10 h-10 bg-accent/20 rounded-xl flex items-center justify-center text-accent text-xl flex-shrink-0">
-                    <i class="fas fa-play"></i>
+            <!-- شعار بسيط وأنيق ومضيء -->
+            <div class="h-20 flex items-center justify-center border-b border-panelBorder relative">
+                <div class="w-10 h-10 bg-accent/10 rounded-2xl flex items-center justify-center text-accent text-xl relative group cursor-pointer">
+                    <div class="absolute inset-0 bg-accent/20 rounded-2xl blur-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <i class="fas fa-play z-10 text-base"></i>
                 </div>
-                <h1 class="text-xl font-black text-white mr-3 hidden md:block">Play<span class="text-accent">Zone</span></h1>
             </div>
 
-            <!-- أزرار القائمة الجانبية بهوامش محسنة تناسب العرض الصغير -->
-            <nav class="mt-6 px-2 md:px-3 space-y-2">
-                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 p-3 md:px-4 md:py-3 rounded-xl bg-panelBorder text-accent font-bold">
-                    <i class="fas fa-search text-xl flex-shrink-0"></i><span class="hidden md:block">البحث والتحميل</span>
+            <!-- أزرار التنقل الذكية المدمجة عمودياً -->
+            <nav class="mt-8 px-2 space-y-4">
+                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn w-12 h-12 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl bg-panelBorder text-accent transition-all duration-300 relative group" title="البحث والتحميل">
+                    <i class="fas fa-search text-lg"></i>
+                    <span class="text-[9px] mt-1 font-bold hidden md:block">البحث</span>
                 </button>
-                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 p-3 md:px-4 md:py-3 rounded-xl text-textMuted hover:bg-panelBorder hover:text-white bg-transparent">
-                    <i class="fas fa-folder text-xl flex-shrink-0"></i><span class="hidden md:block">ملفاتي المحفوظة</span>
+                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn w-12 h-12 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelBorder/50 hover:text-white transition-all duration-300 relative group" title="مكتبتي المحفوظة">
+                    <i class="fas fa-folder text-lg"></i>
+                    <span class="text-[9px] mt-1 font-medium hidden md:block">ملفاتي</span>
                 </button>
-                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 p-3 md:px-4 md:py-3 rounded-xl text-textMuted hover:bg-panelBorder hover:text-white bg-transparent">
-                    <i class="fas fa-cog text-xl flex-shrink-0"></i><span class="hidden md:block">الإعدادات</span>
+                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn w-12 h-12 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelBorder/50 hover:text-white transition-all duration-300 relative group" title="الإعدادات">
+                    <i class="fas fa-cog text-lg"></i>
+                    <span class="text-[9px] mt-1 font-medium hidden md:block">الإعدادات</span>
                 </button>
             </nav>
         </div>
         
-        <!-- زر تيليجرام السفلية بهوامش مصغرة ومحمية تماماً من القص أو التداخل -->
-        <div class="p-2 md:p-4 border-t border-panelBorder">
-            <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="btn w-full flex items-center justify-center md:justify-start gap-3 p-3 md:px-4 md:py-3 rounded-xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20">
-                <i class="fab fa-telegram-plane text-xl flex-shrink-0"></i><span class="hidden md:block font-bold text-sm truncate" dir="ltr">@{BOT_USERNAME}</span>
+        <!-- رابط البوت السفلي المدمج -->
+        <div class="p-2 border-t border-panelBorder flex justify-center">
+            <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="w-12 h-12 rounded-2xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/25 flex items-center justify-center transition-colors" title="افتح البوت">
+                <i class="fab fa-telegram-plane text-xl"></i>
             </a>
         </div>
     </aside>
 
-    <!-- تعديل مساحة المحتوى لتفادي المشغل السفلي بهوامش سفلية أوسع -->
-    <main class="flex-1 h-[100dvh] overflow-y-auto pb-36 md:pb-28 relative scroll-smooth">
+    <!-- مساحة عرض المحتوى الرئيسية -->
+    <main class="flex-1 h-[100dvh] overflow-y-auto pb-24 relative scroll-smooth bg-gradient-to-tr from-[#020203] via-[#050508] to-[#0a0a10]">
         
-        <!-- قسم البحث والنتائج -->
+        <!-- قسم البحث السريع -->
         <section id="searchView" class="view-section active p-4 md:p-8 max-w-4xl mx-auto">
-            <div class="bg-panel rounded-3xl p-6 md:p-8 border border-panelBorder mb-6 relative overflow-hidden">
-                <div class="absolute top-0 left-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl"></div>
-                <h2 class="text-2xl font-bold mb-2 text-white relative z-10">البحث السريع ⚡</h2>
-                <p class="text-textMuted mb-6 text-sm relative z-10">الصق رابط المقطع هنا أو ابحث باسمه مباشرة.</p>
+            <div class="bg-panel/60 backdrop-blur-md rounded-3xl p-6 md:p-8 border border-panelBorder/60 mb-6 relative overflow-hidden shadow-2xl">
+                <div class="absolute -top-10 -left-10 w-44 h-44 bg-accent/5 rounded-full blur-3xl"></div>
                 
-                <div class="flex flex-col md:flex-row gap-4 relative z-10">
-                    <input type="text" id="url" placeholder="الرابط أو الكلمة البحثية..." class="modern-input flex-1">
-                    <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
+                <h2 class="text-2xl md:text-3xl font-black mb-2 text-white flex items-center gap-2">
+                    <span class="bg-gradient-to-r from-accent to-fuchsia-500 bg-clip-text text-transparent">PlayZone Cloud</span> ⚡
+                </h2>
+                <p class="text-textMuted mb-6 text-sm">ابحث عن مقاطع الفيديو والأغاني، شاهد الإعلان السريع، وحمّلها فوراً وبأعلى جودة إلى سيرفرك الشخصي وهاتفك.</p>
+                
+                <div class="flex flex-col md:flex-row gap-3">
+                    <input type="text" id="url" placeholder="أدخل رابط المقطع أو ابحث باسمه مباشرة..." class="modern-input flex-1">
+                    <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-36 shadow-lg shadow-accent/25">
+                        <i class="fas fa-search"></i> ابحث الآن
+                    </button>
                 </div>
                 
-                <!-- حاوية نتائج البحث المُعاد برمجتها (إظهار 5 خيارات تحميل عمودية بالكامل) -->
-                <div id="searchResults" class="hidden mt-8 bg-[#18181b] border border-panelBorder rounded-3xl p-4 md:p-5 shadow-xl">
-                    <div class="mb-4 pb-3 border-b border-panelBorder flex justify-between items-center">
-                        <h3 class="text-white font-bold text-base md:text-lg flex items-center gap-2">🎬 اختر المقطع المطلوب:</h3>
-                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2 bg-bgDark rounded-full transition-colors flex-shrink-0"><i class="fas fa-times"></i></button>
+                <!-- نتائج البحث المتجاوبة كلياً -->
+                <div id="searchResults" class="hidden mt-8 bg-black/40 border border-panelBorder rounded-2xl p-4">
+                    <div class="mb-4 pb-3 border-b border-panelBorder/60 flex justify-between items-center">
+                        <h3 class="text-white font-bold text-sm md:text-base flex items-center gap-2">🎬 نتائج البحث المقترحة:</h3>
+                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2"><i class="fas fa-times"></i></button>
                     </div>
-                    <!-- قائمة الـ 5 مقاطع المحمية من الانضغاط وبدون أرقام -->
                     <div id="searchResultsList" class="flex flex-col gap-3 w-full"></div>
                 </div>
             </div>
 
-            <!-- بطاقة المعاينة والتحكم بعد اختيار مقطع -->
-            <div id="previewBox" class="hidden bg-panel rounded-3xl p-6 border border-panelBorder">
+            <!-- بطاقة المعاينة والتنزيل الذكية -->
+            <div id="previewBox" class="hidden bg-panel/60 backdrop-blur-md rounded-3xl p-6 border border-panelBorder/60 shadow-2xl">
                 <div class="flex flex-col md:flex-row gap-6 items-center">
                     <div class="w-full md:w-1/3">
-                        <img id="thumb" class="w-full rounded-xl object-cover aspect-video shadow-md border border-panelBorder">
+                        <img id="thumb" class="w-full rounded-2xl object-cover aspect-video shadow-lg border border-panelBorder">
                     </div>
                     <div class="w-full md:w-2/3 space-y-4">
                         <h3 id="title" class="font-bold text-lg text-white line-clamp-2"></h3>
                         
-                        <div id="adGate" class="bg-bgDark border border-panelBorder p-4 rounded-xl text-center">
-                            <p class="text-sm mb-3 text-textMuted font-medium"><i class="fas fa-info-circle text-accent ml-1"></i> للتحميل، يجب مشاهدة الإعلان لعدة ثوانٍ ثم الرجوع هنا للتحقق.</p>
+                        <div id="adGate" class="bg-black/50 border border-panelBorder p-4 rounded-2xl text-center">
+                            <p class="text-sm mb-3 text-textMuted font-medium"><i class="fas fa-info-circle text-accent ml-1"></i> يرجى مشاهدة إعلان التمويل لثوانٍ معدودة لبدء التحميل والتحويل.</p>
                             <div class="flex flex-col sm:flex-row gap-3">
-                                <a href="{AD_LINK}" target="_blank" onclick="startAdTimer()" class="btn bg-tgBlue text-white flex-1 hover:bg-blue-500"><i class="fas fa-eye"></i> 1. مشاهدة الإعلان</a>
-                                <button id="verifyBtn" disabled class="btn bg-panel text-textMuted flex-1 cursor-not-allowed border border-panelBorder"><i class="fas fa-lock"></i> 2. التحقق للتحميل</button>
+                                <a href="{AD_LINK}" target="_blank" onclick="startAdTimer()" class="btn bg-blue-600 text-white flex-1 hover:bg-blue-500"><i class="fas fa-eye"></i> 1. مشاهدة الإعلان الممول</a>
+                                <button id="verifyBtn" disabled class="btn bg-panel text-textMuted flex-1 cursor-not-allowed border border-panelBorder"><i class="fas fa-lock"></i> 2. تحقق وفك القفل</button>
                             </div>
                         </div>
 
                         <div id="dlOptions" class="hidden space-y-4">
                             <div class="grid grid-cols-2 gap-3">
-                                <select id="mode" onchange="toggleRes()" class="modern-input bg-bgDark py-2 text-sm"><option value="video">🎬 فيديو (MP4)</option><option value="audio">🎵 صوت (MP3)</option></select>
-                                <select id="resolution" class="modern-input bg-bgDark py-2 text-sm"><option value="480">جودة 480p</option><option value="720" selected>جودة 720p</option></select>
+                                <select id="mode" onchange="toggleRes()" class="modern-input bg-black/60 py-2.5 text-sm"><option value="video">🎬 فيديو (MP4)</option><option value="audio">🎵 صوت (MP3)</option></select>
+                                <select id="resolution" class="modern-input bg-black/60 py-2.5 text-sm"><option value="480">جودة 480p</option><option value="720" selected>جودة 720p</option></select>
                             </div>
-                            <button onclick="startDownload()" class="btn bg-accent text-white w-full hover:bg-accentHover shadow-lg shadow-accent/30"><i class="fas fa-download"></i> بدء التحميل الآن</button>
+                            <button onclick="startDownload()" class="btn bg-gradient-to-r from-accent to-fuchsia-600 text-white w-full hover:from-accentHover hover:to-fuchsia-700 shadow-xl shadow-accent/20">
+                                <i class="fas fa-download"></i> بدء تنزيل وتحويل الملف
+                            </button>
                         </div>
 
-                        <div id="progressBox" class="hidden bg-bgDark p-5 rounded-xl border border-panelBorder">
+                        <div id="progressBox" class="hidden bg-black/50 p-5 rounded-2xl border border-panelBorder">
                             <div class="flex justify-between items-center mb-3">
-                                <span id="progStatus" class="text-accent font-bold text-sm flex items-center gap-2"><i class="fas fa-circle-notch fa-spin"></i> جاري التجهيز...</span>
-                                <span id="progPercent" class="font-mono font-bold text-white text-lg">0%</span>
+                                <span id="progStatus" class="text-accent font-bold text-xs flex items-center gap-2"><i class="fas fa-circle-notch fa-spin"></i> جاري إرسال الطلب...</span>
+                                <span id="progPercent" class="font-mono font-bold text-white text-base">0%</span>
                             </div>
-                            <div class="w-full bg-panel rounded-full h-3 mb-2 overflow-hidden relative">
-                                <div id="progBar" class="bg-gradient-to-r from-accentHover to-accent h-full relative" style="width: 0%">
+                            <div class="w-full bg-zinc-900 rounded-full h-2.5 mb-2 overflow-hidden relative">
+                                <div id="progBar" class="bg-gradient-to-r from-accent to-fuchsia-500 h-full relative" style="width: 0%">
                                     <div class="shimmer-bg"></div>
                                 </div>
                             </div>
-                            <div class="flex justify-between text-xs text-textMuted font-mono mt-1">
+                            <div class="flex justify-between text-[11px] text-textMuted font-mono">
                                 <span id="progSize">-- MB / -- MB</span>
                                 <span id="progSpeed">-- MB/s</span>
                             </div>
                             
-                            <!-- زر التحميل المباشر للجهاز المضاف -->
-                            <div id="directDownloadArea" class="hidden mt-4 pt-4 border-t border-panelBorder">
-                                <a id="directDownloadBtn" href="#" download class="btn bg-green-600 text-white w-full hover:bg-green-500 shadow-lg shadow-green-500/20"><i class="fas fa-arrow-alt-circle-down"></i> تحميل الملف إلى جهازك مباشرة 💾</a>
+                            <div id="directDownloadArea" class="hidden mt-4 pt-4 border-t border-panelBorder/60">
+                                <a id="directDownloadBtn" href="#" download class="btn bg-emerald-600 text-white w-full hover:bg-emerald-500 shadow-lg shadow-emerald-600/20"><i class="fas fa-arrow-alt-circle-down"></i> تحميل وحفظ الملف مباشرة بجهازك 💾</a>
                             </div>
                         </div>
                     </div>
@@ -289,17 +342,23 @@ INDEX_HTML = f"""
             </div>
         </section>
 
-        <!-- الأقسام الأخرى المحفوظة -->
+        <!-- قسم مكتبة الملفات المحفوظة -->
         <section id="libraryView" class="view-section p-4 md:p-8 max-w-6xl mx-auto h-full flex flex-col">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                <h2 class="text-2xl font-bold text-white">ملفاتي المحفوظة</h2>
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                <div>
+                    <h2 class="text-2xl font-black text-white">ملفاتي المحفوظة 📂</h2>
+                    <p class="text-textMuted text-xs mt-1">المقاطع التي تم تحميلها مسبقاً وتخزينها سحابياً بجهازك.</p>
+                </div>
                 <div class="flex flex-wrap gap-2 w-full md:w-auto">
-                    <div class="relative flex-1 md:w-56">
-                        <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-textMuted"></i>
-                        <input type="text" id="libSearch" oninput="applyFilters()" placeholder="بحث سريع..." class="modern-input pl-3 pr-10 py-2 bg-panel text-sm">
+                    <div class="relative flex-1 md:w-64">
+                        <i class="fas fa-search absolute right-3.5 top-1/2 transform -translate-y-1/2 text-textMuted text-sm"></i>
+                        <input type="text" id="libSearch" oninput="applyFilters()" placeholder="ابحث في ملفاتك..." class="modern-input pl-3 pr-10 py-2 bg-panel/60 text-sm">
                     </div>
-                    <select id="libFilter" onchange="applyFilters()" class="modern-input py-2 px-3 w-auto bg-panel text-accent font-bold text-sm">
-                        <option value="all">الكل</option><option value="favorites">❤️ المفضلة</option><option value="audio">🎵 صوتيات</option><option value="video">🎬 فيديوهات</option>
+                    <select id="libFilter" onchange="applyFilters()" class="modern-input py-2 px-4 w-auto bg-panel text-accent font-bold text-sm">
+                        <option value="all">الكل</option>
+                        <option value="favorites">❤️ المفضلة</option>
+                        <option value="audio">🎵 الصوتيات</option>
+                        <option value="video">🎬 الفيديو</option>
                     </select>
                 </div>
             </div>
@@ -307,84 +366,152 @@ INDEX_HTML = f"""
             <div id="pagination" class="mt-8 flex justify-center items-center gap-3 pb-8"></div>
         </section>
 
+        <!-- قسم الإعدادات -->
         <section id="settingsView" class="view-section p-4 md:p-8 max-w-3xl mx-auto">
-            <h2 class="text-2xl font-bold mb-6 text-white">الإعدادات</h2>
+            <h2 class="text-2xl font-black mb-6 text-white">إعدادات التحكم ⚙️</h2>
             <div class="space-y-6">
-                <div class="bg-panel rounded-3xl p-6 border border-panelBorder shadow-sm">
-                    <h3 class="text-lg font-bold text-white mb-3 flex items-center gap-2"><i class="fab fa-telegram text-tgBlue"></i> حساب تيليجرام</h3>
-                    <p class="text-textMuted text-sm mb-4">اربط حسابك لاستلام الملفات عبر البوت.</p>
+                <div class="bg-panel rounded-3xl p-6 border border-panelBorder shadow-2xl">
+                    <h3 class="text-base font-bold text-white mb-3 flex items-center gap-2"><i class="fab fa-telegram text-tgBlue text-lg"></i> ربط حساب تيليجرام (مهم للمزامنة)</h3>
+                    <p class="text-textMuted text-xs mb-4">أدخل معرف حسابك الشخصي لتمكين السحابة من تمرير وإرسال أي ملف تقوم بتحميله إلى البوت فوراً.</p>
                     <div class="flex gap-3 mb-5">
-                        <input type="text" id="settingTgId" placeholder="الآي دي (ID)" class="modern-input font-mono bg-bgDark">
-                        <button onclick="updateTgId()" class="btn bg-tgBlue hover:bg-blue-500 text-white px-6">حفظ</button>
+                        <input type="text" id="settingTgId" placeholder="معرف المستخدم (User ID)" class="modern-input font-mono bg-black/45">
+                        <button onclick="updateTgId()" class="btn bg-tgBlue hover:bg-opacity-90 text-white px-6">حفظ الحساب</button>
                     </div>
-                    <div class="flex items-center justify-between p-4 bg-bgDark rounded-xl border border-panelBorder">
+                    <div class="flex items-center justify-between p-4 bg-black/40 rounded-2xl border border-panelBorder">
                         <div>
-                            <p class="font-bold text-white text-sm">إرسال تلقائي (أتمتة)</p>
-                            <p class="text-xs text-textMuted mt-1">إرسال الملف للبوت فور انتهاء تحميله.</p>
+                            <p class="font-bold text-white text-sm">الإرسال الفوري المؤتمت</p>
+                            <p class="text-xs text-textMuted mt-0.5">تمرير الفيديوهات والأغاني لدردشتك تلقائياً فور نجاح التحميل.</p>
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" id="autoForwardToggle" onchange="toggleAutoForward()" class="sr-only peer" checked>
-                            <div class="w-11 h-6 bg-panelBorder rounded-full peer peer-checked:after:-translate-x-full peer-checked:bg-accent after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                            <div class="w-11 h-6 bg-zinc-800 rounded-full peer peer-checked:after:-translate-x-full peer-checked:bg-accent after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
                         </label>
                     </div>
                 </div>
 
-                <div class="bg-panel rounded-3xl p-6 border border-panelBorder shadow-sm">
-                    <h3 class="text-lg font-bold text-white mb-3 flex items-center gap-2"><i class="fas fa-database text-red-400"></i> إدارة البيانات</h3>
-                    <div class="flex justify-between items-center p-4 bg-bgDark rounded-xl border border-panelBorder">
-                        <div><p class="font-bold text-white text-sm" id="libCountStatus">السجل (0)</p></div>
-                        <button onclick="clearAllLibrary()" class="btn bg-red-500/10 text-red-500 hover:bg-red-500/20 text-sm px-4">مسح السجل بالكامل</button>
+                <div class="bg-panel rounded-3xl p-6 border border-panelBorder shadow-2xl">
+                    <h3 class="text-base font-bold text-white mb-3 flex items-center gap-2"><i class="fas fa-database text-red-400"></i> صيانة البيانات وقاعدة السيرفر</h3>
+                    <div class="flex justify-between items-center p-4 bg-black/40 rounded-2xl border border-panelBorder">
+                        <div>
+                            <p class="font-bold text-white text-sm" id="libCountStatus">مجموع السجلات (0)</p>
+                            <p class="text-xs text-textMuted mt-0.5">قاعدة البيانات المحلية المتواجدة على متصفحك.</p>
+                        </div>
+                        <button onclick="clearAllLibrary()" class="btn bg-red-500/10 text-red-500 hover:bg-red-500/20 text-xs px-4">حذف السجل بالكامل</button>
                     </div>
                 </div>
             </div>
         </section>
     </main>
 
-    <!-- مشغل الموسيقى السفلي -->
-    <div id="musicPlayer" class="pb-safe">
-        <div class="progress-container" id="progressContainer" onclick="seekAudio(event)"><div class="progress-bar" id="audioProgressBar"></div></div>
-        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 p-3 md:px-6">
-            <div class="flex items-center gap-3 w-full md:w-1/3 overflow-hidden">
-                <div class="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent text-xl flex-shrink-0 border border-accent/30" id="playerThumbPlaceholder"><i class="fas fa-music"></i></div>
-                <div class="overflow-hidden">
-                    <p id="playerTitle" class="font-bold text-sm text-white truncate">جاهز للتشغيل</p>
-                    <p id="playerTime" class="text-xs text-textMuted font-mono mt-0.5">0:00 / 0:00</p>
+    <!-- ========================================================== -->
+    <!-- مشغل الوسائط العائم والمطور كلياً (يدعم الصوت والفيديو والتحريك) -->
+    <!-- ========================================================== -->
+    <div id="floatingPlayer" class="active">
+        <!-- ترويسة المشغل القابلة للسحب والتحريك -->
+        <div id="playerHeader" class="drag-handle p-3.5 bg-black/60 border-b border-panelBorder/50 flex items-center justify-between">
+            <div class="flex items-center gap-2 overflow-hidden flex-1">
+                <i class="fas fa-grip-vertical text-textMuted cursor-grab px-1 text-xs"></i>
+                <div class="overflow-hidden w-full">
+                    <p id="playerTitle" class="font-bold text-xs text-white truncate w-full">لا يوجد تشغيل حالياً</p>
                 </div>
             </div>
-            <div class="flex items-center justify-center gap-6 w-full md:w-1/3">
-                <button onclick="toggleShuffle()" id="shuffleBtn" class="text-textMuted hover:text-white transition-colors text-lg active:scale-90"><i class="fas fa-random"></i></button>
-                <button onclick="playPrev()" class="text-white hover:text-accent transition-colors text-xl active:scale-90"><i class="fas fa-step-backward"></i></button>
-                <button onclick="togglePlay()" id="playPauseBtn" class="w-12 h-12 rounded-full bg-accent text-white flex items-center justify-center text-lg active:scale-90 transition-transform"><i class="fas fa-play ml-1"></i></button>
-                <button onclick="playNext()" class="text-white hover:text-accent transition-colors text-xl active:scale-90"><i class="fas fa-step-forward"></i></button>
-                <button onclick="toggleRepeat()" id="repeatBtn" class="text-textMuted hover:text-white transition-colors relative text-lg active:scale-90"><i class="fas fa-redo"></i></button>
-            </div>
-            <div class="flex items-center justify-end gap-4 w-full md:w-1/3 hidden md:flex">
-                <button onclick="changeSpeed()" id="speedBtn" class="btn px-2 py-1 bg-transparent border border-panelBorder text-xs font-mono text-textMuted">1x</button>
-                <i class="fas fa-volume-up text-textMuted text-xs"></i>
-                <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-20 accent-accent">
-                <button onclick="closePlayer()" class="text-textMuted hover:text-red-400 p-2 ml-2 active:scale-90"><i class="fas fa-times text-lg"></i></button>
+            <!-- أزرار نافذة التحكم -->
+            <div class="flex items-center gap-2 flex-shrink-0 mr-2">
+                <button onclick="toggleCompactMode()" class="text-textMuted hover:text-accent p-1 transition-colors" title="تصغير/تكبير"><i class="fas fa-compress-alt text-xs"></i></button>
+                <button onclick="resetPlayerPosition()" class="text-textMuted hover:text-white p-1 transition-colors" title="إعادة تعيين الموضع"><i class="fas fa-redo-alt text-[10px]"></i></button>
+                <button onclick="closePlayer()" class="text-textMuted hover:text-red-400 p-1 transition-colors"><i class="fas fa-times text-xs"></i></button>
             </div>
         </div>
-        <audio id="globalAudioElement" ontimeupdate="updatePlayerProgress()" onended="handleAudioEnd()"></audio>
+
+        <!-- جسم المشغل التفاعلي -->
+        <div id="playerBody" class="p-4 transition-all duration-300">
+            <!-- 1. شاشة عرض الفيديو (تظهر فقط عند تشغيل فيديو) -->
+            <div id="videoContainer" class="hidden w-full aspect-video rounded-xl overflow-hidden bg-black mb-3 border border-panelBorder">
+                <video id="globalVideoElement" class="w-full h-full object-contain" ontimeupdate="updatePlayerProgress()" onended="handleMediaEnd()"></video>
+            </div>
+
+            <!-- 2. واجهة تشغيل الأغاني والصوتيات (تظهر فقط عند تشغيل صوت) -->
+            <div id="audioVisualizer" class="flex flex-col items-center justify-center py-4 mb-2">
+                <!-- قرص الفينيل الدوار -->
+                <div id="diskContainer" class="relative w-28 h-28 rounded-full border-4 border-zinc-800 shadow-xl overflow-hidden mb-3">
+                    <img id="playerCoverImg" src="https://via.placeholder.com/150" class="w-full h-full object-cover album-spin album-paused">
+                    <div class="absolute inset-0 bg-gradient-to-tr from-black/40 to-transparent"></div>
+                    <div class="absolute w-6 h-6 bg-zinc-950 rounded-full top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 border-2 border-zinc-700 flex items-center justify-center">
+                        <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+                    </div>
+                </div>
+                <!-- أعمدة التردد المتفاعلة محاكاة للصوت -->
+                <div id="visualizerBars" class="flex gap-1.5 items-end h-8 justify-center mt-1 hidden">
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                </div>
+            </div>
+
+            <!-- خط تتبع الوقت والتقدم -->
+            <div class="relative w-full h-1 bg-zinc-800 rounded-full mb-3 cursor-pointer group" id="progressContainer" onclick="seekMedia(event)">
+                <div id="mediaProgressBar" class="absolute h-full bg-accent rounded-full w-0 transition-all duration-100 relative">
+                    <div class="absolute -right-2 -top-1 w-3 h-3 bg-white border-2 border-accent rounded-full scale-0 group-hover:scale-100 transition-transform"></div>
+                </div>
+            </div>
+
+            <!-- معلومات وتفاصيل الوقت -->
+            <div class="flex justify-between items-center text-[10px] text-textMuted font-mono mb-4">
+                <span id="playerTime">0:00 / 0:00</span>
+                <span id="trackSource" class="bg-accent/10 text-accent px-1.5 py-0.5 rounded text-[9px] font-bold">MODE</span>
+            </div>
+
+            <!-- أزرار التحكم في التشغيل -->
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-3">
+                    <button onclick="toggleShuffle()" id="shuffleBtn" class="text-textMuted hover:text-white transition-colors text-sm" title="عشوائي"><i class="fas fa-random"></i></button>
+                    <button onclick="playPrev()" class="text-white hover:text-accent transition-colors text-base" title="السابق"><i class="fas fa-step-backward"></i></button>
+                </div>
+
+                <button onclick="togglePlay()" id="playPauseBtn" class="w-12 h-12 rounded-full bg-accent hover:bg-accentHover text-white flex items-center justify-center text-base shadow-lg shadow-accent/30 active:scale-95 transition-all" title="تشغيل / إيقاف">
+                    <i class="fas fa-play ml-0.5"></i>
+                </button>
+
+                <div class="flex items-center gap-3">
+                    <button onclick="playNext()" class="text-white hover:text-accent transition-colors text-base" title="التالي"><i class="fas fa-step-forward"></i></button>
+                    <button onclick="toggleRepeat()" id="repeatBtn" class="text-textMuted hover:text-white transition-colors text-sm" title="تكرار"><i class="fas fa-redo"></i></button>
+                </div>
+            </div>
+
+            <!-- خيارات إضافية متقدمة (سرعة التشغيل، التحكم بالصوت) -->
+            <div id="playerAdvancedRow" class="flex items-center justify-between mt-4 pt-3 border-t border-panelBorder/40">
+                <button onclick="changeSpeed()" id="speedBtn" class="text-[10px] font-bold font-mono px-2 py-1 border border-panelBorder rounded-lg text-textMuted hover:text-white transition-colors">1.0x</button>
+                
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleMute()" id="muteBtn" class="text-textMuted hover:text-white"><i class="fas fa-volume-up text-xs"></i></button>
+                    <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-16 h-1 bg-zinc-800 accent-accent rounded-lg cursor-pointer">
+                </div>
+
+                <button onclick="triggerPiP()" id="pipBtn" class="text-textMuted hover:text-white hidden" title="صورة داخل صورة"><i class="fas fa-clone text-xs"></i></button>
+            </div>
+        </div>
     </div>
 
-    <div id="tgModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] hidden flex-col items-center justify-center p-4">
+    <!-- نافذة ربط حساب تيليجرام المنبثقة -->
+    <div id="tgModal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[200] hidden flex-col items-center justify-center p-4">
         <div class="bg-panel border border-panelBorder p-6 rounded-3xl max-w-sm w-full text-center shadow-2xl" id="tgModalContent">
-            <div class="w-14 h-14 bg-tgBlue/20 text-tgBlue rounded-full flex items-center justify-center mx-auto mb-4 text-2xl"><i class="fab fa-telegram-plane"></i></div>
-            <h3 class="text-lg font-bold mb-2 text-white">يرجى ربط حسابك</h3>
-            <p class="text-textMuted text-sm mb-5">أدخل الـ ID الخاص بك لمرة واحدة للتمكن من الإرسال.</p>
-            <button onclick="window.open('https://t.me/{BOT_USERNAME}', '_blank')" class="btn bg-tgBlue text-white w-full mb-3 text-sm"><i class="fas fa-robot"></i> 1. نسخ الـ ID من البوت</button>
-            <input type="text" id="tgIdInput" placeholder="2. الصق الـ ID هنا" class="modern-input bg-bgDark text-center text-base mb-4 font-mono py-2">
+            <div class="w-14 h-14 bg-tgBlue/20 text-tgBlue rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl"><i class="fab fa-telegram-plane"></i></div>
+            <h3 class="text-lg font-bold mb-1 text-white">ربط السحاب بـ Telegram</h3>
+            <p class="text-textMuted text-xs mb-5">مطلوب معرف حسابك (User ID) ليتمكن البرنامج من إرسال وتمرير الملفات تلقائياً عبر البوت الخاص بك.</p>
+            <button onclick="window.open('https://t.me/{BOT_USERNAME}', '_blank')" class="btn bg-tgBlue text-white w-full mb-3 text-sm"><i class="fas fa-robot"></i> 1. الدخول للبوت ونسخ المعرف</button>
+            <input type="text" id="tgIdInput" placeholder="2. ألصق المعرف الرقمي هنا" class="modern-input bg-black/60 text-center text-sm mb-4 font-mono py-2">
             <div class="flex gap-2">
-                <button onclick="saveTgIdFromModal()" class="btn bg-accent text-white flex-1 text-sm">حفظ ومتابعة</button>
-                <button onclick="closeTgModal()" class="btn bg-panelBorder text-textMuted flex-1 hover:text-white text-sm">إلغاء</button>
+                <button onclick="saveTgIdFromModal()" class="btn bg-accent text-white flex-1 text-xs py-2">حفظ ومتابعة</button>
+                <button onclick="closeTgModal()" class="btn bg-panelBorder text-textMuted flex-1 hover:text-white text-xs py-2">تجاهل الآن</button>
             </div>
         </div>
     </div>
 
-    <!-- كود JavaScript آمن كلياً ضد تعارض الـ f-string وملفات البحث والتحكم -->
+    <!-- كود JavaScript آمن جداً ومبني للعمل مع السيرفر دون مشاكل -->
     <script>
-        // المتغيرات العامة
+        // المتغيرات السحابية العامة
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
         let currentUrl = "";
         let adWatched = false;
@@ -393,19 +520,26 @@ INDEX_HTML = f"""
         let isRepeat = false;
         let libraryPage = 1;
         const itemsPerPage = 6;
-        const audioEl = document.getElementById('globalAudioElement');
+        let isMuted = false;
+        let lastVolume = 1;
+        let currentPlayingMode = 'audio'; // 'audio' or 'video'
 
-        // التهيية عند تشغيل الصفحة
-        window.addEventListener('DOMContentLoaded', () => {{
-            if (window.Telegram && window.Telegram.WebApp) {{
+        // تحديد عناصر الوسائط والمشغل
+        const mediaContainer = document.getElementById('floatingPlayer');
+        const videoElement = document.getElementById('globalVideoElement');
+        let currentActiveMedia = videoElement; // تم توحيد تشغيل الصوت والفيديو باستخدام عنصر الـ <video> الذكي لتجنب تعارضات التشغيل
+
+        window.addEventListener('DOMContentLoaded', () => {
+            // التحقق والربط الذاتي ببيئة تيليجرام
+            if (window.Telegram && window.Telegram.WebApp) {
                 window.Telegram.WebApp.ready();
                 window.Telegram.WebApp.expand();
                 const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
-                if (tgUser && tgUser.id) {{
+                if (tgUser && tgUser.id) {
                     localStorage.setItem('pz_tg_id', tgUser.id);
-                    showToast("تم ربط حساب تيليجرام تلقائياً 🛡️", "success");
-                }}
-            }}
+                    showToast("تم مزامنة حساب تيليجرام تلقائياً 🛡️", "success");
+                }
+            }
             
             const savedId = localStorage.getItem('pz_tg_id') || "";
             document.getElementById('settingTgId').value = savedId;
@@ -416,61 +550,60 @@ INDEX_HTML = f"""
 
             updateLibraryCount();
             switchView('searchView');
-        }});
+            setupDraggable(mediaContainer, document.getElementById('playerHeader'));
+        });
 
-        function formatTime(secs) {{ 
+        function formatTime(secs) { 
             if(isNaN(secs) || secs === null) return "0:00"; 
             const m = Math.floor(secs / 60), s = Math.floor(secs % 60); 
             return m + ":" + (s < 10 ? '0' + s : s); 
-        }}
+        }
 
-        // نظام التنبيهات المنبثقة
-        function showToast(message, type = "success") {{
+        function showToast(message, type = "success") {
             const toast = document.getElementById('toast');
             toast.innerText = message;
             toast.className = "show";
-            if (type === "error") {{
+            if (type === "error") {
                 toast.style.background = "linear-gradient(135deg, #f43f5e, #e11d48)";
-            }} else {{
-                toast.style.background = "linear-gradient(135deg, #10b981, #059669)";
-            }}
-            setTimeout(() => {{ toast.className = ""; }}, 3000);
-        }}
+            } else {
+                toast.style.background = "linear-gradient(135deg, #a855f7, #7c3aed)";
+            }
+            setTimeout(() => { toast.className = ""; }, 3000);
+        }
 
-        // التنقل التفاعلي بين الصفحات
-        function switchView(viewId) {{
+        function switchView(viewId) {
             document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
             
-            document.querySelectorAll('.nav-btn').forEach(btn => {{
-                btn.classList.remove('bg-panelBorder', 'text-accent', 'font-bold');
-                btn.classList.add('text-textMuted', 'hover:bg-panelBorder', 'hover:text-white', 'bg-transparent');
-            }});
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-panelBorder', 'text-accent');
+                btn.classList.add('text-textMuted', 'hover:bg-panelBorder/50', 'hover:text-white');
+            });
             
             const activeBtn = document.getElementById('nav-' + viewId);
-            if (activeBtn) {{
-                activeBtn.classList.remove('text-textMuted', 'hover:bg-panelBorder', 'hover:text-white', 'bg-transparent');
-                activeBtn.classList.add('bg-panelBorder', 'text-accent', 'font-bold');
-            }}
+            if (activeBtn) {
+                activeBtn.classList.remove('text-textMuted', 'hover:bg-panelBorder/50', 'hover:text-white');
+                activeBtn.classList.add('bg-panelBorder', 'text-accent');
+            }
             
-            if (viewId === 'libraryView') {{
+            if (viewId === 'libraryView') {
                 applyFilters();
-            }}
-        }}
+            }
+        }
 
-        // نظام تصفية وعرض ملفات المكتبة (تمت إضافة زر التحميل للجهاز هنا)
-        function applyFilters() {{
+        // فلترة وعرض ملفات المكتبة الذكية
+        function applyFilters() {
             const query = document.getElementById('libSearch').value.toLowerCase();
             const filter = document.getElementById('libFilter').value;
             
-            let filtered = myLibrary.filter(item => {{
+            let filtered = myLibrary.filter(item => {
                 const matchesSearch = item.title.toLowerCase().includes(query) || (item.uploader && item.uploader.toLowerCase().includes(query));
                 let matchesType = true;
                 if (filter === 'favorites') matchesType = item.favorite;
                 else if (filter === 'audio') matchesType = item.is_audio;
                 else if (filter === 'video') matchesType = !item.is_audio;
                 return matchesSearch && matchesType;
-            }});
+            });
 
             const totalItems = filtered.length;
             const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -482,184 +615,180 @@ INDEX_HTML = f"""
             const container = document.getElementById('libraryContainer');
             container.innerHTML = "";
             
-            if (pageItems.length === 0) {{
+            if (pageItems.length === 0) {
                 container.innerHTML = `
-                    <div class="col-span-full py-12 text-center text-textMuted">
-                        <i class="fas fa-folder-open text-5xl mb-3 block"></i>
-                        لا توجد ملفات محفوظة حالياً مطابقة للتصفية.
+                    <div class="col-span-full py-16 text-center text-textMuted">
+                        <i class="fas fa-folder-open text-5xl mb-4 text-zinc-800 block"></i>
+                        لا توجد نتائج مطابقة لبحثك في ملفاتك.
                     </div>
                 `;
                 document.getElementById('pagination').innerHTML = "";
                 return;
-            }}
+            }
 
-            pageItems.forEach((item) => {{
+            pageItems.forEach((item) => {
                 const actualIndex = myLibrary.findIndex(i => i.id === item.id);
                 const durationStr = formatTime(item.duration || 0);
                 const favClass = item.favorite ? 'fas fa-heart text-red-500' : 'far fa-heart';
-                const icon = item.is_audio ? '<i class="fas fa-music text-accent"></i>' : '<i class="fas fa-video text-tgBlue"></i>';
+                const icon = item.is_audio ? '<i class="fas fa-music text-accent"></i>' : '<i class="fas fa-video text-fuchsia-500"></i>';
                 const fileExt = item.is_audio ? 'mp3' : 'mp4';
                 
                 container.innerHTML += `
-                    <div class="bg-panel rounded-2xl p-4 border border-panelBorder flex gap-4 items-center relative group">
-                        <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder flex-shrink-0 cursor-pointer" onclick="${{item.is_audio ? `playAudioTrack(${{actualIndex}})` : `watchVideo('${{item.url}}')`}}">
-                            <img src="${{item.thumb || 'https://via.placeholder.com/150'}}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150'">
-                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <i class="fas ${{item.is_audio ? 'fa-play' : 'fa-external-link-alt'}} text-white text-lg"></i>
+                    <div class="bg-panel/50 rounded-2xl p-4 border border-panelBorder/60 flex gap-4 items-center relative group hover:border-accent/40 transition-all duration-300">
+                        <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder/60 flex-shrink-0 cursor-pointer" onclick="playMediaTrack(${actualIndex})">
+                            <img src="${item.thumb || 'https://via.placeholder.com/150'}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150'">
+                            <div class="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i class="fas fa-play text-white text-base"></i>
                             </div>
-                            <div class="absolute bottom-1 right-1 bg-black/80 text-[10px] px-1 font-mono rounded text-white">${{durationStr}}</div>
+                            <div class="absolute bottom-1 right-1 bg-black/80 text-[9px] px-1.5 font-mono rounded text-white">${durationStr}</div>
                         </div>
                         <div class="flex-1 min-w-0 text-right">
-                            <h4 class="text-white font-bold text-sm truncate cursor-pointer" onclick="${{item.is_audio ? `playAudioTrack(${{actualIndex}})` : `watchVideo('${{item.url}}')`}}">${{item.title}}</h4>
-                            <p class="text-textMuted text-xs mt-1 truncate">${{icon}} ${{item.uploader || 'غير معروف'}}</p>
+                            <h4 class="text-white font-bold text-xs md:text-sm truncate cursor-pointer hover:text-accent" onclick="playMediaTrack(${actualIndex})">${item.title}</h4>
+                            <p class="text-textMuted text-[10px] md:text-xs mt-1 truncate">${icon} ${item.uploader || 'غير معروف'}</p>
                         </div>
-                        <div class="flex items-center gap-2 flex-row-reverse">
-                            <button onclick="deleteFromLibrary('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-400 active:scale-95 transition-transform" title="حذف">
-                                <i class="fas fa-trash-alt"></i>
+                        <div class="flex items-center gap-1.5 flex-row-reverse">
+                            <button onclick="deleteFromLibrary('${item.id}')" class="p-2 bg-black/40 rounded-xl border border-panelBorder/40 text-textMuted hover:text-red-400 active:scale-90 transition-transform" title="حذف">
+                                <i class="fas fa-trash-alt text-xs"></i>
                             </button>
                             
-                            <!-- زر تحميل للجهاز مضاف هنا -->
-                            <a href="${{item.url}}" download="${{item.title}}.${{fileExt}}" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-green-400 active:scale-95 transition-transform flex items-center justify-center" title="تحميل للجهاز">
-                                <i class="fas fa-download"></i>
+                            <a href="${item.url}" download="${item.title}.${fileExt}" class="p-2 bg-black/40 rounded-xl border border-panelBorder/40 text-textMuted hover:text-emerald-400 active:scale-90 transition-transform flex items-center justify-center" title="تحميل للجهاز">
+                                <i class="fas fa-download text-xs"></i>
                             </a>
                             
-                            <button onclick="triggerSendToTelegram('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-tgBlue active:scale-95 transition-transform" title="إرسال لتيليجرام">
-                                <i class="fab fa-telegram-plane"></i>
+                            <button onclick="triggerSendToTelegram('${item.id}')" class="p-2 bg-black/40 rounded-xl border border-panelBorder/40 text-textMuted hover:text-tgBlue active:scale-90 transition-transform" title="تمرير لتيليجرام">
+                                <i class="fab fa-telegram-plane text-xs"></i>
                             </button>
-                            <button onclick="toggleFavorite('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-500 active:scale-95 transition-transform" title="مفضلة">
-                                <i class="${{favClass}}"></i>
+                            <button onclick="toggleFavorite('${item.id}')" class="p-2 bg-black/40 rounded-xl border border-panelBorder/40 text-textMuted hover:text-red-500 active:scale-90 transition-transform" title="مفضلة">
+                                <i class="${favClass} text-xs"></i>
                             </button>
                         </div>
                     </div>
                 `;
-            }});
+            });
 
             renderPagination(totalPages);
-        }}
+        }
 
-        // دالة عرض الصفحات الآمنة من تداخل أقواس بايثون
-        function renderPagination(totalPages) {{
+        function renderPagination(totalPages) {
             const pagBox = document.getElementById('pagination');
             pagBox.innerHTML = "";
             if (totalPages <= 1) return;
 
             let html = '<button onclick="changePage(' + (libraryPage - 1) + ')" ' + (libraryPage === 1 ? 'disabled' : '') + ' class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">السابق</button>';
-            for (let i = 1; i <= totalPages; i++) {{
+            for (let i = 1; i <= totalPages; i++) {
                 const activeClass = (libraryPage === i) ? 'bg-accent text-white' : 'bg-panel border border-panelBorder text-textMuted';
                 html += '<button onclick="changePage(' + i + ')" class="btn px-3 py-1.5 ' + activeClass + ' text-xs font-mono">' + i + '</button>';
-            }}
+            }
             html += '<button onclick="changePage(' + (libraryPage + 1) + ')" ' + (libraryPage === totalPages ? 'disabled' : '') + ' class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">التالي</button>';
             pagBox.innerHTML = html;
-        }}
+        }
 
-        function changePage(page) {{
+        function changePage(page) {
             libraryPage = page;
             applyFilters();
-        }}
+        }
 
-        function toggleFavorite(id) {{
+        function toggleFavorite(id) {
             const index = myLibrary.findIndex(i => i.id === id);
-            if (index !== -1) {{
+            if (index !== -1) {
                 myLibrary[index].favorite = !myLibrary[index].favorite;
                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                 applyFilters();
-                showToast(myLibrary[index].favorite ? "تمت الإضافة للمفضلة ❤️" : "تمت الإزالة من المفضلة", "success");
-            }}
-        }}
+                showToast(myLibrary[index].favorite ? "أضيف للمفضلة ❤️" : "تمت الإزالة من المفضلة", "success");
+            }
+        }
 
-        function deleteFromLibrary(id) {{
-            if (confirm("هل أنت متأكد من حذف هذا الملف من قائمتك؟")) {{
+        function deleteFromLibrary(id) {
+            if (confirm("هل تريد حذف هذا الملف نهائياً من قائمتك؟")) {
                 myLibrary = myLibrary.filter(i => i.id !== id);
                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                 applyFilters();
                 updateLibraryCount();
                 showToast("تم الحذف بنجاح", "success");
-            }}
-        }}
+            }
+        }
 
-        // تحديث عدد ملفات المكتبة
-        function updateLibraryCount() {{
+        function updateLibraryCount() {
             const count = myLibrary.length;
-            document.getElementById('libCountStatus').innerText = "السجل (" + count + ")";
-        }}
+            document.getElementById('libCountStatus').innerText = "مجموع السجلات (" + count + ")";
+        }
 
-        function clearAllLibrary() {{
-            if (confirm("هل أنت متأكد من مسح السجل بالكامل؟")) {{
+        function clearAllLibrary() {
+            if (confirm("تحذير: هل أنت متأكد من رغبتك في مسح السجل بالكامل؟")) {
                 myLibrary = [];
                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                 applyFilters();
                 updateLibraryCount();
-                showToast("تم مسح السجل بالكامل", "success");
-            }}
-        }}
+                showToast("تم تصفير السجل", "success");
+            }
+        }
 
-        function updateTgId() {{
+        function updateTgId() {
             const tgId = document.getElementById('settingTgId').value.trim();
-            if (!tgId) {{
+            if (!tgId) {
                 localStorage.removeItem('pz_tg_id');
                 showToast("تم إزالة معرف تيليجرام", "success");
-            }} else {{
+            } else {
                 localStorage.setItem('pz_tg_id', tgId);
-                showToast("تم حفظ معرف تيليجرام بنجاح", "success");
-            }}
-        }}
+                showToast("تم ربط حساب تيليجرام الخاص بك", "success");
+            }
+        }
 
-        function toggleAutoForward() {{
+        function toggleAutoForward() {
             const val = document.getElementById('autoForwardToggle').checked;
             localStorage.setItem('pz_auto_tg', val ? 'true' : 'false');
-            showToast(val ? "تم تفعيل الإرسال التلقائي" : "تم إيقاف الإرسال التلقائي", "success");
-        }}
+            showToast(val ? "تم تنشيط الإرسال التلقائي" : "تم إيقاف الإرسال التلقائي", "success");
+        }
 
-        // إدارة الـ Modal لتيليجرام
+        // معالجة النافذة المنبثقة لتيليجرام
         let pendingTgItem = null;
-        function triggerSendToTelegram(id) {{
+        function triggerSendToTelegram(id) {
             const item = myLibrary.find(i => i.id === id);
             if (!item) return;
             
             const tgId = localStorage.getItem('pz_tg_id');
-            if (!tgId) {{
+            if (!tgId) {
                 pendingTgItem = item;
                 document.getElementById('tgIdInput').value = "";
                 document.getElementById('tgModal').classList.remove('hidden');
                 document.getElementById('tgModal').classList.add('flex');
-            }} else {{
+            } else {
                 sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
-            }}
-        }}
+            }
+        }
 
-        function closeTgModal() {{
+        function closeTgModal() {
             document.getElementById('tgModal').classList.add('hidden');
             document.getElementById('tgModal').classList.remove('flex');
             pendingTgItem = null;
-        }}
+        }
 
-        function saveTgIdFromModal() {{
+        function saveTgIdFromModal() {
             const val = document.getElementById('tgIdInput').value.trim();
-            if (!val) return showToast("الرجاء إدخال ID صالح", "error");
+            if (!val) return showToast("يرجى إدخال معرف رقمي صالح", "error");
             
             localStorage.setItem('pz_tg_id', val);
             document.getElementById('settingTgId').value = val;
             closeTgModal();
-            showToast("تم الحفظ بنجاح", "success");
+            showToast("تم الربط بنجاح!", "success");
             
-            if (pendingTgItem) {{
+            if (pendingTgItem) {
                 sendToTelegram(pendingTgItem.url, pendingTgItem.is_audio, false, pendingTgItem.title, pendingTgItem.uploader, pendingTgItem.duration, pendingTgItem.thumb);
-            }}
-        }}
+            }
+        }
 
-        // دالة الإرسال لتيليجرام
-        async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {{
+        async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {
             const chatId = localStorage.getItem('pz_tg_id');
-            if (!chatId) {{
-                if (auto) showToast("لم يتم ربط حساب تيليجرام بعد", "error");
+            if (!chatId) {
+                if (auto) showToast("فشل الإرسال التلقائي (لم يربط الحساب)", "error");
                 return;
-            }}
+            }
 
-            if (auto) showToast("جاري إرسال الملف تلقائياً للبوت... 🚀", "success");
-            else showToast("جاري إرسال الملف لبوت تيليجرام الخاص بك... 🚀", "success");
+            if (auto) showToast("جاري إرسال الملف تلقائياً لبوتك... 🚀", "success");
+            else showToast("جاري الإرسال لبوت تيليجرام الخاص بك... 🚀", "success");
 
-            try {{
-                const payload = {{
+            try {
+                const payload = {
                     file_url: fileUrl,
                     chat_id: chatId.toString(),
                     is_audio: isAudio,
@@ -667,84 +796,80 @@ INDEX_HTML = f"""
                     performer: performer,
                     duration: duration || 0,
                     thumb: thumb || ""
-                }};
+                };
 
-                const res = await fetch('/api/send_telegram', {{
+                const res = await fetch('/api/send_telegram', {
                     method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
-                }});
+                });
                 const data = await res.json();
-                if (data.success) {{
-                    showToast("تم إرسال الملف بنجاح إلى حسابك! 🎉", "success");
-                }} else {{
-                    showToast("خطأ بالإرسال: " + data.error, "error");
-                }}
-            }} catch(e) {{
-                showToast("خطأ أثناء الاتصال بالبوت", "error");
-            }}
-        }}
+                if (data.success) {
+                    showToast("وصل الملف لبوت تيليجرام بنجاح! 🎉", "success");
+                } else {
+                    showToast("خطأ أثناء الإرسال: " + data.error, "error");
+                }
+            } catch(e) {
+                showToast("خطأ في الربط ببوت الإرسال", "error");
+            }
+        }
 
-        function watchVideo(url) {{
-            window.open(url, '_blank');
-        }}
-
-        // معالجة البحث والتحقق من الروابط
-        async function processInput() {{
+        // معالجة البحث العام
+        async function processInput() {
             const input = document.getElementById('url').value.trim(); 
             if(!input) return;
-            const btn = document.getElementById('mainBtn'); btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البحث...'; btn.disabled = true;
+            const btn = document.getElementById('mainBtn'); btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري...'; btn.disabled = true;
             
             document.getElementById('previewBox').classList.add('hidden');
             
-            if (input.startsWith('http')) {{
+            if (input.startsWith('http')) {
                 await renderPreview(input);
-            }} else {{
-                try {{
-                    const res = await fetch('/api/search', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{query:input}})}});
+            } else {
+                try {
+                    const res = await fetch('/api/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:input})});
                     if(!res.ok) throw new Error();
                     const data = await res.json();
                     
-                    if(data.success && data.entries.length) {{
+                    if(data.success && data.entries.length) {
                         let box = document.getElementById('searchResultsList'); box.innerHTML = '';
                         
-                        data.entries.forEach((v) => {{
+                        data.entries.forEach((v) => {
                             const duration = formatTime(v.duration || 0);
                             box.innerHTML += `
-                            <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full flex items-center p-3 bg-panel rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-sm mb-1">
-                                <div class="flex-shrink-0 w-24 h-14 rounded-xl overflow-hidden border border-panelBorder shadow-sm relative ml-3">
-                                    <img src="${{v.thumbnail}}" class="w-full h-full object-cover">
-                                    <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono">${{duration}}</div>
+                            <div onclick="renderPreview('https://youtube.com/watch?v=${v.id}')" class="w-full flex items-center p-3 bg-panel border border-panelBorder rounded-2xl cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-md mb-1">
+                                <div class="flex-shrink-0 w-24 h-14 rounded-xl overflow-hidden border border-panelBorder relative ml-3">
+                                    <img src="${v.thumbnail}" class="w-full h-full object-cover">
+                                    <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono">${duration}</div>
                                 </div>
                                 <div class="flex-1 min-w-0 flex flex-col justify-center text-right">
-                                    <h4 class="text-white font-bold text-sm truncate w-full mb-1" dir="auto">${{v.title}}</h4>
-                                    <p class="text-textMuted text-xs truncate w-full" dir="auto">
-                                        <i class="fas fa-user-circle text-accent/70"></i> ${{v.uploader}}
+                                    <h4 class="text-white font-bold text-xs md:text-sm truncate w-full mb-1" dir="auto">${v.title}</h4>
+                                    <p class="text-textMuted text-[10px] md:text-xs truncate w-full" dir="auto">
+                                        <i class="fas fa-user-circle text-accent/70 ml-1"></i> ${v.uploader}
                                     </p>
                                 </div>
-                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent mr-2">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-black/40 border border-panelBorder flex items-center justify-center text-accent mr-2">
                                     <i class="fas fa-download text-xs"></i>
                                 </div>
                             </div>`;
-                        }});
+                        });
                         document.getElementById('searchResults').classList.remove('hidden');
-                    }} else showToast("لم يتم العثور على نتائج متوافقة", "error");
-                }} catch(e) {{ showToast("خطأ في الاتصال بالسيرفر", "error"); }}
-            }}
-            btn.innerHTML = '<i class="fas fa-search"></i> بحث'; btn.disabled = false;
-        }}
+                    } else showToast("لم نعثر على نتائج مطابقة", "error");
+                } catch(e) { showToast("خطأ في الاتصال بسيرفر البحث", "error"); }
+            }
+            btn.innerHTML = '<i class="fas fa-search"></i> ابحث الآن'; btn.disabled = false;
+        }
 
-        async function renderPreview(url) {{
+        async function renderPreview(url) {
             currentUrl = url; 
             document.getElementById('searchResults').classList.add('hidden');
             document.getElementById('previewBox').classList.add('hidden'); 
             document.getElementById('progressBox').classList.add('hidden');
             document.getElementById('dlOptions').classList.remove('hidden'); 
-            try {{
-                const res = await fetch('/api/preview', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{url:url}})}});
+            try {
+                const res = await fetch('/api/preview', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:url})});
                 if(!res.ok) throw new Error();
                 const data = await res.json();
-                if(data.success) {{
+                if(data.success) {
                     document.getElementById('previewBox').classList.remove('hidden');
                     document.getElementById('thumb').src = data.thumb;
                     document.getElementById('title').innerText = data.title;
@@ -753,41 +878,40 @@ INDEX_HTML = f"""
                     let vBtn = document.getElementById('verifyBtn');
                     vBtn.disabled = true; vBtn.onclick = null;
                     vBtn.className = "btn bg-panel text-textMuted flex-1 cursor-not-allowed border border-panelBorder";
-                    vBtn.innerHTML = '<i class="fas fa-lock"></i> 2. التحقق للتحميل'; adWatched = false;
-                }} else showToast("الرابط محمي أو غير متاح حالياً", "error");
-            }} catch(e) {{ showToast("حدث خطأ", "error"); }}
-        }}
+                    vBtn.innerHTML = '<i class="fas fa-lock"></i> 2. تحقق وفك القفل'; adWatched = false;
+                } else showToast("هذا الرابط غير متاح للتنزيل حالياً", "error");
+            } catch(e) { showToast("حدث خطأ في تحميل المعاينة", "error"); }
+        }
 
-        function toggleRes() {{ 
+        function toggleRes() { 
             document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; 
-        }}
+        }
 
-        function startAdTimer() {{
+        function startAdTimer() {
             if(adWatched) return;
             let btn = document.getElementById('verifyBtn'); let timeLeft = 5;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق (' + timeLeft + ')...';
-            let timer = setInterval(() => {{
+            let timer = setInterval(() => {
                 timeLeft--;
                 if(timeLeft > 0) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحقق (' + timeLeft + ')...'; 
-                else {{
+                else {
                     clearInterval(timer); btn.disabled = false; btn.onclick = unlockDownload; 
                     btn.className = "btn bg-green-600 text-white hover:bg-green-500 shadow-lg shadow-green-500/30 flex-1";
                     btn.innerHTML = "<i class='fas fa-unlock-alt'></i> 2. تحقق وفك القفل"; adWatched = true;
-                }}
-            }}, 1000);
-        }}
+                }
+            }, 1000);
+        }
 
-        function unlockDownload() {{
+        function unlockDownload() {
             if(!adWatched) return;
             document.getElementById('adGate').classList.add('hidden'); document.getElementById('dlOptions').classList.remove('hidden');
-        }}
+        }
 
-        async function startDownload() {{
+        async function startDownload() {
             const btn = event.currentTarget; const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري التجهيز...'; btn.disabled = true;
             document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
             
-            // إعادة ضبط وإخفاء زر التحميل المباشر للجهاز لتجنب خلط الروابط السابقة
             document.getElementById('directDownloadArea').classList.add('hidden');
             
             document.getElementById('progPercent').innerText = '0%';
@@ -797,30 +921,29 @@ INDEX_HTML = f"""
             document.getElementById('progStatus').innerHTML = '<i class="fas fa-cloud-download-alt"></i> جاري الاتصال...';
 
             const mode = document.getElementById('mode').value, resVal = document.getElementById('resolution').value;
-            try {{
-                const res = await fetch('/api/download', {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:JSON.stringify({{url:currentUrl, mode:mode, resolution:resVal}})}});
+            try {
+                const res = await fetch('/api/download', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:currentUrl, mode:mode, resolution:resVal})});
                 if(!res.ok) throw new Error();
                 const data = await res.json();
-                if(data.success) {{
-                    const interval = setInterval(async ()=>{{
-                        try {{
-                            const progRes = await fetch(`/api/progress/${{data.job_id}}`); const prog = await progRes.json();
-                            if(prog.status === 'downloading') {{
+                if(data.success) {
+                    const interval = setInterval(async ()=>{
+                        try {
+                            const progRes = await fetch(`/api/progress/${data.job_id}`); const prog = await progRes.json();
+                            if(prog.status === 'downloading') {
                                 document.getElementById('progStatus').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري تحميل الملف...';
                                 document.getElementById('progPercent').innerText = prog.percent + '%';
                                 document.getElementById('progBar').style.width = prog.percent + '%';
                                 document.getElementById('progSize').innerText = prog.dl_mb + ' / ' + prog.total_mb;
                                 document.getElementById('progSpeed').innerText = prog.spd_mb;
-                            }} 
-                            else if(prog.status === 'converting') {{ 
-                                document.getElementById('progStatus').innerHTML = '<i class="fas fa-cog fa-spin"></i> جاري دمج وتجهيز الملف النهائي...'; 
+                            } 
+                            else if(prog.status === 'converting') { 
+                                document.getElementById('progStatus').innerHTML = '<i class="fas fa-cog fa-spin"></i> جاري معالجة وتجهيز الملف النهائي...'; 
                                 document.getElementById('progBar').style.width = '100%'; 
-                            }} 
-                            else if(prog.status === 'completed') {{
+                            } 
+                            else if(prog.status === 'completed') {
                                 clearInterval(interval); 
                                 document.getElementById('progStatus').innerHTML = '<span class="text-green-400"><i class="fas fa-check-circle"></i> اكتمل التحميل بنجاح</span>';
                                 
-                                // تفعيل وتجهيز زر التحميل المباشر للجهاز فوراً
                                 const dlArea = document.getElementById('directDownloadArea');
                                 const dlBtn = document.getElementById('directDownloadBtn');
                                 dlBtn.href = prog.url;
@@ -828,172 +951,330 @@ INDEX_HTML = f"""
                                 dlBtn.setAttribute('download', prog.title + extension);
                                 dlArea.classList.remove('hidden');
                                 
-                                myLibrary.unshift({{ 
+                                myLibrary.unshift({ 
                                     id: Date.now().toString(), title: prog.title, url: prog.url, thumb: prog.thumb, 
                                     uploader: prog.uploader, duration: prog.duration,
                                     is_audio: prog.is_audio, timestamp: Date.now(), favorite: false 
-                                }});
+                                });
                                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                                 
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
-                                showToast("أضيف إلى ملفاتي", "success");
+                                showToast("أضيف إلى ملفاتك المحفوظة 🎉", "success");
 
-                                if(localStorage.getItem('pz_auto_tg') !== 'false') {{
+                                if(localStorage.getItem('pz_auto_tg') !== 'false') {
                                     sendToTelegram(prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
-                                }}
-                            }} 
-                            else if(prog.status === 'error') {{ clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; }}
-                        }} catch(err) {{}}
-                    }}, 800);
-                }}
-            }} catch(e) {{ showToast("فشل الاتصال", "error"); }}
+                                }
+                            } 
+                            else if(prog.status === 'error') { clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; }
+                        } catch(err) {}
+                    }, 800);
+                }
+            } catch(e) { showToast("فشل بدء عملية التحميل", "error"); }
             btn.innerHTML = original; btn.disabled = false;
-        }}
+        }
 
-        // =====================================
-        // مشغل الصوتيات المصحح والآمن كلياً
-        // =====================================
-        function playAudioTrack(index) {{
+        // =======================================================
+        // نظام مشغل الوسائط العائم الذكي (فيديو + صوت وموجات متفاعلة)
+        // =======================================================
+        
+        function playMediaTrack(index) {
             currentPlayingIndex = index;
             const track = myLibrary[index];
-            if (!track || !track.is_audio) return;
+            if (!track) return;
             
-            audioEl.src = track.url;
-            audioEl.play().catch(e => {{
-                showToast("لا يمكن تشغيل هذا الملف الصوتي", "error");
-            }});
+            // إظهار لوحة المشغل العائم في حال كانت مخفية
+            mediaContainer.style.display = 'block';
+            
+            // تحديد نوع الوسائط
+            if (track.is_audio) {
+                currentPlayingMode = 'audio';
+                document.getElementById('trackSource').innerText = '🎵 صوتي';
+                document.getElementById('videoContainer').classList.add('hidden');
+                document.getElementById('audioVisualizer').classList.remove('hidden');
+                document.getElementById('pipBtn').classList.add('hidden');
+                document.getElementById('playerCoverImg').src = track.thumb || 'https://via.placeholder.com/150';
+                
+                // تنشيط قرص الصوت والترددات التفاعلية
+                document.getElementById('playerCoverImg').classList.remove('album-paused');
+                document.getElementById('visualizerBars').classList.remove('hidden');
+            } else {
+                currentPlayingMode = 'video';
+                document.getElementById('trackSource').innerText = '🎬 سينمائي';
+                document.getElementById('videoContainer').classList.remove('hidden');
+                document.getElementById('audioVisualizer').classList.add('hidden');
+                document.getElementById('pipBtn').classList.remove('hidden');
+            }
+
+            // تحميل المقطع الصوتي أو الفيديو في الـ Player الموحد
+            videoElement.src = track.url;
+            videoElement.load();
+            videoElement.play()
+                .then(() => {
+                    document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
+                })
+                .catch(e => {
+                    showToast("لم نتمكن من تشغيل هذا الملف", "error");
+                    document.getElementById('playerCoverImg').classList.add('album-paused');
+                    document.getElementById('visualizerBars').classList.add('hidden');
+                });
             
             document.getElementById('playerTitle').innerText = track.title;
-            document.getElementById('playerThumbPlaceholder').innerHTML = '<img src="' + (track.thumb || 'https://via.placeholder.com/150') + '" class="w-full h-full object-cover rounded-full">';
             
-            document.getElementById('musicPlayer').classList.add('active');
-            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
-        }}
+            // إلغاء الوضع المصغر عند تشغيل مقطع جديد لتسهيل رؤيته
+            if (mediaContainer.classList.contains('compact')) {
+                toggleCompactMode();
+            }
+        }
 
-        function togglePlay() {{
-            if (audioEl.paused) {{
-                audioEl.play().then(() => {{
+        function togglePlay() {
+            if (videoElement.paused) {
+                videoElement.play().then(() => {
                     document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
-                }}).catch(e => {{}});
-            }} else {{
-                audioEl.pause();
-                document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-1"></i>';
-            }}
-        }}
+                    document.getElementById('playerCoverImg').classList.remove('album-paused');
+                    document.getElementById('visualizerBars').classList.remove('hidden');
+                }).catch(e => {});
+            } else {
+                videoElement.pause();
+                document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
+                document.getElementById('playerCoverImg').classList.add('album-paused');
+                document.getElementById('visualizerBars').classList.add('hidden');
+            }
+        }
 
-        function playNext() {{
-            const audioTracks = myLibrary.map((t, idx) => ({{t, idx}})).filter(x => x.t.is_audio);
-            if (audioTracks.length === 0) return;
+        function playNext() {
+            if (myLibrary.length === 0) return;
 
-            if (isShuffle) {{
-                const rand = Math.floor(Math.random() * audioTracks.length);
-                playAudioTrack(audioTracks[rand].idx);
-            }} else {{
-                const currentPosition = audioTracks.findIndex(x => x.idx === currentPlayingIndex);
-                if (currentPosition !== -1 && currentPosition < audioTracks.length - 1) {{
-                    playAudioTrack(audioTracks[currentPosition + 1].idx);
-                }} else if (audioTracks.length > 0) {{
-                    playAudioTrack(audioTracks[0].idx);
-                }}
-            }}
-        }}
+            if (isShuffle) {
+                const rand = Math.floor(Math.random() * myLibrary.length);
+                playMediaTrack(rand);
+            } else {
+                let nextIdx = currentPlayingIndex + 1;
+                if (nextIdx >= myLibrary.length) nextIdx = 0;
+                playMediaTrack(nextIdx);
+            }
+        }
 
-        function playPrev() {{
-            const audioTracks = myLibrary.map((t, idx) => ({{t, idx}})).filter(x => x.t.is_audio);
-            if (audioTracks.length === 0) return;
+        function playPrev() {
+            if (myLibrary.length === 0) return;
 
-            const currentPosition = audioTracks.findIndex(x => x.idx === currentPlayingIndex);
-            if (currentPosition > 0) {{
-                playAudioTrack(audioTracks[currentPosition - 1].idx);
-            }} else if (audioTracks.length > 0) {{
-                playAudioTrack(audioTracks[audioTracks.length - 1].idx);
-            }}
-        }}
+            let prevIdx = currentPlayingIndex - 1;
+            if (prevIdx < 0) prevIdx = myLibrary.length - 1;
+            playMediaTrack(prevIdx);
+        }
 
-        function toggleShuffle() {{
+        function toggleShuffle() {
             isShuffle = !isShuffle;
             const btn = document.getElementById('shuffleBtn');
-            if (isShuffle) {{
-                btn.classList.remove('text-textMuted');
-                btn.classList.add('text-accent');
-                showToast("تم تفعيل التشغيل العشوائي 🔀", "success");
-            }} else {{
-                btn.classList.remove('text-accent');
-                btn.classList.add('text-textMuted');
-            }}
-        }}
+            if (isShuffle) {
+                btn.className = "text-accent hover:text-white transition-colors text-sm";
+                showToast("تفعيل وضع التشغيل العشوائي 🔀", "success");
+            } else {
+                btn.className = "text-textMuted hover:text-white transition-colors text-sm";
+            }
+        }
 
-        function toggleRepeat() {{
+        function toggleRepeat() {
             isRepeat = !isRepeat;
             const btn = document.getElementById('repeatBtn');
-            if (isRepeat) {{
-                btn.classList.remove('text-textMuted');
-                btn.classList.add('text-accent');
-                showToast("تم تفعيل التكرار 🔁", "success");
-            }} else {{
-                btn.classList.remove('text-accent');
-                btn.classList.add('text-textMuted');
-            }}
-        }}
+            if (isRepeat) {
+                btn.className = "text-accent hover:text-white transition-colors text-sm";
+                showToast("تفعيل وضع تكرار المقطع 🔁", "success");
+            } else {
+                btn.className = "text-textMuted hover:text-white transition-colors text-sm";
+            }
+        }
 
-        function updatePlayerProgress() {{
-            const cur = audioEl.currentTime;
-            const dur = audioEl.duration;
+        function updatePlayerProgress() {
+            const cur = videoElement.currentTime;
+            const dur = videoElement.duration;
             if (isNaN(dur)) return;
             
             const pct = (cur / dur) * 100;
-            document.getElementById('audioProgressBar').style.width = pct + '%';
+            document.getElementById('mediaProgressBar').style.width = pct + '%';
             document.getElementById('playerTime').innerText = formatTime(cur) + ' / ' + formatTime(dur);
-        }}
+        }
 
-        function seekAudio(e) {{
+        function seekMedia(e) {
             const container = document.getElementById('progressContainer');
             const rect = container.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
             const pct = clickX / rect.width;
-            if (!isNaN(audioEl.duration)) {{
-                audioEl.currentTime = pct * audioEl.duration;
-            }}
-        }}
+            if (!isNaN(videoElement.duration)) {
+                videoElement.currentTime = pct * videoElement.duration;
+            }
+        }
 
-        function changeVolume() {{
+        function changeVolume() {
             const val = document.getElementById('volumeSlider').value;
-            audioEl.volume = val;
-        }}
+            videoElement.volume = val;
+            lastVolume = val;
+            
+            const muteIcon = document.getElementById('muteBtn').querySelector('i');
+            if (val == 0) {
+                muteIcon.className = "fas fa-volume-mute text-xs";
+                isMuted = true;
+            } else {
+                muteIcon.className = "fas fa-volume-up text-xs";
+                isMuted = false;
+            }
+        }
+
+        function toggleMute() {
+            const muteIcon = document.getElementById('muteBtn').querySelector('i');
+            if (isMuted) {
+                videoElement.volume = lastVolume || 1;
+                document.getElementById('volumeSlider').value = lastVolume || 1;
+                muteIcon.className = "fas fa-volume-up text-xs";
+                isMuted = false;
+            } else {
+                videoElement.volume = 0;
+                document.getElementById('volumeSlider').value = 0;
+                muteIcon.className = "fas fa-volume-mute text-xs";
+                isMuted = true;
+            }
+        }
 
         let currentSpeed = 1;
-        function changeSpeed() {{
+        function changeSpeed() {
             const speeds = [1, 1.25, 1.5, 1.75, 2];
             let idx = speeds.indexOf(currentSpeed);
             idx = (idx + 1) % speeds.length;
             currentSpeed = speeds[idx];
-            audioEl.playbackRate = currentSpeed;
+            videoElement.playbackRate = currentSpeed;
             document.getElementById('speedBtn').innerText = currentSpeed + 'x';
-        }}
+        }
 
-        function handleAudioEnd() {{
-            if (isRepeat) {{
-                audioEl.currentTime = 0;
-                audioEl.play().catch(e => {{}});
-            }} else {{
+        function handleMediaEnd() {
+            if (isRepeat) {
+                videoElement.currentTime = 0;
+                videoElement.play().catch(e => {});
+            } else {
                 playNext();
-            }}
-        }}
+            }
+        }
 
-        function closePlayer() {{
-            audioEl.pause();
-            document.getElementById('musicPlayer').classList.remove('active');
-        }}
+        function closePlayer() {
+            videoElement.pause();
+            mediaContainer.style.display = 'none';
+        }
+
+        // تفعيل وضع "صورة داخل صورة" (Picture in Picture)
+        function triggerPiP() {
+            if (document.pictureInPictureEnabled && videoElement) {
+                if (document.pictureInPictureElement) {
+                    document.exitPictureInPicture();
+                } else {
+                    videoElement.requestPictureInPicture();
+                }
+            }
+        }
+
+        // تبديل حجم المشغل بين المظهر الكامل والتصغير الذكي
+        function toggleCompactMode() {
+            const body = document.getElementById('playerBody');
+            const icon = event.currentTarget.querySelector('i');
+            
+            if (mediaContainer.classList.contains('compact')) {
+                mediaContainer.classList.remove('compact');
+                body.classList.remove('hidden');
+                icon.className = "fas fa-compress-alt text-xs";
+            } else {
+                mediaContainer.classList.add('compact');
+                body.classList.add('hidden');
+                icon.className = "fas fa-expand-alt text-xs";
+            }
+        }
+
+        function resetPlayerPosition() {
+            mediaContainer.style.top = 'auto';
+            mediaContainer.style.left = '30px';
+            mediaContainer.style.bottom = '30px';
+            mediaContainer.style.right = 'auto';
+            mediaContainer.style.transform = 'none';
+            showToast("تم إعادة تعيين مكان المشغل", "success");
+        }
+
+        // =======================================================
+        // كود تحريك وسحب مشغل الوسائط على الشاشة (Mouse & Touch)
+        // =======================================================
+        function setupDraggable(element, handle) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            
+            handle.onmousedown = dragMouseDown;
+            handle.ontouchstart = dragMouseDown;
+
+            function dragMouseDown(e) {
+                e = e || window.event;
+                if (e.type === 'mousedown' && e.button !== 0) return; // سحب بالزر الأيسر فقط
+                
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+                    // منع التحريك التلقائي المتعارض مع المتصفح
+                } else {
+                    return; // السماح للأزرار والمدخلات بالعمل فوراً
+                }
+
+                const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+
+                pos3 = clientX;
+                pos4 = clientY;
+                
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+                document.ontouchend = closeDragElement;
+                document.ontouchmove = elementDrag;
+                
+                element.style.transition = 'none'; // تعطيل الترانزيشن أثناء السحب المباشر
+            }
+
+            function elementDrag(e) {
+                e = e || window.event;
+                
+                const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+
+                pos1 = pos3 - clientX;
+                pos2 = pos4 - clientY;
+                pos3 = clientX;
+                pos4 = clientY;
+                
+                let newTop = element.offsetTop - pos2;
+                let newLeft = element.offsetLeft - pos1;
+                
+                // منع خروج المشغل تماماً من الشاشة وحمايته
+                const maxLeft = window.innerWidth - element.offsetWidth - 10;
+                const maxTop = window.innerHeight - element.offsetHeight - 10;
+                
+                newLeft = Math.max(10, Math.min(newLeft, maxLeft));
+                newTop = Math.max(10, Math.min(newTop, maxTop));
+                
+                element.style.top = newTop + "px";
+                element.style.left = newLeft + "px";
+                element.style.bottom = "auto";
+                element.style.right = "auto";
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+                document.ontouchend = null;
+                document.ontouchmove = null;
+                element.style.transition = 'width 0.3s ease, height 0.3s ease, opacity 0.3s ease';
+            }
+        }
     </script>
 </body>
 </html>
 """
 
+
 @app.get("/", response_class=HTMLResponse)
 async def home():
-    return HTMLResponse(content=INDEX_HTML)
+    # استبدال آمن للمتغيرات في القالب دون الإضرار بـ JavaScript المدمج
+    html = INDEX_HTML.replace("{BOT_USERNAME}", BOT_USERNAME).replace("{AD_LINK}", AD_LINK)
+    return HTMLResponse(content=html)
 
-# مصلح لمنع حدوث خطأ NoneType وحماية الفهرس
+
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
     try:
@@ -1119,7 +1400,7 @@ async def send_to_telegram(req: TelegramRequest):
             
         reply_markup = {
             "inline_keyboard": [
-                [{"text": "🌟 أعجبك البوت؟ شاركه", "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"}]
+                [{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]
             ]
         }
         
