@@ -113,6 +113,10 @@ async def post_init(app: Application):
 
 
 def main():
+    # تم نقل المؤقت إلى هنا ليعمل قبل أي عملية أخرى في النظام
+    logger.info("⏳ انتظار 10 ثوانٍ قبل بدء أي عملية في النظام...")
+    time.sleep(10)
+
     if not TOKEN: 
         raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
@@ -145,8 +149,6 @@ def main():
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_incoming_text))
     app.add_handler(CallbackQueryHandler(handle_callbacks))
 
-    logger.info("⏳ انتظار 10 ثوانٍ قبل بدء تشغيل البوت...")
-    time.sleep(10)
     logger.info("🚀 تم تشغيل البوت بنظام الإدارة المؤسسية (Enterprise Control Center) بنجاح.")
     
     # تشغيل البوت
