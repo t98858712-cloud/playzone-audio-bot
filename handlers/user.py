@@ -83,12 +83,18 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
+    # الكود الجديد ✅
     if getattr(update.message, "document", None) and is_admin(uid):
-        if update.message.document.file_name == "cookies.txt":
-            from core.config import COOKIES_FILE
+        valid_cookie_files = [
+            "cookies.txt", "cookies_youtube.txt", "cookies_tiktok.txt", 
+            "cookies_instagram.txt", "cookies_facebook.txt", "cookies_x.txt", "cookies_spotify.txt"
+        ]
+        if update.message.document.file_name in valid_cookie_files:
+            from core.config import COOKIES_DIR
+            target_path = COOKIES_DIR / update.message.document.file_name
             new_file = await context.bot.get_file(update.message.document.file_id)
-            await new_file.download_to_drive(COOKIES_FILE)
-            return await update.message.reply_text("✅ تم استلام وتحديث ملف الكوكيز (cookies.txt) بنجاح.")
+            await new_file.download_to_drive(target_path)
+            return await update.message.reply_text(f"✅ تم استلام وتحديث ملف كوكيز المنصة ({update.message.document.file_name}) بنجاح! 🎯")
 
     if uid in BANNED_USERS_CACHE: return
     maintenance = get_setting("maintenance", "0")
