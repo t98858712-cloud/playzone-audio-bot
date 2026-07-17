@@ -1,12 +1,13 @@
 # Netscape HTTP Cookie File
 # https://curl.haxx.se/rfc/cookie_spec.html
 # This is a generated file! Do not edit.
-
-# ==========================================
-# 1. TIKTOK
-# ==========================================
 .tiktok.com	TRUE	/	TRUE	0	tt_csrf_token	QwuRnmnI-D45BikMSgoAlS5L8GZmXgE4FY6A
 .tiktok.com	TRUE	/	TRUE	1798560901	tt_chain_token	CAHv70oASBMA6o7GTp10/w==
+www.tiktok.com	FALSE	/	FALSE	0	x-web-secsdk-uid	6b1d5920-6852-4868-89cc-3e5244029d9d
+.www.tiktok.com	TRUE	/	TRUE	1808928902	tiktok_webapp_theme_source	auto
+.www.tiktok.com	TRUE	/	TRUE	1808928902	tiktok_webapp_theme	dark
+.www.tiktok.com	TRUE	/	TRUE	1808928851	delay_guest_mode_vid	5
+www.tiktok.com	FALSE	/	FALSE	1798560854	g_state	{"i_l":0,"i_ll":1783008854916,"i_b":"iy6Z77cPyUQYFO/3LAgMOCRz2fjUag9xLiNggcNCJe4","i_e":{"enable_itp_optimization":24},"i_et":1783008854916}
 .tiktok.com	TRUE	/	TRUE	0	s_v_web_id	verify_mr3pg765_Q5EKFgPU_ejYp_4bzp_A6od_pJkoGaAuqTgu
 .tiktok.com	TRUE	/	TRUE	1788192895	multi_sids	7657964620707169281%3A92e3d4d1cdcbc6f053767f0f72ee2dcf
 .tiktok.com	TRUE	/	TRUE	1788192895	cmpl_token	AgQYAPOn_hfkTtK6eGCYP_BdOPAnF378HP-WLGCm6bo
@@ -26,41 +27,28 @@
 .tiktok.com	TRUE	/	FALSE	1814544907	store-country-code-src	uid
 .tiktok.com	TRUE	/	FALSE	1814544907	tt-target-idc	alisg
 .tiktok.com	TRUE	/	FALSE	1814544907	tt-target-idc-sign	HsWA4_tMX7NFdt2UGUrkA_YUyA5ynQknMeY1NkxWlXIUgcAiwEE5GWdaBCb2lfKCT1kCvL-M7ax3_-GxdoLhZMOz7tv63T9w-TVL5TMiAm8XSncHRwNj4AViv_iq9sgevtEkWz5cwxIztFUC41QK74VVGJLVJMd2kUI__jTKSJVQyzgrjQmRnnjPvVsKq8BMrE9ymSMFHE2G7LHjxGyWAPxdrQrQbXpnWdnh0DORm0R61JKPP0zaa1unC4eGb8BNkHtrC6l_2YEeW5zU0EMkc9qBXFt4HUSSJjhya_uLgJefDr45FpYVqlND0cYdJrjDqBzKWHDYfk3Mtqp4R19iSj6dRozZTU-4j131QNyS-fzdj1ySg2zxga-uxAK6g2P0QII5gbXkrHu-Em_3fYpWmsFO5w0UUBYzXvssIOQRJBfIXYnGTMLomGkaTZbgzjD5h03VzPYfiUe1UupufyJHHa4WQZYeC3VLS8jnLBszdr498yb7UWYAGz53LpB-xza5
-.tiktok.com	TRUE	/	FALSE	1814544906	ttwid	1%7Cg3wSTZRcySCC_iTXsOfNgzNjCZuCivfAD-sY7OpCtao%7C1783008907%7Ca991affd96ba54a50ed16639d84f50d023f9c4375ab3ab0f38ad80076875f278
+www.tiktok.com	FALSE	/	FALSE	1790784895	last_login_method	google
+.www.tiktok.com	TRUE	/	FALSE	0	passport_fe_beating_status	true
+www.tiktok.com	FALSE	/	FALSE	1783095306	tt_ticket_guard_has_set_public_key	1
+.tiktok.com	TRUE	/	TRUE	1814544906	ttwid	1%7Cg3wSTZRcySCC_iTXsOfNgzNjCZuCivfAD-sY7OpCtao%7C1783008907%7Ca991affd96ba54a50ed16639d84f50d023f9c4375ab3ab0f38ad80076875f278
 .tiktok.com	TRUE	/	FALSE	1814544907	store-country-sign	MEIEDNrCOrYkr2y8IeLcyAQgIW6UQN2DS7KoSufEfbW0igq1OJB9I_dN-ZM6oXAE9HkEEGTH_ldlbuUuTt9Wp82o8ps
 .tiktok.com	TRUE	/	FALSE	1814544907	odin_tt	0553f5801c204c0577b646f1536b9374965c97bdee5dff34e13a205ea8b3f36258fd4807f23abfc21577b5495daae7087d2d0d032eb49453e75a24d547654fe4
-.tiktok.com	TRUE	/	TRUE	1783872909	msToken	SSR9eSAkuP3f9G2i48Bgb_TSR3MNbtNASFUxaoopMMJia3gkqU6bL_9LMBYkt7tTXxqVGpRl9LefQRhVLthWV_ozN4aGoDfmQaSCeQTCxlGPUEJg9AJvYOO6mzrvIocFK4xkptx3sK8B0fC8ZM11C3Ex_VyEqqw=
-www.tiktok.com	FALSE	/	FALSE	0	x-web-secsdk-uid	6b1d5920-6852-4868-89cc-3e5244029d9d
-www.tiktok.com	FALSE	/	FALSE	1798560854	g_state	{"i_l":0,"i_ll":1783008854916,"i_b":"iy6Z77cPyUQYFO/3LAgMOCRz2fjUag9xLiNggcNCJe4","i_e":{"enable_itp_optimization":24},"i_et":1783008854916}
-www.tiktok.com	FALSE	/	FALSE	1790784895	last_login_method	google
-www.tiktok.com	FALSE	/	FALSE	1783095306	tt_ticket_guard_has_set_public_key	1
-www.tiktok.com	FALSE	/	FALSE	1790784909	msToken	SSR9eSAkuP3f9G2i48Bgb_TSR3MNbtNASFUxaoopMMJia3gkqU6bL_9LMBYkt7tTXxqVGpRl9LefQRhVLthWV_ozN4aGoDfmQaSCeQTCxlGPUEJg9AJvYOO6mzrvIocFK4xkptx3sK8B0fC8ZM11C3Ex_VyEqqw=
-.www.tiktok.com	TRUE	/	TRUE	1808928902	tiktok_webapp_theme_source	auto
-.www.tiktok.com	TRUE	/	TRUE	1808928902	tiktok_webapp_theme	dark
-.www.tiktok.com	TRUE	/	TRUE	1808928851	delay_guest_mode_vid	5
-.www.tiktok.com	TRUE	/	FALSE	0	passport_fe_beating_status	true
 .www.tiktok.com	TRUE	/	TRUE	1783613708	perf_feed_cache	{%22expireTimestamp%22:1783612800000%2C%22itemIds%22:[%227637630048433900820%22%2C%227625893083934182663%22%2C%227626859152798698759%22]}
-
-# ==========================================
-# 2. X (TWITTER)
-# ==========================================
+.tiktok.com	TRUE	/	TRUE	1783872909	msToken	SSR9eSAkuP3f9G2i48Bgb_TSR3MNbtNASFUxaoopMMJia3gkqU6bL_9LMBYkt7tTXxqVGpRl9LefQRhVLthWV_ozN4aGoDfmQaSCeQTCxlGPUEJg9AJvYOO6mzrvIocFK4xkptx3sK8B0fC8ZM11C3Ex_VyEqqw=
+www.tiktok.com	FALSE	/	FALSE	1790784909	msToken	SSR9eSAkuP3f9G2i48Bgb_TSR3MNbtNASFUxaoopMMJia3gkqU6bL_9LMBYkt7tTXxqVGpRl9LefQRhVLthWV_ozN4aGoDfmQaSCeQTCxlGPUEJg9AJvYOO6mzrvIocFK4xkptx3sK8B0fC8ZM11C3Ex_VyEqqw=
 .x.com	TRUE	/	TRUE	1817569121	guest_id_marketing	v1%3A178300896641494053
 .x.com	TRUE	/	TRUE	1817569121	guest_id_ads	v1%3A178300896641494053
 .x.com	TRUE	/	TRUE	1817568965	guest_id	v1%3A178300896641494053
 .x.com	TRUE	/	TRUE	1817568966	personalization_id	"v1_GqgFwsxEO2HX8g4ThUq8Hw=="
 .x.com	TRUE	/	TRUE	1783017966	gt	2072715951980806526
+x.com	FALSE	/	FALSE	1817569122	__cuid	ad32e9d5-67f4-4145-adbc-c6772148e9ce
 .x.com	TRUE	/	FALSE	1817569122	__cuid	ad32e9d5-67f4-4145-adbc-c6772148e9ce
+x.com	FALSE	/	FALSE	1798560990	g_state	{"i_l":0,"i_ll":1783008978906,"i_e":{"enable_itp_optimization":24},"i_et":1783008978906}
 .x.com	TRUE	/	TRUE	1814545122	twid	u%3D2072716071560171520
 .x.com	TRUE	/	TRUE	1814545048	auth_token	44163ec8122d3d74d6422c8b949dd9a2dff2e17c
 .x.com	TRUE	/	TRUE	1783010848	__cf_bm	Q6MJetfoJxpaG8Qk5j3zy6VT6MQiXnPAsEUuglA0Ddw-1783009047.6500318-1.0.1.1-X4gQ7qHBJXeFDbas3iu53SHYOiCt5J.Z7dCmbkAGUTVniON5RdeK1k1uWZ7zd96Zh5PiPIMl1dMy7Bcumgx3Cqq15L2isDhFmgqTPLSuid_AJMTWOlZW5fzeTyhJnS8J
-.x.com	TRUE	/	TRUE	1817569048	ct0	e8c16d4bb1b718cf115e6f08fcabc1decb32683593bc60cfe7916121c223db9676d36b3029e7298061483ca979bbd42ddd1df4da78d838bf27ec00ac4b1c96d1a10af2165ba56151ea6f406151f6468d
-x.com	FALSE	/	FALSE	1817569122	__cuid	ad32e9d5-67f4-4145-adbc-c6772148e9ce
-x.com	FALSE	/	FALSE	1798560990	g_state	{"i_l":0,"i_ll":1783008978906,"i_e":{"enable_itp_optimization":24},"i_et":1783008978906}
 x.com	FALSE	/	FALSE	0	lang	en
-
-# ==========================================
-# 3. FACEBOOK
-# ==========================================
+.x.com	TRUE	/	TRUE	1817569048	ct0	e8c16d4bb1b718cf115e6f08fcabc1decb32683593bc60cfe7916121c223db9676d36b3029e7298061483ca979bbd42ddd1df4da78d838bf27ec00ac4b1c96d1a10af2165ba56151ea6f406151f6468d
 .facebook.com	TRUE	/	TRUE	1816839465	datr	KG07av3VHumQz4qNbSQPmECK
 .facebook.com	TRUE	/	TRUE	1816839513	sb	KG07aqo2HZCKB_eI2c5soZSV
 .facebook.com	TRUE	/	TRUE	1814544951	c_user	100084440962909
@@ -71,10 +59,6 @@ x.com	FALSE	/	FALSE	0	lang	en
 .facebook.com	TRUE	/	TRUE	1783613752	wd	639x593
 .facebook.com	TRUE	/	TRUE	1783613752	dpr	1.5
 .facebook.com	TRUE	/	TRUE	0	presence	C%7B%22t3%22%3A%5B%5D%2C%22utc3%22%3A1783008952655%2C%22v%22%3A1%7D
-
-# ==========================================
-# 4. INSTAGRAM
-# ==========================================
 .instagram.com	TRUE	/	TRUE	1816783067	datr	2pA6aviW32aHGBQD1zYtWjkE
 .instagram.com	TRUE	/	TRUE	1813759067	ig_did	9115A5CF-1EFD-45E5-88B4-51CC842398F3
 .instagram.com	TRUE	/	TRUE	1816783067	mid	ajqQ2gALAAGOEaBIJyrAC_5XLiiw
@@ -86,10 +70,6 @@ x.com	FALSE	/	FALSE	0	lang	en
 .instagram.com	TRUE	/	TRUE	1783613725	dpr	1.5
 .instagram.com	TRUE	/	TRUE	1814544928	sessionid	15950705177%3AkkmgLyhv9Vdnz0%3A25%3AAYjQgf230PPUoE4AliAfpPhV5xI1Zq_Sc0l7YKSp3Q
 .instagram.com	TRUE	/	TRUE	0	rur	"RVA\05415950705177\0541814544929:01ffcfd8a4e45d4cfb6fcc91c3e134b7e9f3489fb3d3bc7e57113627ba81dbca8114137d"
-
-# ==========================================
-# 5. SPOTIFY
-# ==========================================
 .spotify.com	TRUE	/	TRUE	1814544823	sp_t	4e5c87dc-79f7-4893-927b-1b8deff17a4e
 .spotify.com	TRUE	/	TRUE	1783095223	sp_new	1
 .spotify.com	TRUE	/	TRUE	1783095223	sp_landing	https%3A%2F%2Fopen.spotify.com%2F
@@ -100,10 +80,6 @@ x.com	FALSE	/	FALSE	0	lang	en
 .spotify.com	TRUE	/	FALSE	1817568829	_ga	GA1.1.1888694801.1783008829
 .spotify.com	TRUE	/	FALSE	1817568829	_ga_ZWG1NSHWD8	GS2.1.s1783008829$o1$g0$t1783008829$j60$l0$h0
 .spotify.com	TRUE	/	FALSE	1817568830	_ga_BMC5VGR8YS	GS2.2.s1783008829$o1$g0$t1783008829$j60$l0$h0
-
-# ==========================================
-# 6. YOUTUBE
-# ==========================================
 .youtube.com	TRUE	/	FALSE	1815851286	HSID	AnY_VygHyVwY3UgW-
 .youtube.com	TRUE	/	TRUE	1815851286	SSID	AznDDQ9_M4vNxxa9b
 .youtube.com	TRUE	/	FALSE	1815851286	APISID	fQjpdoutX0UPg5IK/AmbPsytSFzDXpzHTk
