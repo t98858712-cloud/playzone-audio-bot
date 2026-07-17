@@ -111,7 +111,6 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None, url=None):
         "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept-Language": "ar-SA,ar;q=0.9"}
     }
     
-    # اختيار ملف الكوكيز المخصص للموقع المستهدف تلقائياً
     cookie_path = get_cookie_file_for_url(url) if url else None
     if cookie_path and cookie_file_is_usable(cookie_path):
         opts["cookiefile"] = str(cookie_path)
@@ -122,7 +121,6 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None, url=None):
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
 
-# دالة البحث المعدلة: جلب الكوكيز المناسبة ليوتيوب
 def search_youtube(query: str, limit: int = 25):
     opts = get_hardened_ydl_options(url="https://youtube.com")
     opts['extract_flat'] = True
@@ -184,12 +182,11 @@ INDEX_HTML = f"""
         .view-section.active {{ display: block; }}
         @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(10px); }} to {{ opacity: 1; transform: translateY(0); }} }}
         
-        /* تعديل تموضع مشغل الموسيقى ليتوقف عند حدود القائمة الجانبية ولا يغطيها */
         #musicPlayer {{ 
             position: fixed; 
             bottom: 0; 
             left: 0; 
-            right: 5rem; /* مسافة 80px للهواتف لمنع التداخل مع القائمة */
+            right: 5rem;
             z-index: 50; 
             transform: translateY(100%); 
             transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
@@ -200,7 +197,7 @@ INDEX_HTML = f"""
             transform: translateY(0) !important;
         }}
         @media (min-width: 768px) {{
-            #musicPlayer {{ right: 16rem; }} /* مسافة 256px للشاشات الكبيرة */
+            #musicPlayer {{ right: 16rem; }}
         }}
         
         .progress-container {{ width: 100%; height: 4px; background: #27272a; cursor: pointer; position: absolute; top: -2px; left: 0; transition: height 0.2s; }}
@@ -214,7 +211,6 @@ INDEX_HTML = f"""
 <body class="antialiased flex h-[100dvh] w-full">
     <div id="toast"></div>
 
-    <!-- شريط القائمة الجانبية المرتب لمنع التداخل -->
     <aside class="w-20 md:w-64 bg-panel border-l border-panelBorder flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
         <div>
             <div class="h-20 flex items-center justify-center md:justify-start md:px-6 border-b border-panelBorder">
@@ -224,7 +220,6 @@ INDEX_HTML = f"""
                 <h1 class="text-xl font-black text-white mr-3 hidden md:block">Play<span class="text-accent">Zone</span></h1>
             </div>
 
-            <!-- أزرار القائمة الجانبية -->
             <nav class="mt-6 px-2 md:px-3 space-y-2">
                 <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 p-3 md:px-4 md:py-3 rounded-xl bg-panelBorder text-accent font-bold">
                     <i class="fas fa-search text-xl flex-shrink-0"></i><span class="hidden md:block">البحث والتحميل</span>
@@ -238,7 +233,6 @@ INDEX_HTML = f"""
             </nav>
         </div>
         
-        <!-- زر تيليجرام السفلي -->
         <div class="p-2 md:p-4 border-t border-panelBorder">
             <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="btn w-full flex items-center justify-center md:justify-start gap-3 p-3 md:px-4 md:py-3 rounded-xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20">
                 <i class="fab fa-telegram-plane text-xl flex-shrink-0"></i><span class="hidden md:block font-bold text-sm truncate" dir="ltr">@{BOT_USERNAME}</span>
@@ -246,10 +240,8 @@ INDEX_HTML = f"""
         </div>
     </aside>
 
-    <!-- مساحة المحتوى الرئيسية -->
     <main class="flex-1 h-[100dvh] overflow-y-auto pb-36 md:pb-28 relative scroll-smooth">
         
-        <!-- قسم البحث والنتائج -->
         <section id="searchView" class="view-section active p-4 md:p-8 max-w-4xl mx-auto">
             <div class="bg-panel rounded-3xl p-6 md:p-8 border border-panelBorder mb-6 relative overflow-hidden">
                 <div class="absolute top-0 left-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl"></div>
@@ -261,7 +253,6 @@ INDEX_HTML = f"""
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 
-                <!-- حاوية نتائج البحث -->
                 <div id="searchResults" class="hidden mt-8 bg-[#18181b] border border-panelBorder rounded-3xl p-4 md:p-5 shadow-xl">
                     <div class="mb-4 pb-3 border-b border-panelBorder flex justify-between items-center">
                         <h3 class="text-white font-bold text-base md:text-lg flex items-center gap-2">🎬 اختر المقطع المطلوب:</h3>
@@ -271,7 +262,6 @@ INDEX_HTML = f"""
                 </div>
             </div>
 
-            <!-- بطاقة المعاينة والتحكم بعد اختيار مقطع -->
             <div id="previewBox" class="hidden bg-panel rounded-3xl p-6 border border-panelBorder">
                 <div class="flex flex-col md:flex-row gap-6 items-center">
                     <div class="w-full md:w-1/3">
@@ -311,7 +301,6 @@ INDEX_HTML = f"""
                                 <span id="progSpeed">-- MB/s</span>
                             </div>
                             
-                            <!-- زر التحميل المباشر للجهاز -->
                             <div id="directDownloadArea" class="hidden mt-4 pt-4 border-t border-panelBorder">
                                 <a id="directDownloadBtn" href="#" download class="btn bg-green-600 text-white w-full hover:bg-green-500 shadow-lg shadow-green-500/20"><i class="fas fa-arrow-alt-circle-down"></i> تحميل الملف إلى جهازك مباشرة 💾</a>
                             </div>
@@ -321,7 +310,6 @@ INDEX_HTML = f"""
             </div>
         </section>
 
-        <!-- الأقسام الأخرى المحفوظة -->
         <section id="libraryView" class="view-section p-4 md:p-8 max-w-6xl mx-auto h-full flex flex-col">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <h2 class="text-2xl font-bold text-white">ملفاتي المحفوظة</h2>
@@ -372,7 +360,6 @@ INDEX_HTML = f"""
         </section>
     </main>
 
-    <!-- مشغل الموسيقى السفلي المطور بالكامل -->
     <div id="musicPlayer" class="pb-safe">
         <div class="progress-container" id="progressContainer" onclick="seekAudio(event)" ontouchstart="seekAudio(event)"><div class="progress-bar" id="audioProgressBar"></div></div>
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 p-3 md:px-6">
@@ -416,9 +403,7 @@ INDEX_HTML = f"""
         </div>
     </div>
 
-    <!-- كود JavaScript آمن كلياً ومصحح من تحذيرات سلاش الهروب -->
     <script>
-        // المتغيرات العامة
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
         let currentUrl = "";
         let adWatched = false;
@@ -429,7 +414,6 @@ INDEX_HTML = f"""
         const itemsPerPage = 6;
         const audioEl = document.getElementById('globalAudioElement');
 
-        // التهيئة عند تشغيل الصفحة
         window.addEventListener('DOMContentLoaded', () => {{
             if (window.Telegram && window.Telegram.WebApp) {{
                 window.Telegram.WebApp.ready();
@@ -458,7 +442,6 @@ INDEX_HTML = f"""
             return m + ":" + (s < 10 ? '0' + s : s); 
         }}
 
-        // نظام التنبيهات المنبثقة
         function showToast(message, type = "success") {{
             const toast = document.getElementById('toast');
             toast.innerText = message;
@@ -471,7 +454,6 @@ INDEX_HTML = f"""
             setTimeout(() => {{ toast.className = ""; }}, 3000);
         }}
 
-        // التنقل التفاعلي بين الصفحات
         function switchView(viewId) {{
             document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
             document.getElementById(viewId).classList.add('active');
@@ -492,7 +474,6 @@ INDEX_HTML = f"""
             }}
         }}
 
-        // نظام تصفية وعرض ملفات المكتبة مع إبراز المشغل الحالي تفاعلياً (تم إصلاح سلاش الهروب هنا)
         function applyFilters() {{
             const query = document.getElementById('libSearch').value.toLowerCase();
             const filter = document.getElementById('libFilter').value;
@@ -540,33 +521,32 @@ INDEX_HTML = f"""
                 const fileExt = item.is_audio ? 'mp3' : 'mp4';
                 
                 container.innerHTML += `
-                    <div class="bg-panel rounded-2xl p-4 border \${activeBorder} flex gap-4 items-center relative group transition-all duration-300">
-                        <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder flex-shrink-0 cursor-pointer" onclick="\${item.is_audio ? \\`playAudioTrack(\${actualIndex})\\` : \\`watchVideo('\${item.url}')\\`}">
-                            <img src="\${item.thumb || 'https://via.placeholder.com/150'}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150'">
-                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center \${isCurrentPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
-                                \${bounceIcon}
+                    <div class="bg-panel rounded-2xl p-4 border ${{activeBorder}} flex gap-4 items-center relative group transition-all duration-300">
+                        <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder flex-shrink-0 cursor-pointer" onclick="${{item.is_audio ? `playAudioTrack(${{actualIndex}})` : `watchVideo('${{item.url}}')`}}">
+                            <img src="${{item.thumb || 'https://via.placeholder.com/150'}}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150'">
+                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center ${{isCurrentPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}} transition-opacity">
+                                ${{bounceIcon}}
                             </div>
-                            <div class="absolute bottom-1 right-1 bg-black/80 text-[10px] px-1 font-mono rounded text-white">\${durationStr}</div>
+                            <div class="absolute bottom-1 right-1 bg-black/80 text-[10px] px-1 font-mono rounded text-white">${{durationStr}}</div>
                         </div>
                         <div class="flex-1 min-w-0 text-right">
-                            <h4 class="\${titleColor} font-bold text-sm truncate cursor-pointer" onclick="\${item.is_audio ? \\`playAudioTrack(\${actualIndex})\\` : \\`watchVideo('\${item.url}')\\`}">\${item.title}</h4>
-                            <p class="text-textMuted text-xs mt-1 truncate">\${icon} \${item.uploader || 'غير معروف'}</p>
+                            <h4 class="${{titleColor}} font-bold text-sm truncate cursor-pointer" onclick="${{item.is_audio ? `playAudioTrack(${{actualIndex}})` : `watchVideo('${{item.url}}')`}}">${{item.title}}</h4>
+                            <p class="text-textMuted text-xs mt-1 truncate">${{icon}} ${{item.uploader || 'غير معروف'}}</p>
                         </div>
                         <div class="flex items-center gap-2 flex-row-reverse">
-                            <button onclick="deleteFromLibrary('\${item.id}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-400 active:scale-95 transition-transform" title="حذف">
+                            <button onclick="deleteFromLibrary('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-400 active:scale-95 transition-transform" title="حذف">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
                             
-                            <!-- زر تحميل للجهاز مضاف هنا -->
-                            <a href="\${item.url}" download="\${item.title}.\${fileExt}" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-green-400 active:scale-95 transition-transform flex items-center justify-center" title="تحميل للجهاز">
+                            <a href="${{item.url}}" download="${{item.title}}.${{fileExt}}" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-green-400 active:scale-95 transition-transform flex items-center justify-center" title="تحميل للجهاز">
                                 <i class="fas fa-download"></i>
                             </a>
                             
-                            <button onclick="triggerSendToTelegram('\${item.id}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-tgBlue active:scale-95 transition-transform" title="إرسال لتيليجرام">
+                            <button onclick="triggerSendToTelegram('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-tgBlue active:scale-95 transition-transform" title="إرسال لتيليجرام">
                                 <i class="fab fa-telegram-plane"></i>
                             </button>
-                            <button onclick="toggleFavorite('\${item.id}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-500 active:scale-95 transition-transform" title="مفضلة">
-                                <i class="\${favClass}"></i>
+                            <button onclick="toggleFavorite('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-500 active:scale-95 transition-transform" title="مفضلة">
+                                <i class="${{favClass}}"></i>
                             </button>
                         </div>
                     </div>
@@ -576,7 +556,6 @@ INDEX_HTML = f"""
             renderPagination(totalPages);
         }}
 
-        // دالة عرض الصفحات الآمنة من تداخل أقواس بايثون
         function renderPagination(totalPages) {{
             const pagBox = document.getElementById('pagination');
             pagBox.innerHTML = "";
@@ -616,7 +595,6 @@ INDEX_HTML = f"""
             }}
         }}
 
-        // تحديث عدد ملفات المكتبة
         function updateLibraryCount() {{
             const count = myLibrary.length;
             document.getElementById('libCountStatus').innerText = "السجل (" + count + ")";
@@ -649,7 +627,6 @@ INDEX_HTML = f"""
             showToast(val ? "تم تفعيل الإرسال التلقائي" : "تم إيقاف الإرسال التلقائي", "success");
         }}
 
-        // إدارة الـ Modal لتيليجرام
         let pendingTgItem = null;
         function triggerSendToTelegram(id) {{
             const item = myLibrary.find(i => i.id === id);
@@ -674,7 +651,7 @@ INDEX_HTML = f"""
 
         function saveTgIdFromModal() {{
             const val = document.getElementById('tgIdInput').value.trim();
-            if (!val) return showToast("الرجاء إدخل ID صالح", "error");
+            if (!val) return showToast("الرجاء إدخال ID صالح", "error");
             
             localStorage.setItem('pz_tg_id', val);
             document.getElementById('settingTgId').value = val;
@@ -686,7 +663,6 @@ INDEX_HTML = f"""
             }}
         }}
 
-        // دالة الإرسال لتيليجرام
         async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {{
             const chatId = localStorage.getItem('pz_tg_id');
             if (!chatId) {{
@@ -728,7 +704,6 @@ INDEX_HTML = f"""
             window.open(url, '_blank');
         }}
 
-        // معالجة البحث والتحقق من الروابط
         async function processInput() {{
             const input = document.getElementById('url').value.trim(); 
             if(!input) return;
@@ -750,15 +725,15 @@ INDEX_HTML = f"""
                         data.entries.forEach((v) => {{
                             const duration = formatTime(v.duration || 0);
                             box.innerHTML += `
-                            <div onclick="renderPreview('https://youtube.com/watch?v=\${v.id}')" class="w-full flex items-center p-3 bg-panel rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-sm mb-1">
+                            <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full flex items-center p-3 bg-panel rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-sm mb-1">
                                 <div class="flex-shrink-0 w-24 h-14 rounded-xl overflow-hidden border border-panelBorder shadow-sm relative ml-3">
-                                    <img src="\${v.thumbnail}" class="w-full h-full object-cover">
-                                    <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono">\${duration}</div>
+                                    <img src="${{v.thumbnail}}" class="w-full h-full object-cover">
+                                    <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono">${{duration}}</div>
                                 </div>
                                 <div class="flex-1 min-w-0 flex flex-col justify-center text-right">
-                                    <h4 class="text-white font-bold text-sm truncate w-full mb-1" dir="auto">\${v.title}</h4>
+                                    <h4 class="text-white font-bold text-sm truncate w-full mb-1" dir="auto">${{v.title}}</h4>
                                     <p class="text-textMuted text-xs truncate w-full" dir="auto">
-                                        <i class="fas fa-user-circle text-accent/70"></i> \${v.uploader}
+                                        <i class="fas fa-user-circle text-accent/70"></i> ${{v.uploader}}
                                     </p>
                                 </div>
                                 <div class="flex-shrink-0 w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent mr-2">
@@ -842,7 +817,7 @@ INDEX_HTML = f"""
                 if(data.success) {{
                     const interval = setInterval(async ()=>{{
                         try {{
-                            const progRes = await fetch(`/api/progress/${data.job_id}`); const prog = await progRes.json();
+                            const progRes = await fetch(`/api/progress/${{data.job_id}}`); const prog = await progRes.json();
                             if(prog.status === 'downloading') {{
                                 document.getElementById('progStatus').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري تحميل الملف...';
                                 document.getElementById('progPercent').innerText = prog.percent + '%';
@@ -887,9 +862,6 @@ INDEX_HTML = f"""
             btn.innerHTML = original; btn.disabled = false;
         }}
 
-        // =====================================
-        // مشغل الصوتيات المطور والمصحح بالكامل
-        // =====================================
         function playAudioTrack(index) {{
             currentPlayingIndex = index;
             const track = myLibrary[index];
@@ -1071,7 +1043,6 @@ INDEX_HTML = f"""
 async def home():
     return HTMLResponse(content=INDEX_HTML)
 
-# مصلح لمنع حدوث خطأ NoneType وحماية الفهرس
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
     try:
