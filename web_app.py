@@ -13,16 +13,39 @@ BOT_USERNAME = "MusicPlayZoneBot"  # اليوزر الثابت اليدوي لل
 # -------------------------------------------------------------
 
 try:
-    from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
+    from core.config import (
+        BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE,
+        COOKIES_YOUTUBE, COOKIES_TIKTOK, COOKIES_INSTAGRAM, COOKIES_FACEBOOK, COOKIES_X, COOKIES_SPOTIFY
+    )
     from database.connection import init_db
-    from utils.helpers import cookie_file_is_usable
+    from utils.helpers import cookie_file_is_usable, get_cookie_file_for_url
 except ImportError:
     BASE_DOWNLOAD_DIR = Path("./downloads")
     HILLTOPADS_LINK = "https://example.com/ad"
     ADSTERRA_LINK = None
     COOKIES_FILE = Path("cookies.txt")
+    
+    # مسارات افتراضية احتياطية في حال التشغيل المستقل
+    COOKIES_YOUTUBE = Path("cookies_youtube.txt")
+    COOKIES_TIKTOK = Path("cookies_tiktok.txt")
+    COOKIES_INSTAGRAM = Path("cookies_instagram.txt")
+    COOKIES_FACEBOOK = Path("cookies_facebook.txt")
+    COOKIES_X = Path("cookies_x.txt")
+    COOKIES_SPOTIFY = Path("cookies_spotify.txt")
+    
     def init_db(): pass
-    def cookie_file_is_usable(f): return False
+    def cookie_file_is_usable(f): return f.exists() and f.stat().st_size > 0
+    
+    def get_cookie_file_for_url(url: str):
+        if not url: return None
+        url_lower = url.lower()
+        if "youtube.com" in url_lower or "youtu.be" in url_lower: return COOKIES_YOUTUBE
+        elif "tiktok.com" in url_lower: return COOKIES_TIKTOK
+        elif "instagram.com" in url_lower: return COOKIES_INSTAGRAM
+        elif "facebook.com" in url_lower or "fb.watch" in url_lower or "fb.com" in url_lower: return COOKIES_FACEBOOK
+        elif "x.com" in url_lower or "twitter.com" in url_lower: return COOKIES_X
+        elif "spotify.com" in url_lower: return COOKIES_SPOTIFY
+        return COOKIES_FILE if cookie_file_is_usable(COOKIES_FILE) else None
 
 app = FastAPI(title="PlayZone Cloud Dashboard")
 init_db()
@@ -78,7 +101,8 @@ class TelegramRequest(BaseModel):
     duration: int = 0
     thumb: str = ""
 
-def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
+# تهيئة جلب الكوكيز ديناميكياً بناءً على الرابط لمنع الانهيار وفصل الحسابات
+def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None, url=None):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 10, "fragment_retries": 10, "socket_timeout": 30, "cachedir": False,
@@ -86,17 +110,23 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv"], "player_skip": ["web", "mweb"]}},
         "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept-Language": "ar-SA,ar;q=0.9"}
     }
-    if cookie_file_is_usable(COOKIES_FILE): opts["cookiefile"] = str(COOKIES_FILE)
+    
+    # اختيار ملف الكوكيز المخصص للموقع المستهدف تلقائياً
+    cookie_path = get_cookie_file_for_url(url) if url else None
+    if cookie_path and cookie_file_is_usable(cookie_path):
+        opts["cookiefile"] = str(cookie_path)
+    elif cookie_file_is_usable(COOKIES_FILE):
+        opts["cookiefile"] = str(COOKIES_FILE)
+        
     if outtmpl_path: opts["outtmpl"] = str(outtmpl_path)
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
 
-# دالة البحث المعدلة: نقوم بحذف محددات الـ playlist_items للسماح بجلب نتائج البحث كاملة
+# دالة البحث المعدلة: جلب الكوكيز المناسبة ليوتيوب
 def search_youtube(query: str, limit: int = 25):
-    opts = get_hardened_ydl_options()
+    opts = get_hardened_ydl_options(url="https://youtube.com")
     opts['extract_flat'] = True
     
-    # حذف القيود التي تمنع جلب القوائم والبحث المتعدد
     if 'playlist_items' in opts:
         del opts['playlist_items']
     if 'noplaylist' in opts:
@@ -166,13 +196,16 @@ INDEX_HTML = f"""
             border-top: 1px solid #27272a; 
             background: #18181b; 
         }}
+        #musicPlayer.active {{
+            transform: translateY(0) !important;
+        }}
         @media (min-width: 768px) {{
             #musicPlayer {{ right: 16rem; }} /* مسافة 256px للشاشات الكبيرة */
         }}
         
         .progress-container {{ width: 100%; height: 4px; background: #27272a; cursor: pointer; position: absolute; top: -2px; left: 0; transition: height 0.2s; }}
         .progress-container:hover {{ height: 8px; top: -4px; }}
-        .progress-bar {{ height: 100%; background: #8b5cf6; width: 0%; position: relative; transition: width 0.3s ease-out; }}
+        .progress-bar {{ height: 100%; background: #8b5cf6; width: 0%; position: relative; transition: width 0.1s linear; }}
         
         #toast {{ position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100%); opacity: 0; z-index: 1000; padding: 12px 24px; border-radius: 50px; font-weight: bold; color: white; transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); box-shadow: 0 10px 25px rgba(0,0,0,0.5); pointer-events: none; }}
         #toast.show {{ transform: translateX(-50%) translateY(0); opacity: 1; }}
@@ -181,7 +214,7 @@ INDEX_HTML = f"""
 <body class="antialiased flex h-[100dvh] w-full">
     <div id="toast"></div>
 
-    <!-- تحديث شريط القائمة الجانبية لمنع التداخل وترتيب العناصر بشكل مثالي ومربع على الهاتف -->
+    <!-- شريط القائمة الجانبية المرتب لمنع التداخل -->
     <aside class="w-20 md:w-64 bg-panel border-l border-panelBorder flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
         <div>
             <div class="h-20 flex items-center justify-center md:justify-start md:px-6 border-b border-panelBorder">
@@ -191,7 +224,7 @@ INDEX_HTML = f"""
                 <h1 class="text-xl font-black text-white mr-3 hidden md:block">Play<span class="text-accent">Zone</span></h1>
             </div>
 
-            <!-- أزرار القائمة الجانبية بهوامش محسنة تناسب العرض الصغير -->
+            <!-- أزرار القائمة الجانبية -->
             <nav class="mt-6 px-2 md:px-3 space-y-2">
                 <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn btn w-full flex items-center justify-center md:justify-start gap-4 p-3 md:px-4 md:py-3 rounded-xl bg-panelBorder text-accent font-bold">
                     <i class="fas fa-search text-xl flex-shrink-0"></i><span class="hidden md:block">البحث والتحميل</span>
@@ -205,7 +238,7 @@ INDEX_HTML = f"""
             </nav>
         </div>
         
-        <!-- زر تيليجرام السفلية بهوامش مصغرة ومحمية تماماً من القص أو التداخل -->
+        <!-- زر تيليجرام السفلي -->
         <div class="p-2 md:p-4 border-t border-panelBorder">
             <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="btn w-full flex items-center justify-center md:justify-start gap-3 p-3 md:px-4 md:py-3 rounded-xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20">
                 <i class="fab fa-telegram-plane text-xl flex-shrink-0"></i><span class="hidden md:block font-bold text-sm truncate" dir="ltr">@{BOT_USERNAME}</span>
@@ -213,7 +246,7 @@ INDEX_HTML = f"""
         </div>
     </aside>
 
-    <!-- تعديل مساحة المحتوى لتفادي المشغل السفلي بهوامش سفلية أوسع -->
+    <!-- مساحة المحتوى الرئيسية -->
     <main class="flex-1 h-[100dvh] overflow-y-auto pb-36 md:pb-28 relative scroll-smooth">
         
         <!-- قسم البحث والنتائج -->
@@ -228,13 +261,12 @@ INDEX_HTML = f"""
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-32 shadow-lg shadow-accent/20"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 
-                <!-- حاوية نتائج البحث المُعاد برمجتها (إظهار 5 خيارات تحميل عمودية بالكامل) -->
+                <!-- حاوية نتائج البحث -->
                 <div id="searchResults" class="hidden mt-8 bg-[#18181b] border border-panelBorder rounded-3xl p-4 md:p-5 shadow-xl">
                     <div class="mb-4 pb-3 border-b border-panelBorder flex justify-between items-center">
                         <h3 class="text-white font-bold text-base md:text-lg flex items-center gap-2">🎬 اختر المقطع المطلوب:</h3>
                         <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-2 bg-bgDark rounded-full transition-colors flex-shrink-0"><i class="fas fa-times"></i></button>
                     </div>
-                    <!-- قائمة الـ 5 مقاطع المحمية من الانضغاط وبدون أرقام -->
                     <div id="searchResultsList" class="flex flex-col gap-3 w-full"></div>
                 </div>
             </div>
@@ -279,7 +311,7 @@ INDEX_HTML = f"""
                                 <span id="progSpeed">-- MB/s</span>
                             </div>
                             
-                            <!-- زر التحميل المباشر للجهاز المضاف -->
+                            <!-- زر التحميل المباشر للجهاز -->
                             <div id="directDownloadArea" class="hidden mt-4 pt-4 border-t border-panelBorder">
                                 <a id="directDownloadBtn" href="#" download class="btn bg-green-600 text-white w-full hover:bg-green-500 shadow-lg shadow-green-500/20"><i class="fas fa-arrow-alt-circle-down"></i> تحميل الملف إلى جهازك مباشرة 💾</a>
                             </div>
@@ -340,9 +372,9 @@ INDEX_HTML = f"""
         </section>
     </main>
 
-    <!-- مشغل الموسيقى السفلي -->
+    <!-- مشغل الموسيقى السفلي المطور بالكامل -->
     <div id="musicPlayer" class="pb-safe">
-        <div class="progress-container" id="progressContainer" onclick="seekAudio(event)"><div class="progress-bar" id="audioProgressBar"></div></div>
+        <div class="progress-container" id="progressContainer" onclick="seekAudio(event)" ontouchstart="seekAudio(event)"><div class="progress-bar" id="audioProgressBar"></div></div>
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 p-3 md:px-6">
             <div class="flex items-center gap-3 w-full md:w-1/3 overflow-hidden">
                 <div class="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent text-xl flex-shrink-0 border border-accent/30" id="playerThumbPlaceholder"><i class="fas fa-music"></i></div>
@@ -360,12 +392,14 @@ INDEX_HTML = f"""
             </div>
             <div class="flex items-center justify-end gap-4 w-full md:w-1/3 hidden md:flex">
                 <button onclick="changeSpeed()" id="speedBtn" class="btn px-2 py-1 bg-transparent border border-panelBorder text-xs font-mono text-textMuted">1x</button>
-                <i class="fas fa-volume-up text-textMuted text-xs"></i>
+                <button onclick="toggleMute()" id="muteBtn" class="text-textMuted hover:text-white transition-colors focus:outline-none">
+                    <i id="volumeIcon" class="fas fa-volume-up text-sm"></i>
+                </button>
                 <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-20 accent-accent">
                 <button onclick="closePlayer()" class="text-textMuted hover:text-red-400 p-2 ml-2 active:scale-90"><i class="fas fa-times text-lg"></i></button>
             </div>
         </div>
-        <audio id="globalAudioElement" ontimeupdate="updatePlayerProgress()" onended="handleAudioEnd()"></audio>
+        <audio id="globalAudioElement" ontimeupdate="updatePlayerProgress()" onended="handleAudioEnd()" onplay="handleAudioPlay()" onpause="handleAudioPause()"></audio>
     </div>
 
     <div id="tgModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] hidden flex-col items-center justify-center p-4">
@@ -382,7 +416,7 @@ INDEX_HTML = f"""
         </div>
     </div>
 
-    <!-- كود JavaScript آمن كلياً ضد تعارض الـ f-string وملفات البحث والتحكم -->
+    <!-- كود JavaScript آمن ومتكامل للمشغل السحابي -->
     <script>
         // المتغيرات العامة
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
@@ -458,7 +492,7 @@ INDEX_HTML = f"""
             }}
         }}
 
-        // نظام تصفية وعرض ملفات المكتبة (تمت إضافة زر التحميل للجهاز هنا)
+        // نظام تصفية وعرض ملفات المكتبة مع إبراز المشغل الحالي تفاعلياً
         function applyFilters() {{
             const query = document.getElementById('libSearch').value.toLowerCase();
             const filter = document.getElementById('libFilter').value;
@@ -495,22 +529,27 @@ INDEX_HTML = f"""
 
             pageItems.forEach((item) => {{
                 const actualIndex = myLibrary.findIndex(i => i.id === item.id);
+                const isCurrentPlaying = (currentPlayingIndex !== -1 && myLibrary[currentPlayingIndex] && myLibrary[currentPlayingIndex].id === item.id);
+                const activeBorder = isCurrentPlaying ? 'border-accent shadow-lg shadow-accent/10 bg-accent/5' : 'border-panelBorder';
+                const bounceIcon = isCurrentPlaying ? '<i class="fas fa-volume-up text-accent text-lg animate-bounce"></i>' : (item.is_audio ? '<i class="fas fa-play text-white text-lg"></i>' : '<i class="fas fa-external-link-alt text-white text-lg"></i>');
+                const titleColor = isCurrentPlaying ? 'text-accent' : 'text-white';
+                
                 const durationStr = formatTime(item.duration || 0);
                 const favClass = item.favorite ? 'fas fa-heart text-red-500' : 'far fa-heart';
                 const icon = item.is_audio ? '<i class="fas fa-music text-accent"></i>' : '<i class="fas fa-video text-tgBlue"></i>';
                 const fileExt = item.is_audio ? 'mp3' : 'mp4';
                 
                 container.innerHTML += `
-                    <div class="bg-panel rounded-2xl p-4 border border-panelBorder flex gap-4 items-center relative group">
-                        <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder flex-shrink-0 cursor-pointer" onclick="${{item.is_audio ? `playAudioTrack(${{actualIndex}})` : `watchVideo('${{item.url}}')`}}">
+                    <div class="bg-panel rounded-2xl p-4 border ${{activeBorder}} flex gap-4 items-center relative group transition-all duration-300">
+                        <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder flex-shrink-0 cursor-pointer" onclick="${{item.is_audio ? \`playAudioTrack(${{actualIndex}})\` : \`watchVideo('${{item.url}}')\`}}">
                             <img src="${{item.thumb || 'https://via.placeholder.com/150'}}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150'">
-                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <i class="fas ${{item.is_audio ? 'fa-play' : 'fa-external-link-alt'}} text-white text-lg"></i>
+                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center ${{isCurrentPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}} transition-opacity">
+                                ${{bounceIcon}}
                             </div>
                             <div class="absolute bottom-1 right-1 bg-black/80 text-[10px] px-1 font-mono rounded text-white">${{durationStr}}</div>
                         </div>
                         <div class="flex-1 min-w-0 text-right">
-                            <h4 class="text-white font-bold text-sm truncate cursor-pointer" onclick="${{item.is_audio ? `playAudioTrack(${{actualIndex}})` : `watchVideo('${{item.url}}')`}}">${{item.title}}</h4>
+                            <h4 class="${{titleColor}} font-bold text-sm truncate cursor-pointer" onclick="${{item.is_audio ? \`playAudioTrack(${{actualIndex}})\` : \`watchVideo('${{item.url}}')\`}}">${{item.title}}</h4>
                             <p class="text-textMuted text-xs mt-1 truncate">${{icon}} ${{item.uploader || 'غير معروف'}}</p>
                         </div>
                         <div class="flex items-center gap-2 flex-row-reverse">
@@ -804,7 +843,7 @@ INDEX_HTML = f"""
                 if(data.success) {{
                     const interval = setInterval(async ()=>{{
                         try {{
-                            const progRes = await fetch(`/api/progress/${{data.job_id}}`); const prog = await progRes.json();
+                            const progRes = await fetch(\`/api/progress/\${{data.job_id}}\`); const prog = await progRes.json();
                             if(prog.status === 'downloading') {{
                                 document.getElementById('progStatus').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري تحميل الملف...';
                                 document.getElementById('progPercent').innerText = prog.percent + '%';
@@ -851,7 +890,7 @@ INDEX_HTML = f"""
         }}
 
         // =====================================
-        // مشغل الصوتيات المصحح والآمن كلياً
+        // مشغل الصوتيات المطور والمصحح بالكامل
         // =====================================
         function playAudioTrack(index) {{
             currentPlayingIndex = index;
@@ -868,6 +907,7 @@ INDEX_HTML = f"""
             
             document.getElementById('musicPlayer').classList.add('active');
             document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
+            applyFilters();
         }}
 
         function togglePlay() {{
@@ -879,6 +919,16 @@ INDEX_HTML = f"""
                 audioEl.pause();
                 document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-1"></i>';
             }}
+        }}
+
+        function handleAudioPlay() {{
+            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
+            applyFilters();
+        }}
+
+        function handleAudioPause() {{
+            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-1"></i>';
+            applyFilters();
         }}
 
         function playNext() {{
@@ -949,16 +999,45 @@ INDEX_HTML = f"""
         function seekAudio(e) {{
             const container = document.getElementById('progressContainer');
             const rect = container.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
+            let clientX = e.clientX;
+            if (e.touches && e.touches.length > 0) {{
+                clientX = e.touches[0].clientX;
+            }}
+            const clickX = clientX - rect.left;
             const pct = clickX / rect.width;
             if (!isNaN(audioEl.duration)) {{
                 audioEl.currentTime = pct * audioEl.duration;
             }}
         }}
 
+        let lastVolume = 1;
+        function toggleMute() {{
+            const icon = document.getElementById('volumeIcon');
+            if (audioEl.volume > 0) {{
+                lastVolume = audioEl.volume;
+                audioEl.volume = 0;
+                document.getElementById('volumeSlider').value = 0;
+                icon.className = "fas fa-volume-mute text-sm text-red-500";
+                showToast("تم الكتم 🔇", "success");
+            }} else {{
+                audioEl.volume = lastVolume;
+                document.getElementById('volumeSlider').value = lastVolume;
+                icon.className = "fas fa-volume-up text-sm text-textMuted";
+                showToast("تم إلغاء الكتم 🔊", "success");
+            }}
+        }}
+
         function changeVolume() {{
             const val = document.getElementById('volumeSlider').value;
             audioEl.volume = val;
+            const icon = document.getElementById('volumeIcon');
+            if (val == 0) {{
+                icon.className = "fas fa-volume-mute text-sm text-red-500";
+            }} else if (val < 0.5) {{
+                icon.className = "fas fa-volume-down text-sm text-textMuted";
+            }} else {{
+                icon.className = "fas fa-volume-up text-sm text-textMuted";
+            }}
         }}
 
         let currentSpeed = 1;
@@ -983,6 +1062,7 @@ INDEX_HTML = f"""
         function closePlayer() {{
             audioEl.pause();
             document.getElementById('musicPlayer').classList.remove('active');
+            applyFilters();
         }}
     </script>
 </body>
@@ -1034,7 +1114,7 @@ async def api_search(req: SearchRequest):
 @app.post("/api/preview")
 async def get_preview(req: URLRequest):
     try:
-        opts = get_hardened_ydl_options()
+        opts = get_hardened_ydl_options(url=req.url)
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(req.url, download=False)
             return {"success": True, "title": info.get("title", "بدون عنوان"), "thumb": info.get("thumbnail", "")}
@@ -1060,7 +1140,7 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
         elif d['status'] == 'finished': 
             PROGRESS_CACHE[job_id] = {"status": "converting", "timestamp": time.time()}
 
-    opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
+    opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook, url=url)
     if mode == 'audio': opts.update({'format': 'bestaudio/best', 'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]})
     else: opts.update({'format': f'bestvideo[height<={res}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 'merge_output_format': 'mp4'})
     
