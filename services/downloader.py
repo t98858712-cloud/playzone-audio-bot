@@ -57,10 +57,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
-    from core.config import COOKIES_FILE
-    from utils.helpers import cookie_file_is_usable
-    if cookie_file_is_usable(COOKIES_FILE):
-        opts["cookiefile"] = str(COOKIES_FILE)
+    from utils.helpers import get_cookie_file_for_url
+    cookie_path = get_cookie_file_for_url(url) if url else None
+    if cookie_path:
+        opts["cookiefile"] = str(cookie_path)
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
