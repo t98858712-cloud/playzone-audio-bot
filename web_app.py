@@ -1231,6 +1231,7 @@ async def api_search(req: SearchRequest):
 async def get_preview(req: URLRequest):
     try:
         opts = get_hardened_ydl_options(url=req.url)
+        opts["format"] = "best" # لتجاوز فلتر الحجم والأخطاء
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(req.url, download=False)
             return {"success": True, "title": info.get("title", "بدون عنوان"), "thumb": info.get("thumbnail", "")}
