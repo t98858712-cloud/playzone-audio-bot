@@ -44,22 +44,22 @@
         .view-section.active { display: block !important; }
         .view-section.active.flex-layout { display: flex !important; }
         
-        #progBar { transition: width 0.6s cubic-bezier(0.1, 0.8, 0.25, 1); box-shadow: 0 0 12px rgba(168, 85, 247, 0.45); }
+        #progBar { transition: width 0.1s linear; box-shadow: 0 0 12px rgba(168, 85, 247, 0.45); }
         
         #floatingPlayer {
             position: fixed; bottom: 25px; left: 25px; width: 360px; max-width: calc(100vw - 32px);
-            background: rgba(11, 11, 15, 0.82); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            background: rgba(11, 11, 15, 0.85); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
             border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 24px;
             box-shadow: 0 35px 70px rgba(0,0,0,0.85), 0 0 25px rgba(168, 85, 247, 0.15);
             z-index: 100; overflow: hidden; display: none; opacity: 0; transform: scale(0.95);
-            transition: opacity 0.2s ease, transform 0.2s ease;
+            transition: opacity 0.2s ease, transform 0.2s ease; touch-action: none;
         }
         #floatingPlayer.active-player { display: block !important; opacity: 1; transform: scale(1); }
         #floatingPlayer.dragging-player { transform: scale(0.97) !important; opacity: 0.9 !important; border-color: rgba(168, 85, 247, 0.4) !important; box-shadow: 0 45px 90px rgba(0,0,0,0.9), 0 0 35px rgba(168, 85, 247, 0.3) !important; }
         
         @media (max-width: 768px) { #floatingPlayer { bottom: calc(85px + env(safe-area-inset-bottom)) !important; left: 16px !important; } }
 
-        .drag-handle { cursor: grab; touch-action: none; }
+        .drag-handle { cursor: grab; touch-action: none; user-select: none; }
         .drag-handle:active { cursor: grabbing; }
 
         @keyframes spinDisk { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -83,6 +83,9 @@
         #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
         
         .tg-safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 16px) !important; }
+        
+        .click-area-boost { position: relative; }
+        .click-area-boost::after { content: ''; position: absolute; top: -10px; bottom: -10px; left: -10px; right: -10px; }
     </style>
 </head>
 <body class="antialiased flex flex-col md:flex-row h-[100dvh] w-full relative">
@@ -249,7 +252,7 @@
     <div id="floatingPlayer">
         <div id="playerHeader" class="drag-handle p-3 bg-black/60 border-b border-panelBorder/50 flex items-center justify-between">
             <div class="flex items-center gap-2 overflow-hidden flex-1">
-                <i class="fas fa-grip-vertical text-textMuted opacity-60 cursor-grab text-[11px] p-2 -m-2"></i>
+                <i class="fas fa-grip-vertical text-textMuted opacity-60 cursor-grab text-[11px] p-3 -m-3"></i>
                 <div class="overflow-hidden w-full pl-2">
                     <p id="playerTitle" class="font-bold text-[11px] text-white truncate w-full">جاهز للتشغيل</p>
                 </div>
@@ -276,9 +279,9 @@
                     <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
                 </div>
             </div>
-            <div class="relative w-full h-1.5 bg-zinc-800 rounded-full mb-3 cursor-pointer group" id="progressContainer" dir="ltr">
-                <div id="mediaProgressBar" class="absolute left-0 h-full bg-accent rounded-full w-0 pointer-events-none"></div>
-                <div id="mediaProgressSlider" class="absolute w-3 h-3 bg-white border-2 border-accent rounded-full -top-[3px] -ml-[6px] scale-100 group-hover:scale-125 transition-transform pointer-events-none" style="left: 0%;"></div>
+            <div class="relative w-full h-3 bg-zinc-800/40 rounded-full mb-3 cursor-pointer group flex items-center" id="progressContainer" dir="ltr">
+                <div id="mediaProgressBar" class="absolute left-0 h-1.5 bg-accent rounded-full w-0 pointer-events-none"></div>
+                <div id="mediaProgressSlider" class="absolute w-3.5 h-3.5 bg-white border-2 border-accent rounded-full -ml-[7px] scale-100 group-hover:scale-110 transition-transform pointer-events-none" style="left: 0%;"></div>
             </div>
             <div class="flex justify-between items-center text-[10px] text-textMuted font-mono mb-4 px-1">
                 <span id="playerTime">0:00 / 0:00</span>
@@ -286,17 +289,17 @@
             </div>
             <div class="flex items-center justify-between gap-2 px-2">
                 <div class="flex items-center gap-4">
-                    <button onclick="toggleShuffle()" id="shuffleBtn" class="text-textMuted hover:text-white transition-colors p-1" title="عشوائي"><i class="fas fa-random"></i></button>
-                    <button onclick="playPrev()" class="text-white hover:text-accent transition-transform active:scale-90 p-1" title="السابق"><i class="fas fa-step-backward"></i></button>
+                    <button onclick="toggleShuffle()" id="shuffleBtn" class="text-textMuted hover:text-white transition-colors p-2 -m-1" title="عشوائي"><i class="fas fa-random"></i></button>
+                    <button onclick="playPrev()" class="text-white hover:text-accent transition-transform active:scale-90 p-2 -m-1" title="السابق"><i class="fas fa-step-backward"></i></button>
                 </div>
                 <button onclick="togglePlay()" id="playPauseBtn" class="w-12 h-12 rounded-full bg-accent hover:bg-accentHover text-white flex items-center justify-center text-sm shadow-md shadow-accent/30 active:scale-90 transition-all"><i class="fas fa-play ml-0.5"></i></button>
                 <div class="flex items-center gap-4">
-                    <button onclick="playNext()" class="text-white hover:text-accent transition-transform active:scale-90 p-1" title="التالي"><i class="fas fa-step-forward"></i></button>
-                    <button onclick="toggleRepeat()" id="repeatBtn" class="text-textMuted hover:text-white transition-colors p-1" title="تكرار"><i class="fas fa-redo"></i></button>
+                    <button onclick="playNext()" class="text-white hover:text-accent transition-transform active:scale-90 p-2 -m-1" title="التالي"><i class="fas fa-step-forward"></i></button>
+                    <button onclick="toggleRepeat()" id="repeatBtn" class="text-textMuted hover:text-white transition-colors p-2 -m-1" title="تكرار"><i class="fas fa-redo"></i></button>
                 </div>
             </div>
             <div class="flex items-center justify-between mt-4 pt-3 border-t border-panelBorder/40">
-                <button onclick="changeSpeed()" id="speedBtn" class="text-[10px] font-bold font-mono px-2 py-1 border border-panelBorder rounded-md text-textMuted hover:text-white">1.0x</button>
+                <button onclick="changeSpeed()" id="speedBtn" class="text-[10px] font-bold font-mono px-2.5 py-1 border border-panelBorder rounded-md text-textMuted hover:text-white">1.0x</button>
                 <div class="flex items-center gap-2">
                     <button onclick="toggleMute()" id="muteBtn" class="text-textMuted hover:text-white p-2 -m-2"><i class="fas fa-volume-up text-xs"></i></button>
                     <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-16 h-1 bg-zinc-800 accent-accent rounded-lg cursor-pointer">
@@ -350,8 +353,8 @@
                 tg.HapticFeedback.impactOccurred(style);
             } else if (navigator.vibrate) {
                 if (style === 'light') navigator.vibrate(10);
-                else if (style === 'medium') navigator.vibrate(20);
-                else if (style === 'heavy') navigator.vibrate(40);
+                else if (style === 'medium') navigator.vibrate(25);
+                else if (style === 'heavy') navigator.vibrate(45);
             }
         }
 
@@ -359,8 +362,8 @@
             if (isMiniApp && tg.HapticFeedback) {
                 tg.HapticFeedback.notificationOccurred(type);
             } else if (navigator.vibrate) {
-                if (type === 'success') navigator.vibrate([20, 50, 20]);
-                else navigator.vibrate([50, 50, 50]);
+                if (type === 'success') navigator.vibrate([15, 30, 15]);
+                else navigator.vibrate([40, 40, 40]);
             }
         }
 
@@ -405,12 +408,12 @@
         }
 
         function showToast(message, type = "success") {
-            triggerNotification(type === "error" ? "error" : "success");
             const toast = document.getElementById('toast');
             toast.innerText = message; toast.className = "show";
             if (type === "error") toast.style.background = "linear-gradient(135deg, #f43f5e, #e11d48)";
             else toast.style.background = "linear-gradient(135deg, #a855f7, #7c3aed)";
             setTimeout(() => { toast.className = ""; }, 3000);
+            setTimeout(() => { triggerNotification(type === "error" ? "error" : "success"); }, 50);
         }
 
         function switchView(viewId) {
@@ -759,13 +762,12 @@
                                 
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
                                 showToast("تم حفظ الملف بنجاح", "success");
-                                triggerHaptic('success');
 
                                 if(localStorage.getItem('pz_auto_tg') !== 'false') {
                                     sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
                                 }
                             } 
-                            else if(prog.status === 'error') { clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; triggerHaptic('error'); }
+                            else if(prog.status === 'error') { clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; }
                         } catch(err) {}
                     }, 800);
                 } else {
@@ -834,13 +836,13 @@
         function toggleShuffle() {
             triggerHaptic('light');
             isShuffle = !isShuffle; const btn = document.getElementById('shuffleBtn');
-            btn.className = isShuffle ? "text-accent hover:text-white transition-colors p-1" : "text-textMuted hover:text-white transition-colors p-1";
+            btn.className = isShuffle ? "text-accent hover:text-white transition-colors p-2 -m-1" : "text-textMuted hover:text-white transition-colors p-2 -m-1";
         }
 
         function toggleRepeat() {
             triggerHaptic('light');
             isRepeat = !isRepeat; const btn = document.getElementById('repeatBtn');
-            btn.className = isRepeat ? "text-accent hover:text-white transition-colors p-1" : "text-textMuted hover:text-white transition-colors p-1";
+            btn.className = isRepeat ? "text-accent hover:text-white transition-colors p-2 -m-1" : "text-textMuted hover:text-white transition-colors p-2 -m-1";
         }
 
         function updatePlayerProgress() {
@@ -851,23 +853,45 @@
 
         function setupScrubbing() {
             const container = document.getElementById('progressContainer');
-            container.addEventListener('pointerdown', (e) => {
-                isScrubbing = true; performScrub(e); container.setPointerCapture(e.pointerId);
-                container.addEventListener('pointermove', performScrub); container.addEventListener('pointerup', endScrub); container.addEventListener('pointercancel', endScrub);
-            });
-            function performScrub(e) {
-                if (!isScrubbing) return; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
-                const pct = Math.max(0, Math.min(1, clickX / rect.width)); document.getElementById('mediaProgressBar').style.width = (pct * 100) + '%';
+            
+            function getScrubPct(e) {
+                const rect = container.getBoundingClientRect();
+                const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+                const clickX = clientX - rect.left;
+                return Math.max(0, Math.min(1, clickX / rect.width));
+            }
+
+            function handleScrubUpdate(e) {
+                const pct = getScrubPct(e);
+                document.getElementById('mediaProgressBar').style.width = (pct * 100) + '%';
                 document.getElementById('mediaProgressSlider').style.left = (pct * 100) + '%';
-                if (!isNaN(videoElement.duration)) { document.getElementById('playerTime').innerText = formatTime(pct * videoElement.duration) + ' / ' + formatTime(videoElement.duration); }
+                if (!isNaN(videoElement.duration)) { 
+                    document.getElementById('playerTime').innerText = formatTime(pct * videoElement.duration) + ' / ' + formatTime(videoElement.duration); 
+                }
             }
-            function endScrub(e) {
-                if (!isScrubbing) return; isScrubbing = false; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
-                const pct = Math.max(0, Math.min(1, clickX / rect.width));
-                if (!isNaN(videoElement.duration)) { videoElement.currentTime = pct * videoElement.duration; }
-                try { container.releasePointerCapture(e.pointerId); } catch(err) {}
-                container.removeEventListener('pointermove', performScrub); container.removeEventListener('pointerup', endScrub); container.removeEventListener('pointercancel', endScrub);
-            }
+
+            container.addEventListener('pointerdown', (e) => {
+                isScrubbing = true;
+                container.setPointerCapture(e.pointerId);
+                handleScrubUpdate(e);
+                
+                const moveHandler = (ev) => { if (isScrubbing) handleScrubUpdate(ev); };
+                const upHandler = (ev) => {
+                    if (isScrubbing) {
+                        isScrubbing = false;
+                        const pct = getScrubPct(ev);
+                        if (!isNaN(videoElement.duration)) videoElement.currentTime = pct * videoElement.duration;
+                        try { container.releasePointerCapture(ev.pointerId); } catch(err) {}
+                    }
+                    container.removeEventListener('pointermove', moveHandler);
+                    container.removeEventListener('pointerup', upHandler);
+                    container.removeEventListener('pointercancel', upHandler);
+                };
+                
+                container.addEventListener('pointermove', moveHandler);
+                container.addEventListener('pointerup', upHandler);
+                container.addEventListener('pointercancel', upHandler);
+            });
         }
 
         function changeVolume() {
@@ -913,29 +937,56 @@
 
         function setupAdvancedDraggable(el, handle) {
             let isDragging = false; let startX, startY, initialLeft, initialTop;
+            
             handle.addEventListener('pointerdown', dragStart);
+            
             function dragStart(e) {
                 if (e.target.closest('button, input, a, select')) return;
-                isDragging = true; handle.style.cursor = 'grabbing'; el.classList.add('dragging-player');
-                startX = e.clientX; startY = e.clientY; initialLeft = el.offsetLeft; initialTop = el.offsetTop;
-                el.style.transition = 'none'; handle.setPointerCapture(e.pointerId);
-                handle.addEventListener('pointermove', dragMove); handle.addEventListener('pointerup', dragEnd); handle.addEventListener('pointercancel', dragEnd);
+                isDragging = true;
+                handle.style.cursor = 'grabbing';
+                el.classList.add('dragging-player');
+                startX = e.clientX;
+                startY = e.clientY;
+                initialLeft = el.offsetLeft;
+                initialTop = el.offsetTop;
+                el.style.transition = 'none';
+                handle.setPointerCapture(e.pointerId);
+                
+                handle.addEventListener('pointermove', dragMove);
+                handle.addEventListener('pointerup', dragEnd);
+                handle.addEventListener('pointercancel', dragEnd);
             }
+            
             function dragMove(e) {
-                if (!isDragging) return; const dx = e.clientX - startX; const dy = e.clientY - startY;
-                let newLeft = initialLeft + dx; let newTop = initialTop + dy; const padding = 16;
+                if (!isDragging) return;
+                e.preventDefault();
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                let newLeft = initialLeft + dx;
+                let newTop = initialTop + dy;
+                const padding = 16;
                 const bottomOffset = window.innerWidth <= 768 ? 80 : padding; 
                 const maxLeft = window.innerWidth - el.offsetWidth - padding; 
                 const maxTop = window.innerHeight - el.offsetHeight - bottomOffset;
                 
-                newLeft = Math.max(padding, Math.min(newLeft, maxLeft)); newTop = Math.max(padding, Math.min(newTop, maxTop));
-                el.style.left = newLeft + "px"; el.style.top = newTop + "px"; el.style.bottom = "auto"; el.style.right = "auto";
+                newLeft = Math.max(padding, Math.min(newLeft, maxLeft));
+                newTop = Math.max(padding, Math.min(newTop, maxTop));
+                el.style.left = newLeft + "px";
+                el.style.top = newTop + "px";
+                el.style.bottom = "auto";
+                el.style.right = "auto";
             }
+            
             function dragEnd(e) {
-                if (!isDragging) return; isDragging = false; handle.style.cursor = 'grab'; el.classList.remove('dragging-player');
-                el.style.transition = 'opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                if (!isDragging) return;
+                isDragging = false;
+                handle.style.cursor = 'grab';
+                el.classList.remove('dragging-player');
+                el.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
                 try { handle.releasePointerCapture(e.pointerId); } catch(err) {}
-                handle.removeEventListener('pointermove', dragMove); handle.removeEventListener('pointerup', dragEnd); handle.removeEventListener('pointercancel', dragEnd);
+                handle.removeEventListener('pointermove', dragMove);
+                handle.removeEventListener('pointerup', dragEnd);
+                handle.removeEventListener('pointercancel', dragEnd);
             }
         }
     </script>
