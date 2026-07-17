@@ -252,7 +252,8 @@ def send_to_telegram(req: TelegramRequest):
             file_data = f.read()
             
         files = {'audio' if req.is_audio else 'video': (filename, file_data)}
-        if req.thumb:
+        
+        if req.thumb and req.is_audio:
             try:
                 t_res = requests.get(req.thumb, timeout=4)
                 if t_res.status_code == 200: files['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
