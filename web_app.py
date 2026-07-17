@@ -1168,7 +1168,7 @@ async def send_to_telegram(req: TelegramRequest):
             
         reply_markup = {
             "inline_keyboard": [
-                [{"text": "🌟 أعجبك البوت؟ شاركه", "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"}]
+                [{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/MusicPlayZoneBot"}]
             ]
         }
         
