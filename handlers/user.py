@@ -80,29 +80,36 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
+    # 🌟 التعرف الذكي على ملفات الكوكيز مهما كان اسمها
     if getattr(update.message, "document", None) and is_admin(uid):
-        valid_cookie_files = [
-            "cookies.txt", "cookies_youtube.txt", "cookies_tiktok.txt", 
-            "cookies_instagram.txt", "cookies_facebook.txt", "cookies_x.txt", "cookies_spotify.txt"
-        ]
-        file_name = update.message.document.file_name
+        file_name = update.message.document.file_name.lower()
         
-        if file_name in valid_cookie_files:
+        target_name = None
+        if "youtube" in file_name: target_name = "cookies_youtube.txt"
+        elif "tiktok" in file_name: target_name = "cookies_tiktok.txt"
+        elif "instagram" in file_name: target_name = "cookies_instagram.txt"
+        elif "facebook" in file_name or "fb" in file_name: target_name = "cookies_facebook.txt"
+        elif "x.com" in file_name or "twitter" in file_name: target_name = "cookies_x.txt"
+        elif "spotify" in file_name: target_name = "cookies_spotify.txt"
+        elif file_name == "cookies.txt": target_name = "cookies.txt"
+        
+        if target_name:
             from core.config import COOKIES_DIR
             from database.operations import save_cookie_to_db
             
-            target_path = COOKIES_DIR / file_name
+            target_path = COOKIES_DIR / target_name
             new_file = await context.bot.get_file(update.message.document.file_id)
             await new_file.download_to_drive(target_path)
             
-            # قراءة المحتوى ورفعه للسحابة فوراً
             try:
                 with open(target_path, 'r', encoding='utf-8', errors='ignore') as f:
                     cookie_content = f.read()
-                save_cookie_to_db(file_name, cookie_content)
-                return await update.message.reply_text(f"✅ تم استلام وتحديث ملف كوكيز ({file_name}) وحفظه سحابياً لضمان عدم حذفه بنجاح! ☁️🎯")
+                save_cookie_to_db(target_name, cookie_content) # رفع الملف بالاسم الداخلي المعتمد
+                return await update.message.reply_text(f"✅ تم التعرف على الملف بنجاح!\nالاسم الأصلي: <code>{file_name}</code>\nتم ربطه بمنصة: <b>{target_name}</b>\n☁️ تم الرفع والحفظ السحابي بنجاح.", parse_mode="HTML")
             except Exception as e:
                 return await update.message.reply_text(f"⚠️ تم حفظ الملف محلياً ولكن فشل الرفع السحابي: {e}")
+        elif file_name.endswith(".txt"):
+            return await update.message.reply_text("❌ لم أتمكن من التعرف على منصة الملف. يرجى التأكد أن الاسم يحتوي على اسم المنصة (مثل tiktok أو instagram).")
 
     if uid in BANNED_USERS_CACHE: return
     maintenance = get_setting("maintenance", "0")
