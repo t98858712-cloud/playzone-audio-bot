@@ -172,7 +172,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             if "Message is not modified" in str(e): return
             raise e
 
-    # معالجة تشغيل / إيقاف إعلانات HilltopAds
     elif data == "adm_toggle_hilltop":
         current = get_setting("hilltop_status", "1")
         new_val = "0" if current == "1" else "1"
@@ -184,7 +183,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             if "Message is not modified" in str(e): return
             raise e
 
-    # معالجة تشغيل / إيقاف إعلانات Adsterra
     elif data == "adm_toggle_adsterra":
         current = get_setting("adsterra_status", "1")
         new_val = "0" if current == "1" else "1"
@@ -219,7 +217,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             )
             return await edit_message_smart(query.message, "✅ تم إرسال النسخة الاحتياطية بنجاح.", reply_markup=admin_security_menu(lang))
         else:
-            # خيار احتياطي في حال وجود قاعدة محلية قديمة بالقرص
             if DB_FILE.exists():
                 with open(DB_FILE, 'rb') as f:
                     await context.bot.send_document(chat_id=query.message.chat_id, document=f, filename="bot_database.db", caption="✅ النسخة الاحتياطية المحلية المحدثة (SQLite).")
@@ -227,19 +224,18 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             else:
                 return await edit_message_smart(query.message, "❌ فشل سحب نسخة احتياطية، قاعدة البيانات السحابية والمحلية غير متوفرة.", reply_markup=admin_security_menu(lang))
 
-    # الكود الجديد ✅
     elif data == "adm_cookie_guide":
         await query.answer()
         guide_text = (
             "🍪 <b>طريقة تحديث كوكيز المنصات:</b>\n\n"
-            "لست بحاجة لأوامر معقدة! فقط قم باستخراج ملف الكوكيز الخاص بالمنصة التي تريد تحديثها من متصفحك بالاسم المناسب:\n"
-            "• <code>cookies_youtube.txt</code>\n"
-            "• <code>cookies_tiktok.txt</code>\n"
-            "• <code>cookies_instagram.txt</code>\n"
-            "• <code>cookies_facebook.txt</code>\n"
-            "• <code>cookies_x.txt</code>\n"
-            "• <code>cookies_spotify.txt</code>\n\n"
-            "ثم أرسل الملف **مباشرة بمحادثة البوت كملف مستند**، وسيقوم البوت تلقائياً بحفظه في مكانه الصحيح لتفعيل التحديث فوراً! 🚀"
+            "قم باستخراج ملف الكوكيز من المتصفح بالإضافات العادية وسيتم تسميته كالتالي:\n"
+            "• <code>www.youtube.com_cookies.txt</code>\n"
+            "• <code>www.tiktok.com_cookies.txt</code>\n"
+            "• <code>www.instagram.com_cookies.txt</code>\n"
+            "• <code>www.facebook.com_cookies.txt</code>\n"
+            "• <code>x.com_cookies.txt</code>\n"
+            "• <code>open.spotify.com_cookies.txt</code>\n\n"
+            "ثم أرسل الملف **مباشرة بمحادثة البوت كملف مستند**، وسيتعرف عليه البوت تلقائياً ويرفعه للسحابة. 🚀"
         )
         return await edit_message_smart(query.message, guide_text, reply_markup=admin_security_menu(lang))
         
