@@ -227,11 +227,19 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
             else:
                 return await edit_message_smart(query.message, "❌ فشل سحب نسخة احتياطية، قاعدة البيانات السحابية والمحلية غير متوفرة.", reply_markup=admin_security_menu(lang))
 
+    # الكود الجديد ✅
     elif data == "adm_cookie_guide":
         await query.answer()
         guide_text = (
-            "🍪 <b>طريقة تحديث الكوكيز:</b>\n\n"
-            "لا حاجة لأي أوامر! فقط قم باستخراج ملف <code>cookies.txt</code> جديد من المتصفح الخاص بك، وأرسله كملف مباشر في هذه المحادثة، وسيقوم البوت بالتقاطه وتحديثه تلقائياً."
+            "🍪 <b>طريقة تحديث كوكيز المنصات:</b>\n\n"
+            "لست بحاجة لأوامر معقدة! فقط قم باستخراج ملف الكوكيز الخاص بالمنصة التي تريد تحديثها من متصفحك بالاسم المناسب:\n"
+            "• <code>cookies_youtube.txt</code>\n"
+            "• <code>cookies_tiktok.txt</code>\n"
+            "• <code>cookies_instagram.txt</code>\n"
+            "• <code>cookies_facebook.txt</code>\n"
+            "• <code>cookies_x.txt</code>\n"
+            "• <code>cookies_spotify.txt</code>\n\n"
+            "ثم أرسل الملف **مباشرة بمحادثة البوت كملف مستند**، وسيقوم البوت تلقائياً بحفظه في مكانه الصحيح لتفعيل التحديث فوراً! 🚀"
         )
         return await edit_message_smart(query.message, guide_text, reply_markup=admin_security_menu(lang))
         
