@@ -32,12 +32,11 @@ WEB_DIR = BASE_DOWNLOAD_DIR / "web_library"
 WEB_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- إدارة قاعدة البيانات للأنظمة ضخمة المستخدمين (Multi-Worker Safe) ---
 DB_PATH = "playzone_core.db"
 
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
-    conn.execute("PRAGMA journal_mode=WAL;")  # تفعيل الكفاءة العالية والقراءة/الكتابة المتزامنة
+    conn.execute("PRAGMA journal_mode=WAL;")  # تفعيل نظام WAL للتعامل مع آلاف الطلبات المتزامنة بدون قفل البيانات
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -60,11 +59,11 @@ def init_db():
 
 init_db()
 
-# إدارة الطوابير: الحد الأقصى للتحميلات المتزامنة في نفس الوقت لحماية معالج السيرفر
+# تنظيم طابور العمليات (Thread Pool) لـ 10 تحميلات متزامنة لحماية موارد المعالج من الاختناق
 DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
 
 def cleanup_cron():
-    """ تنظيف تلقائي سريع بدون استهلاك موارد السيرفر """
+    """ تنظيف دوري صامت للملفات القديمة لتوفير المساحة """
     while True:
         try:
             now = time.time()
@@ -152,7 +151,7 @@ async def api_search(req: SearchRequest):
                     "uploader": entry.get("uploader") or entry.get("channel") or "غير معروف",
                     "thumbnail": thumb_url
                 })
-            if len(valid_videos) == 15: break # تم زيادة الاقتراحات المعروضة لـ 15 اقتراح محترف عالي الجودة
+            if len(valid_videos) == 15: break # إخراج 15 اقتراحاً كاملاً واحترافياً للمستخدم
         return {"success": True, "entries": valid_videos}
     except Exception as e: 
         return {"success": False, "error": str(e)}
@@ -276,7 +275,7 @@ def send_to_telegram(req: TelegramRequest):
         filename = req.file_url.split("/")[-1]
         file_path = WEB_DIR / filename
         if not file_path.exists(): return {"success": False, "error": "الملف غير موجود."}
-        if not TELEGRAM_TOKEN: return {"success": False, "error": "البوت غير مفعل."}
+        if not TELEGRAM_TOKEN: return {"success": False, "error": "البوت غير مفعل بالخلفية."}
 
         api_method = "sendAudio" if req.is_audio else "sendVideo"
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
