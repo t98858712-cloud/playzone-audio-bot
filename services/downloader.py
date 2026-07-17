@@ -13,7 +13,6 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# أضفنا url: str | None = None هنا ليستقبل الرابط
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720", url: str | None = None):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
@@ -53,11 +52,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
-    # 🌟 الاستعانة بنظام الكوكيز الديناميكي حسب الرابط
     cookie_path = get_cookie_file_for_url(url) if url else None
     if cookie_path and cookie_file_is_usable(cookie_path):
         opts["cookiefile"] = str(cookie_path)
-    elif cookie_file_is_usable(COOKIES_FILE): # الاحتياطي
+    elif cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
 
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
@@ -87,7 +85,6 @@ def search_youtube(query: str, limit: int = 30):
         }
     }
     
-    # البحث دائماً يوتيوب، لذلك نعطيه كوكيز يوتيوب مباشرة
     if cookie_file_is_usable(COOKIES_YOUTUBE):
         opts["cookiefile"] = str(COOKIES_YOUTUBE)
     elif cookie_file_is_usable(COOKIES_FILE):
