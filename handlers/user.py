@@ -80,34 +80,49 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
+    # 🌟 التعرف الصارم والمباشر على أسماء الملفات فقط 🌟
     if getattr(update.message, "document", None) and is_admin(uid):
-        file_name = update.message.document.file_name.lower()
-        target_name = None
-        if "youtube" in file_name: target_name = "www.youtube.com_cookies.txt"
-        elif "tiktok" in file_name: target_name = "www.tiktok.com_cookies.txt"
-        elif "instagram" in file_name: target_name = "www.instagram.com_cookies.txt"
-        elif "facebook" in file_name or "fb" in file_name: target_name = "www.facebook.com_cookies.txt"
-        elif "x.com" in file_name or "twitter" in file_name: target_name = "x.com_cookies.txt"
-        elif "spotify" in file_name: target_name = "open.spotify.com_cookies.txt"
-        elif file_name == "cookies.txt": target_name = "cookies.txt"
+        file_name = update.message.document.file_name
         
-        if target_name:
+        # قائمة الأسماء الصارمة التي يجب أن يتطابق معها الملف المرفوع
+        valid_cookie_files = [
+            "cookies.txt", 
+            "www.youtube.com_cookies.txt", 
+            "www.tiktok.com_cookies.txt", 
+            "www.instagram.com_cookies.txt", 
+            "www.facebook.com_cookies.txt", 
+            "x.com_cookies.txt", 
+            "open.spotify.com_cookies.txt"
+        ]
+        
+        if file_name in valid_cookie_files:
             from core.config import COOKIES_DIR
             from database.operations import save_cookie_to_db
             
-            target_path = COOKIES_DIR / target_name
+            target_path = COOKIES_DIR / file_name
             new_file = await context.bot.get_file(update.message.document.file_id)
             await new_file.download_to_drive(target_path)
             
             try:
                 with open(target_path, 'r', encoding='utf-8', errors='ignore') as f:
                     cookie_content = f.read()
-                save_cookie_to_db(target_name, cookie_content)
-                return await update.message.reply_text(f"✅ تم التعرف على الملف بنجاح!\nالاسم الأصلي: <code>{file_name}</code>\nتم ربطه بمنصة: <b>{target_name}</b>\n☁️ تم الرفع والحفظ السحابي بنجاح.", parse_mode="HTML")
+                save_cookie_to_db(file_name, cookie_content)
+                return await update.message.reply_text(f"✅ تم استلام ملف <b>{file_name}</b> بنجاح!\n☁️ تم الرفع والحفظ السحابي، وهو جاهز للعمل.", parse_mode="HTML")
             except Exception as e:
                 return await update.message.reply_text(f"⚠️ تم حفظ الملف محلياً ولكن فشل الرفع السحابي: {e}")
+                
         elif file_name.endswith(".txt"):
-            return await update.message.reply_text("❌ لم أتمكن من التعرف على منصة الملف. يرجى التأكد أن الاسم يحتوي على اسم المنصة.")
+            return await update.message.reply_text(
+                "❌ خطأ: اسم الملف غير مطابق للأسماء المعتمدة.\n\n"
+                "يرجى التأكد من تسمية الملف بأحد الأسماء التالية بالضبط قبل إرساله:\n"
+                "• <code>www.youtube.com_cookies.txt</code>\n"
+                "• <code>www.tiktok.com_cookies.txt</code>\n"
+                "• <code>www.instagram.com_cookies.txt</code>\n"
+                "• <code>www.facebook.com_cookies.txt</code>\n"
+                "• <code>x.com_cookies.txt</code>\n"
+                "• <code>open.spotify.com_cookies.txt</code>\n"
+                "• <code>cookies.txt</code>", parse_mode="HTML"
+            )
 
     if uid in BANNED_USERS_CACHE: return
     maintenance = get_setting("maintenance", "0")
