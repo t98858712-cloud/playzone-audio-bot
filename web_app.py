@@ -112,7 +112,7 @@ def formatTime(secs):
     return f"{m}:{s:02d}"
 
 # ==========================================================
-# واجهة الـ HTML المحدثة بنظام الـ 10 ثوانٍ والروابط المطلقة
+# واجهة الـ HTML المصلحة بالكامل بجافا سكريبت سليمة 100%
 # ==========================================================
 INDEX_HTML = """
 <!DOCTYPE html>
@@ -312,7 +312,7 @@ INDEX_HTML = """
                                 <span id="progSpeed">-- MB/s</span>
                             </div>
                             <div id="directDownloadArea" class="hidden mt-4 pt-4 border-t border-panelBorder/60">
-                                <a id="directDownloadBtn" href="#" download class="btn bg-emerald-600 text-white w-full hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 text-xs"><i class="fas fa-arrow-alt-circle-down"></i> تحميل إلى جهازك 💾</a>
+                                <a id="directDownloadBtn" href="#" download class="btn bg-emerald-600 text-white w-full hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 text-xs"><i class="fas fa-arrow-alt-circle-down"></i> تحميل إلى جعلزك 💾</a>
                             </div>
                         </div>
                     </div>
@@ -457,7 +457,6 @@ INDEX_HTML = """
     </div>
 
     <script>
-        // 🌟 تعيين رابط خادم الباك إند تلقائياً ليعمل على الاستضافة المحلية أو البعيدة دون مشاكل
         const BACKEND_URL = window.location.origin;
 
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
@@ -738,7 +737,7 @@ INDEX_HTML = """
             
             adCheckInterval = setInterval(manualCheckAdStatus, 2000);
             
-            // 🌟 تحديث المؤقت الاحتياطي التلقائي هنا ليصبح 10 ثوانٍ (10000ms) تماماً بناء على طلبك
+            // 🌟 تعديل العداد الاحتياطي بالكامل ليصبح 10 ثوانٍ (جافا سكريبت صحيحة ههنا)
             adFallbackTimeout = setTimeout(() => {
                 clearInterval(adCheckInterval);
                 document.getElementById('adGate').classList.add('hidden');
@@ -780,7 +779,7 @@ INDEX_HTML = """
 
         async function startDownload() {
             const btn = event.currentTarget; const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = True;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
             document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
             document.getElementById('directDownloadArea').classList.add('hidden');
             
@@ -820,14 +819,14 @@ INDEX_HTML = """
                                 dlBtn.href = BACKEND_URL + prog.url; dlBtn.setAttribute('download', prog.title + (prog.is_audio ? '.mp3' : '.mp4'));
                                 dlArea.classList.remove('hidden');
                                 
-                                myLibrary.unshift({ id: Date.now().toString(), title: prog.title, url: BACKEND_URL + prog.url, thumb: prog.thumb, uploader: prog.uploader, duration: prog.duration, is_audio: prog.is_audio, timestamp: Date.now(), favorite: False });
+                                myLibrary.unshift({ id: Date.now().toString(), title: prog.title, url: BACKEND_URL + prog.url, thumb: prog.thumb, uploader: prog.uploader, duration: prog.duration, is_audio: prog.is_audio, timestamp: Date.now(), favorite: false });
                                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                                 
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
                                 showToast("تم حفظ الملف بنجاح", "success");
 
                                 if(localStorage.getItem('pz_auto_tg') !== 'false') {
-                                    sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, True, prog.title, prog.uploader, prog.duration, prog.thumb);
+                                    sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
                                 }
                             } 
                             else if(prog.status === 'error') { clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; }
@@ -838,7 +837,7 @@ INDEX_HTML = """
                     document.getElementById('progStatus').innerHTML = `<span class="text-red-500">${data.error}</span>`;
                 }
             } catch(e) { showToast("فشل الاتصال بالخادم", "error"); }
-            btn.innerHTML = original; btn.disabled = False;
+            btn.innerHTML = original; btn.disabled = false;
         }
 
         function playMediaTrack(index) {
@@ -848,12 +847,12 @@ INDEX_HTML = """
                 currentPlayingMode = 'audio'; document.getElementById('trackSource').innerText = '🎵 صوت';
                 document.getElementById('videoContainer').classList.add('hidden'); document.getElementById('audioVisualizer').classList.remove('hidden');
                 document.getElementById('pipBtn').classList.add('hidden'); document.getElementById('playerCoverImg').src = track.thumb || 'https://via.placeholder.com/150';
-                document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(True);
+                document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(true);
             } else {
                 currentPlayingMode = 'video'; document.getElementById('trackSource').innerText = '🎬 فيديو';
                 document.getElementById('videoContainer').classList.remove('hidden'); document.getElementById('audioVisualizer').classList.add('hidden');
                 document.getElementById('pipBtn').classList.remove('hidden'); document.getElementById('playerCoverImg').style.animationPlayState = 'paused';
-                animateVisualizerBars(False);
+                animateVisualizerBars(false);
             }
             videoElement.src = track.url; videoElement.load();
             const playPromise = videoElement.play();
@@ -861,7 +860,7 @@ INDEX_HTML = """
                 playPromise.then(() => { document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>'; })
                 .catch(error => {
                     document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
-                    document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(False);
+                    document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(false);
                     showToast("اضغط زر التشغيل للمتابعة", "success");
                 });
             }
@@ -873,11 +872,11 @@ INDEX_HTML = """
             if (videoElement.paused) {
                 videoElement.play().then(() => {
                     document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
-                    if(currentPlayingMode === 'audio') { document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(True); }
+                    if(currentPlayingMode === 'audio') { document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(true); }
                 }).catch(()=>{});
             } else {
                 videoElement.pause(); document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
-                document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(False);
+                document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(false);
             }
         }
 
@@ -911,7 +910,7 @@ INDEX_HTML = """
         function setupScrubbing() {
             const container = document.getElementById('progressContainer');
             container.addEventListener('pointerdown', (e) => {
-                isScrubbing = True; performScrub(e); container.setPointerCapture(e.pointerId);
+                isScrubbing = true; performScrub(e); container.setPointerCapture(e.pointerId);
                 container.addEventListener('pointermove', performScrub); container.addEventListener('pointerup', endScrub); container.addEventListener('pointercancel', endScrub);
             });
             function performScrub(e) {
@@ -921,7 +920,7 @@ INDEX_HTML = """
                 if (!isNaN(videoElement.duration)) { document.getElementById('playerTime').innerText = formatTime(pct * videoElement.duration) + ' / ' + formatTime(videoElement.duration); }
             }
             function endScrub(e) {
-                if (!isScrubbing) return; isScrubbing = False; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
+                if (!isScrubbing) return; isScrubbing = false; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
                 const pct = Math.max(0, Math.min(1, clickX / rect.width));
                 if (!isNaN(videoElement.duration)) { videoElement.currentTime = pct * videoElement.duration; }
                 try { container.releasePointerCapture(e.pointerId); } catch(err) {}
@@ -932,16 +931,16 @@ INDEX_HTML = """
         function changeVolume() {
             const val = document.getElementById('volumeSlider').value; videoElement.volume = val; lastVolume = val;
             const i = document.getElementById('muteBtn').querySelector('i');
-            if (val == 0) { i.className = "fas fa-volume-mute text-xs"; isMuted = True; } else { i.className = "fas fa-volume-up text-xs"; isMuted = False; }
+            if (val == 0) { i.className = "fas fa-volume-mute text-xs"; isMuted = true; } else { i.className = "fas fa-volume-up text-xs"; isMuted = false; }
         }
 
         function toggleMute() {
             const i = document.getElementById('muteBtn').querySelector('i');
             if (isMuted) {
                 videoElement.volume = lastVolume || 1; document.getElementById('volumeSlider').value = lastVolume || 1;
-                i.className = "fas fa-volume-up text-xs"; isMuted = False;
+                i.className = "fas fa-volume-up text-xs"; isMuted = false;
             } else {
-                videoElement.volume = 0; document.getElementById('volumeSlider').value = 0; i.className = "fas fa-volume-mute text-xs"; isMuted = True;
+                videoElement.volume = 0; document.getElementById('volumeSlider').value = 0; i.className = "fas fa-volume-mute text-xs"; isMuted = true;
             }
         }
 
@@ -952,7 +951,7 @@ INDEX_HTML = """
         }
 
         function handleMediaEnd() { if (isRepeat) { videoElement.currentTime = 0; videoElement.play().catch(()=>{}); } else { playNext(); } }
-        function closePlayer() { videoElement.pause(); mediaContainer.classList.remove('active-player'); animateVisualizerBars(False); }
+        function closePlayer() { videoElement.pause(); mediaContainer.classList.remove('active-player'); animateVisualizerBars(false); }
         function triggerPiP() { if (document.pictureInPictureEnabled && videoElement && currentPlayingMode === 'video') { if (document.pictureInPictureElement) document.exitPictureInPicture(); else videoElement.requestPictureInPicture().catch(()=>{}); } }
         function toggleCompactMode(e) { e.stopPropagation(); const icon = e.currentTarget.querySelector('i'); if (mediaContainer.classList.contains('compact-mode')) { removeCompactLayout(); icon.className = "fas fa-compress-alt text-xs"; } else { mediaContainer.classList.add('compact-mode'); document.getElementById('playerBody').style.display = 'none'; icon.className = "fas fa-expand-alt text-xs"; } }
         function removeCompactLayout() { mediaContainer.classList.remove('compact-mode'); document.getElementById('playerBody').style.display = 'block'; }
@@ -960,11 +959,11 @@ INDEX_HTML = """
         function animateVisualizerBars(run) { const visualizer = document.getElementById('visualizerBars'); if (run) visualizer.classList.add('playing-visualizer'); else visualizer.classList.remove('playing-visualizer'); }
 
         function setupAdvancedDraggable(el, handle) {
-            let isDragging = False; let startX, startY, initialLeft, initialTop;
+            let isDragging = false; let startX, startY, initialLeft, initialTop;
             handle.addEventListener('pointerdown', dragStart);
             function dragStart(e) {
                 if (e.target.closest('button, input, a, select')) return;
-                isDragging = True; handle.style.cursor = 'grabbing'; el.classList.add('dragging-player');
+                isDragging = true; handle.style.cursor = 'grabbing'; el.classList.add('dragging-player');
                 startX = e.clientX; startY = e.clientY; initialLeft = el.offsetLeft; initialTop = el.offsetTop;
                 el.style.transition = 'none'; handle.setPointerCapture(e.pointerId);
                 handle.addEventListener('pointermove', dragMove); handle.addEventListener('pointerup', dragEnd); handle.addEventListener('pointercancel', dragEnd);
@@ -977,7 +976,7 @@ INDEX_HTML = """
                 el.style.left = newLeft + "px"; el.style.top = newTop + "px"; el.style.bottom = "auto"; el.style.right = "auto";
             }
             function dragEnd(e) {
-                if (!isDragging) return; isDragging = False; handle.style.cursor = 'grab'; el.classList.remove('dragging-player');
+                if (!isDragging) return; isDragging = false; handle.style.cursor = 'grab'; el.classList.remove('dragging-player');
                 el.style.transition = 'opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
                 try { handle.releasePointerCapture(e.pointerId); } catch(err) {}
                 handle.removeEventListener('pointermove', dragMove); handle.removeEventListener('pointerup', dragEnd); handle.removeEventListener('pointercancel', dragEnd);
@@ -1033,7 +1032,6 @@ def generate_ad_session():
     click_id = uuid.uuid4().hex[:12]
     AD_VERIFICATIONS[click_id] = {"status": "pending", "created_at": time.time()}
     
-    # 🌟 فصل البارامترات بذكاء: استخدام علامة & لو كان الرابط يحتوي على علامة استفهام مسبقاً لمنع تلف الـ URL
     separator = "&" if "?" in AD_LINK else "?"
     tracked_link = f"{AD_LINK}{separator}clickid={click_id}"
     
@@ -1052,7 +1050,6 @@ def check_ad_status(click_id: str):
     if not session:
         return {"status": "not_found"}
         
-    # 🌟 العداد الاحتياطي في الباك إند: لو مرت 10 ثوانٍ يتم فك القفل فوراً لضمان تجربة مستخدم سريعة
     if session["status"] == "verified" or (time.time() - session["created_at"] > 10):
         return {"status": "verified"}
         
@@ -1093,7 +1090,6 @@ async def start_download(req: URLRequest):
     if not session:
         return {"success": False, "error": "جلسة إعلانية غير صالحة."}
         
-    # 🌟 جدار الحماية في الباك إند محدث كلياً ليدعم الـ 10 ثوانٍ كحد أقصى للتحقق الاحتياطي الآمن
     is_verified = session["status"] == "verified"
     is_expired_safe = (time.time() - session["created_at"] > 10)
     
