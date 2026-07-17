@@ -117,6 +117,43 @@ def trim_old_pending_requests(context: ContextTypes.DEFAULT_TYPE, max_items: int
         items = sorted(pending.items(), key=lambda kv: kv[1].get("created_at", 0), reverse=True)
         context.user_data["pending_requests"] = dict(items[:max_items])
 
+# الكود الجديد ✅ (أضف هذه الدالة في نهاية الملف)
+def get_cookie_file_for_url(url: str) -> Path | None:
+    """تحديد ملف الكوكيز المناسب ديناميكياً بناءً على دومين الرابط"""
+    if not url:
+        return None
+    
+    url_lower = url.lower()
+    from core.config import (
+        COOKIES_YOUTUBE, COOKIES_TIKTOK, COOKIES_INSTAGRAM, 
+        COOKIES_FACEBOOK, COOKIES_X, COOKIES_SPOTIFY, COOKIES_FILE
+    )
+    
+    selected_cookie = None
+    
+    if "youtube.com" in url_lower or "youtu.be" in url_lower:
+        selected_cookie = COOKIES_YOUTUBE
+    elif "tiktok.com" in url_lower:
+        selected_cookie = COOKIES_TIKTOK
+    elif "instagram.com" in url_lower:
+        selected_cookie = COOKIES_INSTAGRAM
+    elif "facebook.com" in url_lower or "fb.watch" in url_lower or "fb.com" in url_lower:
+        selected_cookie = COOKIES_FACEBOOK
+    elif "x.com" in url_lower or "twitter.com" in url_lower:
+        selected_cookie = COOKIES_X
+    elif "spotify.com" in url_lower:
+        selected_cookie = COOKIES_SPOTIFY
+
+    # التحقق من صلاحية ملف الكوكيز المستهدف قبل اعتماده
+    if selected_cookie and cookie_file_is_usable(selected_cookie):
+        return selected_cookie
+        
+    # خيار بديل (Fallback): إذا لم يتوفر كوكيز المنصة، نحاول استخدام الكوكيز العام الافتراضي
+    if cookie_file_is_usable(COOKIES_FILE):
+        return COOKIES_FILE
+        
+    return None
+
 def cookie_file_is_usable(path: Path) -> bool:
     try:
         if not path.exists() or path.stat().st_size <= 0: return False
