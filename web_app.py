@@ -274,8 +274,11 @@ def send_to_telegram(req: TelegramRequest):
     try:
         filename = req.file_url.split("/")[-1]
         file_path = WEB_DIR / filename
+        
+        # الفحوصات الأمنية وحالة الملف
         if not file_path.exists(): return {"success": False, "error": "الملف غير موجود."}
         if not TELEGRAM_TOKEN: return {"success": False, "error": "البوت غير مفعل بالخلفية."}
+        if file_path.stat().st_size / (1024 * 1024) > 49.5: return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
 
         api_method = "sendAudio" if req.is_audio else "sendVideo"
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
@@ -284,10 +287,12 @@ def send_to_telegram(req: TelegramRequest):
         reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]]}
         
         data = {'chat_id': req.chat_id, 'caption': caption, 'reply_markup': json.dumps(reply_markup)}
+        
         if req.is_audio:
             data.update({'title': req.title, 'performer': req.performer, 'duration': req.duration})
         else:
             data.update({'supports_streaming': True, 'duration': req.duration})
+            # استخراج أبعاد الفيديو باختصار
             try:
                 cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
                 res = subprocess.run(cmd, capture_output=True, text=True)
@@ -297,6 +302,8 @@ def send_to_telegram(req: TelegramRequest):
 
         with open(file_path, 'rb') as f: file_data = f.read()
         files = {'audio' if req.is_audio else 'video': (filename, file_data)}
+        
+        # جلب وإرفاق الصورة المصغرة للصوتيات
         if req.thumb and req.is_audio:
             try:
                 t_res = requests.get(req.thumb, timeout=4)
@@ -305,6 +312,8 @@ def send_to_telegram(req: TelegramRequest):
                 
         response = requests.post(url, data=data, files=files, timeout=60)
         res_data = response.json()
+        
         if response.status_code == 200 and res_data.get("ok"): return {"success": True}
         return {"success": False, "error": res_data.get("description", "تأكد من بدء البوت أولاً.")}
+        
     except Exception as e: return {"success": False, "error": str(e)}
