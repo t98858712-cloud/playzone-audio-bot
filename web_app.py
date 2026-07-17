@@ -93,8 +93,8 @@ def search_youtube(query: str, limit: int = 5):
         return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
 # ==========================================
-// قالب HTML يتم استبدال المتغيرات به لتفادي تعارض الأقواس
-// ==========================================
+# قالب HTML يتم استبدال المتغيرات به لتفادي تعارض الأقواس
+# ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl" class="dark">
