@@ -14,18 +14,15 @@ BOT_USERNAME = "MusicPlayZoneBot"  # اليوزر الثابت اليدوي لل
 
 try:
     from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
-    from database.connection import init_db
-    from utils.helpers import cookie_file_is_usable
 except ImportError:
     BASE_DOWNLOAD_DIR = Path("./downloads")
-    HILLTOPADS_LINK = "https://example.com/ad"
-    ADSTERRA_LINK = None
+    HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z"
+    ADSTERRA_LINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
     COOKIES_FILE = Path("cookies.txt")
     def init_db(): pass
     def cookie_file_is_usable(f): return False
 
 app = FastAPI(title="PlayZone Dashboard")
-init_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,7 +53,8 @@ def cleanup_daemon():
             for jid in expired_jobs:
                 PROGRESS_CACHE.pop(jid, None)
                 
-            expired_ads = [cid for cid, t in list(AD_VERIFICATIONS.items()) if isinstance(t, float) and now - t > 3600]
+            # تنظيف سجل الجلسات الإعلانية منتهي الصلاحية (أقدم من ساعة)
+            expired_ads = [cid for cid, data in list(AD_VERIFICATIONS.items()) if now - data.get("created_at", now) > 3600]
             for cid in expired_ads:
                 AD_VERIFICATIONS.pop(cid, None)
         except Exception as e:
@@ -69,7 +67,7 @@ class URLRequest(BaseModel):
     url: str
     mode: str = "video"
     resolution: str = "720"
-    click_id: str = "" # تمرير معرف الإعلان للتحقق منه قبل التحميل
+    click_id: str = ""
 
 class SearchRequest(BaseModel):
     query: str
@@ -91,7 +89,10 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv"], "player_skip": ["web", "mweb"]}},
         "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept-Language": "ar-SA,ar;q=0.9"}
     }
-    if cookie_file_is_usable(COOKIES_FILE): opts["cookiefile"] = str(COOKIES_FILE)
+    try:
+        from utils.helpers import cookie_file_is_usable
+        if cookie_file_is_usable(COOKIES_FILE): opts["cookiefile"] = str(COOKIES_FILE)
+    except: pass
     if outtmpl_path: opts["outtmpl"] = str(outtmpl_path)
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
@@ -111,7 +112,7 @@ def formatTime(secs):
     return f"{m}:{s:02d}"
 
 # ==========================================================
-# واجهة الـ HTML المحدثة بالكامل بنظام تتبع الـ Postback
+# واجهة الـ HTML المحدثة بنظام الـ 10 ثوانٍ والروابط المطلقة
 # ==========================================================
 INDEX_HTML = """
 <!DOCTYPE html>
@@ -270,12 +271,12 @@ INDEX_HTML = """
                     <div class="w-full md:w-2/3 space-y-4">
                         <h3 id="title" class="font-bold text-sm md:text-base text-white line-clamp-2"></h3>
                         
-                        <!-- نظام جدار الإعلانات الحقيقي -->
+                        <!-- نظام جدار الإعلانات الهجين المحدث -->
                         <div id="adGate" class="bg-black/50 border border-panelBorder p-4 rounded-2xl text-center">
-                            <p class="text-xs mb-3 text-textMuted font-medium"><i class="fas fa-lock text-accent ml-1"></i> يرجى فتح الإعلان وتخطيه لتفعيل رابط التحميل تلقائياً.</p>
+                            <p class="text-xs mb-3 text-textMuted font-medium"><i class="fas fa-lock text-accent ml-1"></i> يرجى فتح الإعلان ليفك رابط التحميل قفله تلقائياً.</p>
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <a id="realAdLink" href="#" target="_blank" onclick="startAdVerificationCheck()" class="btn bg-blue-600 text-white flex-1 hover:bg-blue-500 text-xs md:text-sm"><i class="fas fa-external-link-alt"></i> 1. فتح الإعلان</a>
-                                <button id="verifyBtn" onclick="manualCheckAdStatus()" class="btn bg-panel text-textMuted flex-1 border border-panelBorder text-xs md:text-sm cursor-wait"><i class="fas fa-sync fa-spin mr-1"></i> 2. جاري الانتظار تلقائياً...</button>
+                                <button id="verifyBtn" onclick="manualCheckAdStatus()" class="btn bg-panel text-textMuted flex-1 border border-panelBorder text-xs md:text-sm cursor-wait"><i class="fas fa-sync fa-spin mr-1"></i> جاري الانتظار تلقائياً...</button>
                             </div>
                         </div>
 
@@ -389,7 +390,7 @@ INDEX_HTML = """
                 </div>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0 mr-2">
-                <button onclick="toggleCompactMode(event)" class="text-textMuted hover:text-accent p-1 transition-transform active:scale-90" title="تصغير"><i class="fas fa-compress-alt text-xs"></i></button>
+                <button onclick="toggleCompactMode(event)" class="text-textMuted hover:text-accent p-1 transition-colors transition-transform active:scale-90" title="تصغير"><i class="fas fa-compress-alt text-xs"></i></button>
                 <button onclick="resetPlayerPosition()" class="text-textMuted hover:text-white p-1 transition-colors transition-transform active:scale-90" title="إعادة تعيين الموضع"><i class="fas fa-location-arrow text-[10px]"></i></button>
                 <button onclick="closePlayer()" class="text-textMuted hover:text-red-400 p-1 transition-colors transition-transform active:scale-90"><i class="fas fa-times text-xs"></i></button>
             </div>
@@ -456,10 +457,14 @@ INDEX_HTML = """
     </div>
 
     <script>
+        // 🌟 تعيين رابط خادم الباك إند تلقائياً ليعمل على الاستضافة المحلية أو البعيدة دون مشاكل
+        const BACKEND_URL = window.location.origin;
+
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
         let currentUrl = "";
-        let currentClickId = ""; // كود تتبع الجلسة الإعلانية الحالية
+        let currentClickId = "";
         let adCheckInterval = null;
+        let adFallbackTimeout = null; 
         let currentPlayingIndex = -1;
         let isShuffle = false;
         let isRepeat = false;
@@ -654,7 +659,7 @@ INDEX_HTML = """
             const chatId = localStorage.getItem('pz_tg_id'); if (!chatId) return;
             showToast(auto ? "جاري الإرسال لبوت تيليجرام تلقائياً..." : "جاري إرسال الملف إلى تيليجرام...", "success");
             try {
-                const res = await fetch('/api/send_telegram', {
+                const res = await fetch(`${BACKEND_URL}/api/send_telegram`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ file_url: fileUrl, chat_id: chatId.toString(), is_audio: isAudio, title: title, performer: performer, duration: duration || 0, thumb: thumb || "" })
                 });
@@ -671,7 +676,7 @@ INDEX_HTML = """
             if (input.startsWith('http')) { await renderPreview(input); } 
             else {
                 try {
-                    const res = await fetch('/api/search', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:input})});
+                    const res = await fetch(`${BACKEND_URL}/api/search`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:input})});
                     const data = await res.json();
                     if(data.success && data.entries.length) {
                         let box = document.getElementById('searchResultsList'); box.innerHTML = '';
@@ -701,16 +706,16 @@ INDEX_HTML = """
             document.getElementById('previewBox').classList.add('hidden'); document.getElementById('progressBox').classList.add('hidden');
             document.getElementById('dlOptions').classList.add('hidden'); 
             if(adCheckInterval) clearInterval(adCheckInterval);
+            if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
             
             try {
-                const res = await fetch('/api/preview', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:url})});
+                const res = await fetch(`${BACKEND_URL}/api/preview`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:url})});
                 const data = await res.json();
                 if(data.success) {
                     document.getElementById('previewBox').classList.remove('hidden');
                     document.getElementById('thumb').src = data.thumb; document.getElementById('title').innerText = data.title;
                     
-                    // توليد جلسة التحقق الإعلانية الفريدة من السيرفر قبل التحميل
-                    const sessionRes = await fetch('/api/generate_ad_session');
+                    const sessionRes = await fetch(`${BACKEND_URL}/api/generate_ad_session`);
                     const sessionData = await sessionRes.json();
                     currentClickId = sessionData.click_id;
                     
@@ -719,30 +724,40 @@ INDEX_HTML = """
                     
                     let vBtn = document.getElementById('verifyBtn');
                     vBtn.className = "btn bg-panel text-textMuted flex-1 border border-panelBorder text-xs cursor-wait";
-                    vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> بانتظار المشاهدة التلقائية...';
+                    vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> بانتظار الفحص التلقائي...';
                 } else showToast("الرابط غير صالح للتحميل", "error");
             } catch(e) { showToast("فشل تحميل المعاينة", "error"); }
         }
 
         function toggleRes() { document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; }
         
-        // فحص حالة الإعلان الحقيقية تلقائياً كل ثانيتين بعد فتح الرابط لفك القفل فوراً
         function startAdVerificationCheck() {
-            showToast("تم فتح الإعلان، يرجى تخطيه ليفتح الرابط تلقائياً", "success");
+            showToast("تم فتح الإعلان بنجاح 🌐", "success");
             if(adCheckInterval) clearInterval(adCheckInterval);
+            if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
+            
             adCheckInterval = setInterval(manualCheckAdStatus, 2000);
+            
+            // 🌟 تحديث المؤقت الاحتياطي التلقائي هنا ليصبح 10 ثوانٍ (10000ms) تماماً بناء على طلبك
+            adFallbackTimeout = setTimeout(() => {
+                clearInterval(adCheckInterval);
+                document.getElementById('adGate').classList.add('hidden');
+                document.getElementById('dlOptions').classList.remove('hidden');
+                showToast("تم تجاوز الفحص وتفعيل الرابط بنجاح 🔓", "success");
+            }, 10000);
         }
 
         async function manualCheckAdStatus() {
             if(!currentClickId) return;
             try {
-                const res = await fetch(`/api/check_ad_status/${currentClickId}`);
+                const res = await fetch(`${BACKEND_URL}/api/check_ad_status/${currentClickId}`);
                 const data = await res.json();
                 if(data.status === 'verified') {
                     clearInterval(adCheckInterval);
+                    clearTimeout(adFallbackTimeout);
                     document.getElementById('adGate').classList.add('hidden');
                     document.getElementById('dlOptions').classList.remove('hidden');
-                    showToast("تم التحقق من الإعلان بنجاح! تم فك قفل التحميل 🔓", "success");
+                    showToast("تم التحقق من شبكة الإعلانات بنجاح! 🔓", "success");
                 }
             } catch(e){}
         }
@@ -765,7 +780,7 @@ INDEX_HTML = """
 
         async function startDownload() {
             const btn = event.currentTarget; const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = True;
             document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
             document.getElementById('directDownloadArea').classList.add('hidden');
             
@@ -776,7 +791,7 @@ INDEX_HTML = """
 
             const mode = document.getElementById('mode').value, resVal = document.getElementById('resolution').value;
             try {
-                const res = await fetch('/api/download', {
+                const res = await fetch(`${BACKEND_URL}/api/download`, {
                     method:'POST', headers:{'Content-Type':'application/json'}, 
                     body:JSON.stringify({url:currentUrl, mode:mode, resolution:resVal, click_id: currentClickId})
                 });
@@ -784,7 +799,7 @@ INDEX_HTML = """
                 if(data.success) {
                     const interval = setInterval(async ()=>{
                         try {
-                            const progRes = await fetch(`/api/progress/${data.job_id}`); const prog = await progRes.json();
+                            const progRes = await fetch(`${BACKEND_URL}/api/progress/${data.job_id}`); const prog = await progRes.json();
                             if(prog.status === 'downloading') {
                                 document.getElementById('progStatus').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري تحميل الملف...';
                                 document.getElementById('progBar').style.width = prog.percent + '%';
@@ -802,17 +817,17 @@ INDEX_HTML = """
                                 document.getElementById('progPercent').innerText = '100%'; document.getElementById('progBar').style.width = '100%';
                                 
                                 const dlArea = document.getElementById('directDownloadArea'); const dlBtn = document.getElementById('directDownloadBtn');
-                                dlBtn.href = prog.url; dlBtn.setAttribute('download', prog.title + (prog.is_audio ? '.mp3' : '.mp4'));
+                                dlBtn.href = BACKEND_URL + prog.url; dlBtn.setAttribute('download', prog.title + (prog.is_audio ? '.mp3' : '.mp4'));
                                 dlArea.classList.remove('hidden');
                                 
-                                myLibrary.unshift({ id: Date.now().toString(), title: prog.title, url: prog.url, thumb: prog.thumb, uploader: prog.uploader, duration: prog.duration, is_audio: prog.is_audio, timestamp: Date.now(), favorite: false });
+                                myLibrary.unshift({ id: Date.now().toString(), title: prog.title, url: BACKEND_URL + prog.url, thumb: prog.thumb, uploader: prog.uploader, duration: prog.duration, is_audio: prog.is_audio, timestamp: Date.now(), favorite: False });
                                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                                 
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
                                 showToast("تم حفظ الملف بنجاح", "success");
 
                                 if(localStorage.getItem('pz_auto_tg') !== 'false') {
-                                    sendToTelegram(prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
+                                    sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, True, prog.title, prog.uploader, prog.duration, prog.thumb);
                                 }
                             } 
                             else if(prog.status === 'error') { clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; }
@@ -823,7 +838,7 @@ INDEX_HTML = """
                     document.getElementById('progStatus').innerHTML = `<span class="text-red-500">${data.error}</span>`;
                 }
             } catch(e) { showToast("فشل الاتصال بالخادم", "error"); }
-            btn.innerHTML = original; btn.disabled = false;
+            btn.innerHTML = original; btn.disabled = False;
         }
 
         function playMediaTrack(index) {
@@ -833,12 +848,12 @@ INDEX_HTML = """
                 currentPlayingMode = 'audio'; document.getElementById('trackSource').innerText = '🎵 صوت';
                 document.getElementById('videoContainer').classList.add('hidden'); document.getElementById('audioVisualizer').classList.remove('hidden');
                 document.getElementById('pipBtn').classList.add('hidden'); document.getElementById('playerCoverImg').src = track.thumb || 'https://via.placeholder.com/150';
-                document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(true);
+                document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(True);
             } else {
                 currentPlayingMode = 'video'; document.getElementById('trackSource').innerText = '🎬 فيديو';
                 document.getElementById('videoContainer').classList.remove('hidden'); document.getElementById('audioVisualizer').classList.add('hidden');
                 document.getElementById('pipBtn').classList.remove('hidden'); document.getElementById('playerCoverImg').style.animationPlayState = 'paused';
-                animateVisualizerBars(false);
+                animateVisualizerBars(False);
             }
             videoElement.src = track.url; videoElement.load();
             const playPromise = videoElement.play();
@@ -846,7 +861,7 @@ INDEX_HTML = """
                 playPromise.then(() => { document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>'; })
                 .catch(error => {
                     document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
-                    document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(false);
+                    document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(False);
                     showToast("اضغط زر التشغيل للمتابعة", "success");
                 });
             }
@@ -858,11 +873,11 @@ INDEX_HTML = """
             if (videoElement.paused) {
                 videoElement.play().then(() => {
                     document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
-                    if(currentPlayingMode === 'audio') { document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(true); }
+                    if(currentPlayingMode === 'audio') { document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(True); }
                 }).catch(()=>{});
             } else {
                 videoElement.pause(); document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
-                document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(false);
+                document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(False);
             }
         }
 
@@ -896,7 +911,7 @@ INDEX_HTML = """
         function setupScrubbing() {
             const container = document.getElementById('progressContainer');
             container.addEventListener('pointerdown', (e) => {
-                isScrubbing = true; performScrub(e); container.setPointerCapture(e.pointerId);
+                isScrubbing = True; performScrub(e); container.setPointerCapture(e.pointerId);
                 container.addEventListener('pointermove', performScrub); container.addEventListener('pointerup', endScrub); container.addEventListener('pointercancel', endScrub);
             });
             function performScrub(e) {
@@ -906,7 +921,7 @@ INDEX_HTML = """
                 if (!isNaN(videoElement.duration)) { document.getElementById('playerTime').innerText = formatTime(pct * videoElement.duration) + ' / ' + formatTime(videoElement.duration); }
             }
             function endScrub(e) {
-                if (!isScrubbing) return; isScrubbing = false; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
+                if (!isScrubbing) return; isScrubbing = False; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
                 const pct = Math.max(0, Math.min(1, clickX / rect.width));
                 if (!isNaN(videoElement.duration)) { videoElement.currentTime = pct * videoElement.duration; }
                 try { container.releasePointerCapture(e.pointerId); } catch(err) {}
@@ -917,16 +932,16 @@ INDEX_HTML = """
         function changeVolume() {
             const val = document.getElementById('volumeSlider').value; videoElement.volume = val; lastVolume = val;
             const i = document.getElementById('muteBtn').querySelector('i');
-            if (val == 0) { i.className = "fas fa-volume-mute text-xs"; isMuted = true; } else { i.className = "fas fa-volume-up text-xs"; isMuted = false; }
+            if (val == 0) { i.className = "fas fa-volume-mute text-xs"; isMuted = True; } else { i.className = "fas fa-volume-up text-xs"; isMuted = False; }
         }
 
         function toggleMute() {
             const i = document.getElementById('muteBtn').querySelector('i');
             if (isMuted) {
                 videoElement.volume = lastVolume || 1; document.getElementById('volumeSlider').value = lastVolume || 1;
-                i.className = "fas fa-volume-up text-xs"; isMuted = false;
+                i.className = "fas fa-volume-up text-xs"; isMuted = False;
             } else {
-                videoElement.volume = 0; document.getElementById('volumeSlider').value = 0; i.className = "fas fa-volume-mute text-xs"; isMuted = true;
+                videoElement.volume = 0; document.getElementById('volumeSlider').value = 0; i.className = "fas fa-volume-mute text-xs"; isMuted = True;
             }
         }
 
@@ -937,7 +952,7 @@ INDEX_HTML = """
         }
 
         function handleMediaEnd() { if (isRepeat) { videoElement.currentTime = 0; videoElement.play().catch(()=>{}); } else { playNext(); } }
-        function closePlayer() { videoElement.pause(); mediaContainer.classList.remove('active-player'); animateVisualizerBars(false); }
+        function closePlayer() { videoElement.pause(); mediaContainer.classList.remove('active-player'); animateVisualizerBars(False); }
         function triggerPiP() { if (document.pictureInPictureEnabled && videoElement && currentPlayingMode === 'video') { if (document.pictureInPictureElement) document.exitPictureInPicture(); else videoElement.requestPictureInPicture().catch(()=>{}); } }
         function toggleCompactMode(e) { e.stopPropagation(); const icon = e.currentTarget.querySelector('i'); if (mediaContainer.classList.contains('compact-mode')) { removeCompactLayout(); icon.className = "fas fa-compress-alt text-xs"; } else { mediaContainer.classList.add('compact-mode'); document.getElementById('playerBody').style.display = 'none'; icon.className = "fas fa-expand-alt text-xs"; } }
         function removeCompactLayout() { mediaContainer.classList.remove('compact-mode'); document.getElementById('playerBody').style.display = 'block'; }
@@ -945,11 +960,11 @@ INDEX_HTML = """
         function animateVisualizerBars(run) { const visualizer = document.getElementById('visualizerBars'); if (run) visualizer.classList.add('playing-visualizer'); else visualizer.classList.remove('playing-visualizer'); }
 
         function setupAdvancedDraggable(el, handle) {
-            let isDragging = false; let startX, startY, initialLeft, initialTop;
+            let isDragging = False; let startX, startY, initialLeft, initialTop;
             handle.addEventListener('pointerdown', dragStart);
             function dragStart(e) {
                 if (e.target.closest('button, input, a, select')) return;
-                isDragging = true; handle.style.cursor = 'grabbing'; el.classList.add('dragging-player');
+                isDragging = True; handle.style.cursor = 'grabbing'; el.classList.add('dragging-player');
                 startX = e.clientX; startY = e.clientY; initialLeft = el.offsetLeft; initialTop = el.offsetTop;
                 el.style.transition = 'none'; handle.setPointerCapture(e.pointerId);
                 handle.addEventListener('pointermove', dragMove); handle.addEventListener('pointerup', dragEnd); handle.addEventListener('pointercancel', dragEnd);
@@ -962,7 +977,7 @@ INDEX_HTML = """
                 el.style.left = newLeft + "px"; el.style.top = newTop + "px"; el.style.bottom = "auto"; el.style.right = "auto";
             }
             function dragEnd(e) {
-                if (!isDragging) return; isDragging = false; handle.style.cursor = 'grab'; el.classList.remove('dragging-player');
+                if (!isDragging) return; isDragging = False; handle.style.cursor = 'grab'; el.classList.remove('dragging-player');
                 el.style.transition = 'opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
                 try { handle.releasePointerCapture(e.pointerId); } catch(err) {}
                 handle.removeEventListener('pointermove', dragMove); handle.removeEventListener('pointerup', dragEnd); handle.removeEventListener('pointercancel', dragEnd);
@@ -1013,27 +1028,35 @@ async def get_preview(req: URLRequest):
             return {"success": True, "title": info.get("title", "بدون عنوان"), "thumb": info.get("thumbnail", "")}
     except Exception as e: return {"success": False, "error": str(e)}
 
-# 1. توليد كود تتبع إعلاني فريد لكل محاولة تحميل لمنع التخطي التلقائي للرابط
 @app.get("/api/generate_ad_session")
 def generate_ad_session():
     click_id = uuid.uuid4().hex[:12]
-    AD_VERIFICATIONS[click_id] = "pending"
-    tracked_link = f"{AD_LINK}?clickid={click_id}"
+    AD_VERIFICATIONS[click_id] = {"status": "pending", "created_at": time.time()}
+    
+    # 🌟 فصل البارامترات بذكاء: استخدام علامة & لو كان الرابط يحتوي على علامة استفهام مسبقاً لمنع تلف الـ URL
+    separator = "&" if "?" in AD_LINK else "?"
+    tracked_link = f"{AD_LINK}{separator}clickid={click_id}"
+    
     return {"click_id": click_id, "ad_link": tracked_link}
 
-# 2. مسار الـ Postback / Callback الخاص بالشبكات الإعلانية (Adsterra / HilltopAds) لتأكيد المشاهدة الحقيقية
 @app.get("/api/ad_callback")
 def ad_callback(clickid: str):
     if clickid in AD_VERIFICATIONS:
-        AD_VERIFICATIONS[clickid] = "verified"
+        AD_VERIFICATIONS[clickid]["status"] = "verified"
         return {"status": "success", "message": "Ad verified successfully"}
     return {"status": "error", "message": "Invalid token"}
 
-# 3. فحص الواجهة البرمجية من طرف المتصفح لحالة الإعلان الحالية
 @app.get("/api/check_ad_status/{click_id}")
 def check_ad_status(click_id: str):
-    status = AD_VERIFICATIONS.get(click_id, "not_found")
-    return {"status": status}
+    session = AD_VERIFICATIONS.get(click_id)
+    if not session:
+        return {"status": "not_found"}
+        
+    # 🌟 العداد الاحتياطي في الباك إند: لو مرت 10 ثوانٍ يتم فك القفل فوراً لضمان تجربة مستخدم سريعة
+    if session["status"] == "verified" or (time.time() - session["created_at"] > 10):
+        return {"status": "verified"}
+        
+    return {"status": session["status"]}
 
 def bg_download(job_id: str, url: str, mode: str, res: str):
     def hook(d):
@@ -1066,9 +1089,16 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
 
 @app.post("/api/download")
 async def start_download(req: URLRequest):
-    # حماية أمنية من السيرفر: لا يمكن بدء التحميل إطلاقاً إلا إذا استقبل الـ callback من لوحة الإعلانات
-    if req.click_id not in AD_VERIFICATIONS or AD_VERIFICATIONS[req.click_id] != "verified":
-        return {"success": False, "error": "خطأ: لم يتم التحقق من مشاهدة الإعلان بشكل حقيقي بعد!"}
+    session = AD_VERIFICATIONS.get(req.click_id)
+    if not session:
+        return {"success": False, "error": "جلسة إعلانية غير صالحة."}
+        
+    # 🌟 جدار الحماية في الباك إند محدث كلياً ليدعم الـ 10 ثوانٍ كحد أقصى للتحقق الاحتياطي الآمن
+    is_verified = session["status"] == "verified"
+    is_expired_safe = (time.time() - session["created_at"] > 10)
+    
+    if not (is_verified or is_expired_safe):
+        return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
         
     job_id = uuid.uuid4().hex[:8]
     PROGRESS_CACHE[job_id] = {"status": "starting", "timestamp": time.time()}
@@ -1078,7 +1108,6 @@ async def start_download(req: URLRequest):
 @app.get("/api/progress/{job_id}")
 async def get_progress(job_id: str): return PROGRESS_CACHE.get(job_id, {"status": "waiting"})
 
-# تعديل الدالة لتصبح متزامنة (def) لتعمل بشكل منفصل في الـ Thread Pool من أجل حل مشكلة تجمد خادم fastapi
 @app.post("/api/send_telegram")
 def send_to_telegram(req: TelegramRequest):
     try:
