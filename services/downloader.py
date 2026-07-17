@@ -7,7 +7,7 @@ import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
 from telegram.ext import Application
-from core.config import COOKIES_FILE, LOCAL_API_URL, PROGRESS_UPDATE_SECONDS, EXECUTOR, COOKIES_YOUTUBE
+from core.config import COOKIES_FILE, LOCAL_API_URL, PROGRESS_UPDATE_SECONDS, EXECUTOR
 from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progress_bar, format_size, get_cookie_file_for_url
 from locales.language import _t
 
@@ -52,11 +52,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
+    # استخدام الفاحص الذكي لجلب الملف المناسب
     cookie_path = get_cookie_file_for_url(url) if url else None
-    if cookie_path and cookie_file_is_usable(cookie_path):
+    if cookie_path:
         opts["cookiefile"] = str(cookie_path)
-    elif cookie_file_is_usable(COOKIES_FILE):
-        opts["cookiefile"] = str(COOKIES_FILE)
 
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
@@ -85,10 +84,10 @@ def search_youtube(query: str, limit: int = 30):
         }
     }
     
-    if cookie_file_is_usable(COOKIES_YOUTUBE):
-        opts["cookiefile"] = str(COOKIES_YOUTUBE)
-    elif cookie_file_is_usable(COOKIES_FILE):
-        opts["cookiefile"] = str(COOKIES_FILE)
+    # محرك البحث يعتمد على يوتيوب، لذلك نبحث عن أي ملف كوكيز ليوتيوب ذكياً
+    cookie_path = get_cookie_file_for_url("https://youtube.com")
+    if cookie_path:
+        opts["cookiefile"] = str(cookie_path)
 
     combined_entries = []
     seen_ids = set()
@@ -153,13 +152,14 @@ async def youtube_health_monitor(app: Application):
     while True:
         await asyncio.sleep(6 * 3600)
         try:
-            if not cookie_file_is_usable(COOKIES_YOUTUBE):
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies_youtube.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر إرساله للبوت لمنع توقف التحميل.")
+            cookie_path = get_cookie_file_for_url("https://youtube.com")
+            if not cookie_path:
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف كوكيز يوتيوب غير متوفر أو منتهي الصلاحية. يرجى إرساله للبوت لمنع توقف التحميل.")
                 continue
             opts = {
                 "quiet": True, 
                 "extract_flat": True, 
-                "cookiefile": str(COOKIES_YOUTUBE),
+                "cookiefile": str(cookie_path),
                 "extractor_args": {
                     "youtube": {
                         "player_client": ["android", "ios", "tv"],
