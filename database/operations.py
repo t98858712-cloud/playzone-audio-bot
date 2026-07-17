@@ -151,7 +151,6 @@ def export_firebase_backup_json() -> str:
         return ""
 
 def save_cookie_to_db(file_name: str, content: str):
-    """حفظ محتوى ملف الكوكيز في فايربيس لضمان بقائه بعد التحديثات وإعادة التشغيل"""
     if db is None: return
     try:
         db.collection('cookies').document(file_name).set({
@@ -163,12 +162,10 @@ def save_cookie_to_db(file_name: str, content: str):
         logger.error(f"Error saving cookie {file_name} to DB: {e}")
 
 def load_all_cookies_from_db():
-    """استرجاع جميع ملفات الكوكيز من فايربيس وكتابتها على السيرفر عند الإقلاع"""
     if db is None: return
     try:
         from core.config import COOKIES_DIR
         COOKIES_DIR.mkdir(parents=True, exist_ok=True)
-        
         docs = db.collection('cookies').stream()
         count = 0
         for doc in docs:
