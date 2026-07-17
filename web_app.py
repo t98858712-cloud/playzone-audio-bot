@@ -9,45 +9,30 @@ import yt_dlp
 
 # --- إعدادات البوت والبيئة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot"  # اليوزر الثابت اليدوي للبوت الخاص بك
+BOT_USERNAME = "MusicPlayZoneBot"
 # -------------------------------------------------------------
 
 try:
-    from core.config import (
-        BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE,
-        COOKIES_YOUTUBE, COOKIES_TIKTOK, COOKIES_INSTAGRAM, COOKIES_FACEBOOK, COOKIES_X, COOKIES_SPOTIFY
-    )
+    from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
     from database.connection import init_db
-    from utils.helpers import cookie_file_is_usable, get_cookie_file_for_url
+    from utils.helpers import get_cookie_file_for_url
 except ImportError:
     BASE_DOWNLOAD_DIR = Path("./downloads")
     HILLTOPADS_LINK = "https://example.com/ad"
     ADSTERRA_LINK = None
     COOKIES_FILE = Path("cookies.txt")
     
-    COOKIES_YOUTUBE = Path("cookies_youtube.txt")
-    COOKIES_TIKTOK = Path("cookies_tiktok.txt")
-    COOKIES_INSTAGRAM = Path("cookies_instagram.txt")
-    COOKIES_FACEBOOK = Path("cookies_facebook.txt")
-    COOKIES_X = Path("cookies_x.txt")
-    COOKIES_SPOTIFY = Path("cookies_spotify.txt")
-    
     def init_db(): pass
-    def cookie_file_is_usable(f): return f.exists() and f.stat().st_size > 0
-    
-    def get_cookie_file_for_url(url: str):
-        if not url: return None
-        url_lower = url.lower()
-        if "youtube.com" in url_lower or "youtu.be" in url_lower: return COOKIES_YOUTUBE
-        elif "tiktok.com" in url_lower: return COOKIES_TIKTOK
-        elif "instagram.com" in url_lower: return COOKIES_INSTAGRAM
-        elif "facebook.com" in url_lower or "fb.watch" in url_lower or "fb.com" in url_lower: return COOKIES_FACEBOOK
-        elif "x.com" in url_lower or "twitter.com" in url_lower: return COOKIES_X
-        elif "spotify.com" in url_lower: return COOKIES_SPOTIFY
-        return COOKIES_FILE if cookie_file_is_usable(COOKIES_FILE) else None
+    def get_cookie_file_for_url(url: str): return COOKIES_FILE if COOKIES_FILE.exists() else None
 
 app = FastAPI(title="PlayZone Cloud Dashboard")
 init_db()
+
+try:
+    from database.operations import load_all_cookies_from_db
+    load_all_cookies_from_db()
+except ImportError:
+    pass
 
 app.add_middleware(
     CORSMiddleware,
@@ -107,11 +92,10 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None, url=None):
         "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept-Language": "ar-SA,ar;q=0.9"}
     }
     
+    # 🌟 الاستعانة بالفاحص الذكي للكوكيز 🌟
     cookie_path = get_cookie_file_for_url(url) if url else None
-    if cookie_path and cookie_file_is_usable(cookie_path):
+    if cookie_path:
         opts["cookiefile"] = str(cookie_path)
-    elif cookie_file_is_usable(COOKIES_FILE):
-        opts["cookiefile"] = str(COOKIES_FILE)
         
     if outtmpl_path: opts["outtmpl"] = str(outtmpl_path)
     if progress_hook: opts["progress_hooks"] = [progress_hook]
@@ -130,7 +114,7 @@ def search_youtube(query: str, limit: int = 25):
         return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
 # ==========================================
-# الواجهة الاحترافية الجديدة كنص خام لمنع تعارضات f-string
+# الواجهة الاحترافية (HTML) كنص خام (Raw) لمنع أي خطأ فني
 # ==========================================
 INDEX_HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -251,14 +235,12 @@ INDEX_HTML_TEMPLATE = """
             transform: translateY(0) scale(1);
         }
         
-        /* Mobile Bottom Nav */
         .bottom-nav {
             position: fixed; bottom: 0; left: 0; right: 0;
             z-index: 40;
             padding-bottom: var(--safe-bottom);
         }
         
-        /* Floating Music Player */
         #musicPlayer { 
             position: fixed; 
             bottom: calc(5rem + var(--safe-bottom)); 
@@ -302,7 +284,6 @@ INDEX_HTML_TEMPLATE = """
 <body class="antialiased flex h-[100dvh] w-full">
     <div id="toast"></div>
 
-    <!-- Desktop Sidebar -->
     <aside class="hidden md:flex w-72 glass-panel border-l border-surfaceBorder flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
         <div>
             <div class="h-24 flex items-center justify-center border-b border-surfaceBorder px-8 relative overflow-hidden">
@@ -336,10 +317,8 @@ INDEX_HTML_TEMPLATE = """
         </div>
     </aside>
 
-    <!-- Main Content Area -->
     <main class="flex-1 h-[100dvh] overflow-y-auto pb-24 md:pb-8 relative scroll-smooth">
         
-        <!-- View: Search -->
         <section id="searchView" class="view-section active p-4 md:p-10 max-w-5xl mx-auto mt-4 md:mt-8">
             <div class="text-center mb-10">
                 <h2 class="text-3xl md:text-5xl font-black text-white mb-4 tracking-tight">ماذا تريد أن تُحمل <span class="text-brand">اليوم؟</span></h2>
@@ -421,7 +400,6 @@ INDEX_HTML_TEMPLATE = """
             </div>
         </section>
 
-        <!-- View: Library -->
         <section id="libraryView" class="view-section p-4 md:p-10 max-w-6xl mx-auto h-full flex flex-col mt-4 md:mt-8">
             <div class="flex flex-col md:flex-row justify-between items-center gap-6 mb-10 bg-bgBase/50 p-4 rounded-2xl border border-surfaceBorder">
                 <div class="flex items-center gap-3">
@@ -442,7 +420,6 @@ INDEX_HTML_TEMPLATE = """
             <div id="pagination" class="mt-10 flex justify-center items-center gap-2 pb-10"></div>
         </section>
 
-        <!-- View: Settings -->
         <section id="settingsView" class="view-section p-4 md:p-10 max-w-3xl mx-auto mt-4 md:mt-8">
             <div class="text-center mb-10">
                 <h2 class="text-3xl font-black text-white mb-2">إعدادات النظام</h2>
@@ -469,7 +446,7 @@ INDEX_HTML_TEMPLATE = """
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" id="autoForwardToggle" onchange="toggleAutoForward()" class="sr-only peer" checked>
-                            <div class="w-14 h-7 bg-surfaceSolid border border-surfaceBorder rounded-full peer peer-checked:after:-translate-x-[120%] peer-checked:bg-brand after:content-'' after:absolute after:top-[2px] after:right-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all shadow-inner"></div>
+                            <div class="w-14 h-7 bg-surfaceSolid border border-surfaceBorder rounded-full peer peer-checked:after:-translate-x-[120%] peer-checked:bg-brand after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all shadow-inner"></div>
                         </label>
                     </div>
                 </div>
@@ -494,7 +471,6 @@ INDEX_HTML_TEMPLATE = """
         </section>
     </main>
 
-    <!-- Mobile Bottom Navigation -->
     <nav class="bottom-nav glass-panel border-t border-surfaceBorder">
         <div class="flex justify-around items-center h-16 px-2 relative">
             <button onclick="switchView('searchView')" id="nav-mobile-searchView" class="mob-nav nav-item active w-1/3">
@@ -509,7 +485,6 @@ INDEX_HTML_TEMPLATE = """
         </div>
     </nav>
 
-    <!-- Floating Music Player (Premium Look) -->
     <div id="musicPlayer" class="glass-panel border border-surfaceBorder shadow-2xl p-3">
         <div class="flex flex-col gap-3">
             <div class="flex items-center gap-3 w-full">
@@ -521,13 +496,11 @@ INDEX_HTML_TEMPLATE = """
                     <p id="playerTime" class="text-xs text-brand font-mono mt-1 opacity-80">0:00 / 0:00</p>
                 </div>
                 
-                <!-- Mobile Controls -->
                 <div class="flex items-center justify-end gap-2 md:hidden">
                     <button onclick="togglePlay()" id="playPauseBtnMob" class="w-10 h-10 rounded-full bg-white text-bgBase flex items-center justify-center text-sm shadow-md active:scale-90 transition-transform"><i class="fas fa-play ml-0.5"></i></button>
                     <button onclick="closePlayer()" class="w-8 h-8 rounded-full bg-surfaceSolid text-textMuted flex items-center justify-center text-xs active:scale-90 transition-transform border border-surfaceBorder"><i class="fas fa-times"></i></button>
                 </div>
                 
-                <!-- Desktop Controls -->
                 <div class="hidden md:flex items-center gap-4 flex-shrink-0 bg-bgBase p-1.5 rounded-2xl border border-surfaceBorder">
                     <button onclick="toggleShuffle()" id="shuffleBtn" class="w-8 h-8 text-textMuted hover:text-white transition-colors active:scale-90 rounded-lg"><i class="fas fa-random text-sm"></i></button>
                     <button onclick="playPrev()" class="w-8 h-8 text-white hover:text-brand transition-colors active:scale-90 rounded-lg"><i class="fas fa-step-backward"></i></button>
@@ -548,7 +521,6 @@ INDEX_HTML_TEMPLATE = """
         <audio id="globalAudioElement" ontimeupdate="updatePlayerProgress()" onended="handleAudioEnd()" onplay="handleAudioPlay()" onpause="handleAudioPause()"></audio>
     </div>
 
-    <!-- Telegram Modal -->
     <div id="tgModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] hidden flex-col items-center justify-center p-4">
         <div class="glass-panel border border-surfaceBorder p-8 rounded-[2rem] max-w-sm w-full text-center shadow-2xl" id="tgModalContent">
             <div class="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-5 text-3xl shadow-lg shadow-blue-500/30"><i class="fab fa-telegram-plane pr-1"></i></div>
@@ -1214,7 +1186,7 @@ INDEX_HTML_TEMPLATE = """
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
-    # حقن المتغيرات الخاصة بالبايثون داخل قالب الـ HTML بدون استخدام f-string
+    # حقن المتغيرات الخاصة بالبايثون داخل قالب الـ HTML بأمان كامل
     html_content = INDEX_HTML_TEMPLATE.replace("{{BOT_USERNAME}}", BOT_USERNAME).replace("{{AD_LINK}}", AD_LINK)
     return HTMLResponse(content=html_content)
 
