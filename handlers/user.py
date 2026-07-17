@@ -81,18 +81,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     lang = context.user_data.get("lang", "ar")
     
     if getattr(update.message, "document", None) and is_admin(uid):
-        # تم تسجيل الأسماء الأصلية للإضافات مباشرةً
-        valid_cookie_files = [
-            "cookies.txt", 
-            "www.youtube.com_cookies.txt", 
-            "www.tiktok.com_cookies.txt", 
-            "www.instagram.com_cookies.txt", 
-            "www.facebook.com_cookies.txt", 
-            "x.com_cookies.txt", 
-            "open.spotify.com_cookies.txt"
-        ]
         file_name = update.message.document.file_name.lower()
-        
         target_name = None
         if "youtube" in file_name: target_name = "www.youtube.com_cookies.txt"
         elif "tiktok" in file_name: target_name = "www.tiktok.com_cookies.txt"
@@ -118,7 +107,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             except Exception as e:
                 return await update.message.reply_text(f"⚠️ تم حفظ الملف محلياً ولكن فشل الرفع السحابي: {e}")
         elif file_name.endswith(".txt"):
-            return await update.message.reply_text("❌ لم أتمكن من التعرف على منصة الملف. يرجى التأكد أن الاسم يحتوي على اسم المنصة (مثل tiktok أو instagram).")
+            return await update.message.reply_text("❌ لم أتمكن من التعرف على منصة الملف. يرجى التأكد أن الاسم يحتوي على اسم المنصة.")
 
     if uid in BANNED_USERS_CACHE: return
     maintenance = get_setting("maintenance", "0")
