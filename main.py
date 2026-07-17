@@ -28,7 +28,6 @@ for noisy_logger in ["httpx", "httpcore", "telegram", "telegram.ext"]:
 async def user_id(update: Update, context):
     user = update.effective_user
     username = f"@{user.username}" if user.username else "لا يوجد"
-
     await update.message.reply_text(
         f"🆔 ID: {user.id}\n👤 Username: {username}",
         reply_markup=InlineKeyboardMarkup([
@@ -88,8 +87,6 @@ def main():
         raise RuntimeError("المتغير البيئي TELEGRAM_TOKEN غير متوفر بالسيرفر!")
 
     init_db()
-    
-    # 🌟 سحب كافة الكوكيز من السحابة قبل بدء البوت
     load_all_cookies_from_db()
     
     sec.BANNED_USERS_CACHE = load_banned_users()
