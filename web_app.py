@@ -1118,7 +1118,7 @@ def send_to_telegram(req: TelegramRequest):
         
         dur = int(req.duration) if req.duration else 0
         caption = f"- @{BOT_USERNAME} , {formatTime(dur)}" if dur > 0 else f"- @{BOT_USERNAME}"
-        reply_markup = {"inline_keyboard": [[{"text": "🌟 مشاركة البوت", "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"}]]}
+        reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]]}
         
         data = {'chat_id': req.chat_id, 'caption': caption, 'reply_markup': json.dumps(reply_markup)}
         if req.is_audio: data.update({'title': req.title, 'performer': req.performer, 'duration': req.duration})
