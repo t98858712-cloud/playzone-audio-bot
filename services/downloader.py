@@ -87,8 +87,9 @@ def search_youtube(query: str, limit: int = 30):
             }
         }
     }
-    if cookie_file_is_usable(COOKIES_FILE):
-        opts["cookiefile"] = str(COOKIES_FILE)
+    from core.config import COOKIES_YOUTUBE
+    if cookie_file_is_usable(COOKIES_YOUTUBE):
+        opts["cookiefile"] = str(COOKIES_YOUTUBE)
     combined_entries = []
     seen_ids = set()
     try:
@@ -152,8 +153,9 @@ async def youtube_health_monitor(app: Application):
     while True:
         await asyncio.sleep(6 * 3600)
         try:
-            if not cookie_file_is_usable(COOKIES_FILE):
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
+            from core.config import COOKIES_YOUTUBE
+            if not cookie_file_is_usable(COOKIES_YOUTUBE):
+                await alert_admins_live(app.bot, "⚠️ تنبيه من السيرفر:\nملف cookies_youtube.txt الخاص بيوتيوب غير صالح...")
                 continue
             opts = {
                 "quiet": True, 
