@@ -18,11 +18,11 @@ DB_LOCK = threading.Lock()
 
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
-# الكود الجديد ✅
-COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt")) # ملف احتياطي عام
+
+# --- إعدادات الكوكيز الأساسية والمنفصلة للمنصات ---
+COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt"))
 COOKIES_DIR = Path(os.getenv("COOKIES_DIR", "."))
 
-# مسارات ملفات كوكيز المنصات المستقلة
 COOKIES_YOUTUBE = COOKIES_DIR / "cookies_youtube.txt"
 COOKIES_TIKTOK = COOKIES_DIR / "cookies_tiktok.txt"
 COOKIES_INSTAGRAM = COOKIES_DIR / "cookies_instagram.txt"
@@ -45,8 +45,5 @@ FACEBOOK_PLAYZONE = "https://www.facebook.com/share/18goJYQebr/?mibextid=wwXIfr"
 INSTAGRAM_PLAYZONE = "https://www.instagram.com/p1ay.zone?igsh=MW9uYTB1dTZxZnpocQ%3D%3D&utm_source=qr"
 THREADS_PLAYZONE = "https://www.threads.com/@p1ay.zone?igshid=NTc4MTIwNjQ2YQ=="
 TELEGRAM_BOT_PLAYZONE = f"https://t.me/{BOT_USERNAME.replace('@', '')}"
-# 🌟 الرابط المباشر الفعلي المعتمد بعد التفعيل من منصة HilltopAds
 HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z"
-
-# 🌟 الرابط المباشر الفعلي المستخرج من منصة Adsterra (تم تحديثه برابطك الفعلي)
 ADSTERRA_LINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
