@@ -110,7 +110,7 @@ INDEX_HTML = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PlayZone | مشغل ومحمل الوسائط</title>
+    <title>PlayZone | Music </title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -283,7 +283,7 @@ INDEX_HTML = """
         <section id="searchView" class="view-section active p-4 md:p-8 max-w-4xl mx-auto">
             <div class="bg-panel/60 backdrop-blur-md rounded-3xl p-6 md:p-8 border border-panelBorder/60 mb-6 relative overflow-hidden shadow-2xl mt-4">
                 <h2 class="text-2xl md:text-3xl font-bold mb-2 text-white flex items-center gap-2">
-                    <span>PlayZone</span> ⚡
+                    <span>Music</span> ⚡
                 </h2>
                 <p class="text-textMuted mb-6 text-xs md:text-sm">ابحث عن مقاطع الفيديو أو الأغاني لتحميلها وتشغيلها مباشرة.</p>
                 
