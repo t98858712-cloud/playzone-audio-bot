@@ -7,23 +7,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import yt_dlp
 
-# --- إعدادات البوت والبيئة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = "MusicPlayZoneBot"
-# -------------------------------------------------------------
 
 try:
-    from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE
+    from core.config import (
+        BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK, COOKIES_FILE,
+        COOKIES_YOUTUBE, COOKIES_TIKTOK, COOKIES_INSTAGRAM, COOKIES_FACEBOOK, COOKIES_X, COOKIES_SPOTIFY
+    )
     from database.connection import init_db
-    from utils.helpers import get_cookie_file_for_url
+    from utils.helpers import cookie_file_is_usable, get_cookie_file_for_url
 except ImportError:
     BASE_DOWNLOAD_DIR = Path("./downloads")
     HILLTOPADS_LINK = "https://example.com/ad"
     ADSTERRA_LINK = None
     COOKIES_FILE = Path("cookies.txt")
-    
+    COOKIES_YOUTUBE = Path("cookies_youtube.txt")
+    COOKIES_TIKTOK = Path("cookies_tiktok.txt")
+    COOKIES_INSTAGRAM = Path("cookies_instagram.txt")
+    COOKIES_FACEBOOK = Path("cookies_facebook.txt")
+    COOKIES_X = Path("cookies_x.txt")
+    COOKIES_SPOTIFY = Path("cookies_spotify.txt")
     def init_db(): pass
-    def get_cookie_file_for_url(url: str): return COOKIES_FILE if COOKIES_FILE.exists() else None
+    def cookie_file_is_usable(f): return f.exists() and f.stat().st_size > 0
+    def get_cookie_file_for_url(url: str): return COOKIES_FILE if cookie_file_is_usable(COOKIES_FILE) else None
 
 app = FastAPI(title="PlayZone Cloud Dashboard")
 init_db()
@@ -56,12 +63,10 @@ def cleanup_daemon():
             for file_path in WEB_DIR.glob("*"):
                 if file_path.is_file() and now - file_path.stat().st_mtime > 86400:
                     file_path.unlink(missing_ok=True)
-            
             expired_jobs = [jid for jid, data in list(PROGRESS_CACHE.items()) if now - data.get("timestamp", now) > 86400]
             for jid in expired_jobs:
                 PROGRESS_CACHE.pop(jid, None)
-        except Exception as e:
-            pass
+        except Exception as e: pass
         time.sleep(3600)
 
 threading.Thread(target=cleanup_daemon, daemon=True).start()
@@ -83,19 +88,42 @@ class TelegramRequest(BaseModel):
     duration: int = 0
     thumb: str = ""
 
+def fallback_cobalt_download(url: str, mode: str = "video"):
+    api_url = "https://api.cobalt.tools/api/json"
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "PlayZoneBot/1.0"
+    }
+    payload = {
+        "url": url,
+        "vQuality": "720",
+        "isAudioOnly": True if mode == "audio" else False,
+        "isNoTTWatermark": True, 
+    }
+    try:
+        response = requests.post(api_url, json=payload, headers=headers, timeout=20)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") in ["stream", "redirect"]:
+                return data.get("url")
+    except Exception: pass
+    return None
+
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None, url=None):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 10, "fragment_retries": 10, "socket_timeout": 30, "cachedir": False,
         "no_check_certificate": True,
-        "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv"], "player_skip": ["web", "mweb"]}},
-        "http_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept-Language": "ar-SA,ar;q=0.9"}
+        "source_address": "0.0.0.0",
+        "force_ipv4": True, 
+        "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv", "mweb"], "player_skip": ["web"]}},
+        "http_headers": {"User-Agent": "Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36", "Accept-Language": "ar-SA,ar;q=0.9"}
     }
     
-    # 🌟 الاستعانة بالفاحص الذكي للكوكيز 🌟
     cookie_path = get_cookie_file_for_url(url) if url else None
-    if cookie_path:
-        opts["cookiefile"] = str(cookie_path)
+    if cookie_path and cookie_file_is_usable(cookie_path): opts["cookiefile"] = str(cookie_path)
+    elif cookie_file_is_usable(COOKIES_FILE): opts["cookiefile"] = str(COOKIES_FILE)
         
     if outtmpl_path: opts["outtmpl"] = str(outtmpl_path)
     if progress_hook: opts["progress_hooks"] = [progress_hook]
@@ -104,18 +132,11 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None, url=None):
 def search_youtube(query: str, limit: int = 25):
     opts = get_hardened_ydl_options(url="https://youtube.com")
     opts['extract_flat'] = True
-    
-    if 'playlist_items' in opts:
-        del opts['playlist_items']
-    if 'noplaylist' in opts:
-        del opts['noplaylist']
-        
+    if 'playlist_items' in opts: del opts['playlist_items']
+    if 'noplaylist' in opts: del opts['noplaylist']
     with yt_dlp.YoutubeDL(opts) as ydl: 
         return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
-# ==========================================
-# الواجهة الاحترافية (HTML) كنص خام (Raw) لمنع أي خطأ فني
-# ==========================================
 INDEX_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl" class="dark">
@@ -446,7 +467,7 @@ INDEX_HTML_TEMPLATE = """
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" id="autoForwardToggle" onchange="toggleAutoForward()" class="sr-only peer" checked>
-                            <div class="w-14 h-7 bg-surfaceSolid border border-surfaceBorder rounded-full peer peer-checked:after:-translate-x-[120%] peer-checked:bg-brand after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all shadow-inner"></div>
+                            <div class="w-14 h-7 bg-surfaceSolid border border-surfaceBorder rounded-full peer peer-checked:after:-translate-x-[120%] peer-checked:bg-brand after:content-'' after:absolute after:top-[2px] after:right-[2px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all shadow-inner"></div>
                         </label>
                     </div>
                 </div>
@@ -1186,7 +1207,6 @@ INDEX_HTML_TEMPLATE = """
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
-    # حقن المتغيرات الخاصة بالبايثون داخل قالب الـ HTML بأمان كامل
     html_content = INDEX_HTML_TEMPLATE.replace("{{BOT_USERNAME}}", BOT_USERNAME).replace("{{AD_LINK}}", AD_LINK)
     return HTMLResponse(content=html_content)
 
@@ -1198,8 +1218,7 @@ async def api_search(req: SearchRequest):
         
         valid_videos = []
         for entry in entries:
-            if not entry:
-                continue
+            if not entry: continue
                 
             video_id = entry.get("id")
             title = entry.get("title")
@@ -1219,9 +1238,7 @@ async def api_search(req: SearchRequest):
                     "thumbnail": thumb_url
                 }
                 valid_videos.append(clean_entry)
-            
-            if len(valid_videos) == 5:
-                break
+            if len(valid_videos) == 5: break
                 
         return {"success": True, "entries": valid_videos}
     except Exception as e: 
@@ -1231,7 +1248,7 @@ async def api_search(req: SearchRequest):
 async def get_preview(req: URLRequest):
     try:
         opts = get_hardened_ydl_options(url=req.url)
-        opts["format"] = "best" # لتجاوز فلتر الحجم والأخطاء
+        opts["format"] = "best"
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(req.url, download=False)
             return {"success": True, "title": info.get("title", "بدون عنوان"), "thumb": info.get("thumbnail", "")}
@@ -1275,7 +1292,32 @@ def bg_download(job_id: str, url: str, mode: str, res: str):
                 "is_audio": mode == 'audio', 
                 "timestamp": time.time()
             }
-    except Exception as e: PROGRESS_CACHE[job_id] = {"status": "error", "error": str(e), "timestamp": time.time()}
+    except Exception as e:
+        error_str = str(e).lower()
+        if "sign in" in error_str or "cookie" in error_str or "bot" in error_str or "unavailable" in error_str:
+            PROGRESS_CACHE[job_id] = {"status": "downloading", "percent": 50, "total_mb": "-- MB", "dl_mb": "-- MB", "spd_mb": "Fallback API", "timestamp": time.time()}
+            direct_url = fallback_cobalt_download(url, mode)
+            if direct_url:
+                try:
+                    filename = f"{job_id}.mp3" if mode == 'audio' else f"{job_id}.mp4"
+                    file_path = WEB_DIR / filename
+                    response = requests.get(direct_url, stream=True)
+                    with open(file_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    PROGRESS_CACHE[job_id] = {
+                        "status": "completed", 
+                        "url": f"/files/{filename}", 
+                        "title": "تم التحميل بنجاح", 
+                        "thumb": "", 
+                        "uploader": "سيرفرات PlayZone البديلة",
+                        "duration": 0,
+                        "is_audio": mode == 'audio', 
+                        "timestamp": time.time()
+                    }
+                    return
+                except Exception: pass
+        PROGRESS_CACHE[job_id] = {"status": "error", "error": str(e), "timestamp": time.time()}
 
 @app.post("/api/download")
 async def start_download(req: URLRequest):
@@ -1293,14 +1335,11 @@ async def send_to_telegram(req: TelegramRequest):
         filename = req.file_url.split("/")[-1]
         file_path = WEB_DIR / filename
         
-        if not file_path.exists():
-            return {"success": False, "error": "الملف مسح من السيرفر. يرجى إعادة التحميل."}
-        if not TELEGRAM_TOKEN:
-            return {"success": False, "error": "البوت غير مفعل حالياً."}
+        if not file_path.exists(): return {"success": False, "error": "الملف مسح من السيرفر. يرجى إعادة التحميل."}
+        if not TELEGRAM_TOKEN: return {"success": False, "error": "البوت غير مفعل حالياً."}
 
         file_size_mb = file_path.stat().st_size / (1024 * 1024)
-        if file_size_mb > 49.5:
-            return {"success": False, "error": "حجم الملف يتجاوز الحد المسموح للإرسال في تيليجرام (50MB)."}
+        if file_size_mb > 49.5: return {"success": False, "error": "حجم الملف يتجاوز الحد المسموح للإرسال في تيليجرام (50MB)."}
 
         api_method = "sendAudio" if req.is_audio else "sendVideo"
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
@@ -1314,17 +1353,8 @@ async def send_to_telegram(req: TelegramRequest):
         else:
             caption = f"- @{BOT_USERNAME}"
             
-        reply_markup = {
-            "inline_keyboard": [
-                [{"text": "🌟 أعجبك البوت؟ شاركه", "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"}]
-            ]
-        }
-        
-        data = {
-            'chat_id': req.chat_id,
-            'caption': caption,
-            'reply_markup': json.dumps(reply_markup)
-        }
+        reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"}]]}
+        data = {'chat_id': req.chat_id, 'caption': caption, 'reply_markup': json.dumps(reply_markup)}
         
         if req.is_audio:
             data['title'] = req.title
@@ -1342,8 +1372,7 @@ async def send_to_telegram(req: TelegramRequest):
         if req.thumb:
             try:
                 thumb_res = requests.get(req.thumb, timeout=5)
-                if thumb_res.status_code == 200:
-                    files['thumb'] = ('thumb.jpg', thumb_res.content, 'image/jpeg')
+                if thumb_res.status_code == 200: files['thumb'] = ('thumb.jpg', thumb_res.content, 'image/jpeg')
             except: pass
                 
         response = requests.post(url, data=data, files=files)
