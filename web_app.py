@@ -102,7 +102,7 @@ def search_youtube(query: str, limit: int = 25):
         return ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
 
 # ==========================================================
-# واجهة الـ HTML المحدثة بخيارات الجودة الكاملة
+# واجهة الـ HTML مع تطوير شريط التنزيل والعداد المنساب كلياً
 # ==========================================================
 INDEX_HTML = """
 <!DOCTYPE html>
@@ -114,7 +114,7 @@ INDEX_HTML = """
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2 family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script>
         tailwind.config={
             darkMode:'class',
@@ -144,11 +144,17 @@ INDEX_HTML = """
         .btn:active:not(:disabled) { transform: scale(0.95); }
         
         @keyframes shimmer { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-        .shimmer-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); animation: shimmer 1.5s infinite linear; }
+        .shimmer-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent); animation: shimmer 1.2s infinite linear; }
 
-        .view-section { display: none; animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
-        .view-section.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        .view-section { display: none !important; }
+        .view-section.active { display: block !important; }
+        .view-section.active.flex-layout { display: flex !important; }
+        
+        /* تزويد شريط التحويل والتحميل بمنحنى تمدد مائي مرن وتوهج نيون */
+        #progBar {
+            transition: width 0.6s cubic-bezier(0.1, 0.8, 0.25, 1);
+            box-shadow: 0 0 12px rgba(168, 85, 247, 0.45);
+        }
         
         #floatingPlayer {
             position: fixed;
@@ -170,9 +176,16 @@ INDEX_HTML = """
             transition: opacity 0.2s ease, transform 0.2s ease;
         }
         #floatingPlayer.active-player {
-            display: block;
+            display: block !important;
             opacity: 1;
             transform: scale(1);
+        }
+        
+        #floatingPlayer.dragging-player {
+            transform: scale(0.97) !important;
+            opacity: 0.9 !important;
+            border-color: rgba(168, 85, 247, 0.4) !important;
+            box-shadow: 0 45px 90px rgba(0,0,0,0.9), 0 0 35px rgba(168, 85, 247, 0.3) !important;
         }
         
         .drag-handle {
@@ -192,13 +205,29 @@ INDEX_HTML = """
             animation: spinDisk 18s linear infinite;
         }
         
+        @keyframes bounceGpu {
+            0% { transform: scaleY(0.2); }
+            100% { transform: scaleY(1.0); }
+        }
         .wave-bar {
             width: 3px;
-            height: 6px;
+            height: 24px;
             background-color: #a855f7;
             border-radius: 3px;
-            transition: height 0.1s ease;
+            transform-origin: bottom;
+            transform: scaleY(0.2);
+            transition: transform 0.15s ease;
         }
+        .playing-visualizer .wave-bar {
+            animation: bounceGpu 0.7s ease-in-out infinite alternate;
+        }
+        .playing-visualizer .wave-bar:nth-child(1) { animation-delay: 0.1s; animation-duration: 0.5s; }
+        .playing-visualizer .wave-bar:nth-child(2) { animation-delay: 0.25s; animation-duration: 0.65s; }
+        .playing-visualizer .wave-bar:nth-child(3) { animation-delay: 0.05s; animation-duration: 0.55s; }
+        .playing-visualizer .wave-bar:nth-child(4) { animation-delay: 0.35s; animation-duration: 0.75s; }
+        .playing-visualizer .wave-bar:nth-child(5) { animation-delay: 0.15s; animation-duration: 0.45s; }
+        .playing-visualizer .wave-bar:nth-child(6) { animation-delay: 0.45s; animation-duration: 0.7s; }
+        .playing-visualizer .wave-bar:nth-child(7) { animation-delay: 0.2s; animation-duration: 0.6s; }
         
         #floatingPlayer.compact-mode {
             width: 340px !important;
@@ -291,13 +320,10 @@ INDEX_HTML = """
                             </div>
                         </div>
 
-                        <!-- خيارات التحميل مع تحديث قائمة الجودات كاملة -->
+                        <!-- خيارات التحميل -->
                         <div id="dlOptions" class="hidden space-y-4">
                             <div class="grid grid-cols-2 gap-3">
-                                <select id="mode" onchange="toggleRes()" class="modern-input bg-black/60 py-2.5 text-xs md:text-sm">
-                                    <option value="video">🎬 فيديو (MP4)</option>
-                                    <option value="audio">🎵 صوت (MP3)</option>
-                                </select>
+                                <select id="mode" onchange="toggleRes()" class="modern-input bg-black/60 py-2.5 text-xs md:text-sm"><option value="video">🎬 فيديو (MP4)</option><option value="audio">🎵 صوت (MP3)</option></select>
                                 <select id="resolution" class="modern-input bg-black/60 py-2.5 text-xs md:text-sm">
                                     <option value="360">جودة 360p</option>
                                     <option value="480">جودة 480p</option>
@@ -310,12 +336,13 @@ INDEX_HTML = """
                             </button>
                         </div>
 
+                        <!-- صندوق تقدم التحميل المطور -->
                         <div id="progressBox" class="hidden bg-black/50 p-5 rounded-2xl border border-panelBorder">
                             <div class="flex justify-between items-center mb-3">
-                                <span id="progStatus" class="text-accent font-bold text-xs flex items-center gap-2"><i class="fas fa-circle-notch fa-spin"></i> jari التحميل...</span>
-                                <span id="progPercent" class="font-mono font-bold text-white text-sm">0%</span>
+                                <span id="progStatus" class="text-accent font-bold text-xs flex items-center gap-2"><i class="fas fa-circle-notch fa-spin"></i> جاري التحميل...</span>
+                                <span id="progPercent" class="font-mono font-bold text-white text-sm transition-all duration-300 transform scale-100">0%</span>
                             </div>
-                            <div class="w-full bg-zinc-900 rounded-full h-2 mb-2 overflow-hidden relative">
+                            <div class="w-full bg-zinc-900 rounded-full h-2.5 mb-2 overflow-hidden relative">
                                 <div id="progBar" class="bg-gradient-to-r from-accent to-fuchsia-500 h-full relative w-0">
                                     <div class="shimmer-bg"></div>
                                 </div>
@@ -335,7 +362,7 @@ INDEX_HTML = """
         </section>
 
         <!-- قسم ملفاتي المحفوظة -->
-        <section id="libraryView" class="view-section p-4 md:p-8 max-w-6xl mx-auto h-full flex flex-col">
+        <section id="libraryView" class="view-section flex-layout p-4 md:p-8 max-w-6xl mx-auto h-full flex flex-col">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 mt-2">
                 <div>
                     <h2 class="text-xl md:text-2xl font-bold text-white">ملفاتي المحفوظة 📁</h2>
@@ -405,9 +432,9 @@ INDEX_HTML = """
                 </div>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0 mr-2">
-                <button onclick="toggleCompactMode(event)" class="text-textMuted hover:text-accent p-1 transition-colors" title="تصغير"><i class="fas fa-compress-alt text-xs"></i></button>
-                <button onclick="resetPlayerPosition()" class="text-textMuted hover:text-white p-1 transition-colors" title="إعادة تعيين الموضع"><i class="fas fa-location-arrow text-[10px]"></i></button>
-                <button onclick="closePlayer()" class="text-textMuted hover:text-red-400 p-1 transition-colors"><i class="fas fa-times text-xs"></i></button>
+                <button onclick="toggleCompactMode(event)" class="text-textMuted hover:text-accent p-1 transition-colors transition-transform active:scale-90" title="تصغير"><i class="fas fa-compress-alt text-xs"></i></button>
+                <button onclick="resetPlayerPosition()" class="text-textMuted hover:text-white p-1 transition-colors transition-transform active:scale-90" title="إعادة تعيين الموضع"><i class="fas fa-location-arrow text-[10px]"></i></button>
+                <button onclick="closePlayer()" class="text-textMuted hover:text-red-400 p-1 transition-colors transition-transform active:scale-90"><i class="fas fa-times text-xs"></i></button>
             </div>
         </div>
 
@@ -436,9 +463,9 @@ INDEX_HTML = """
                 </div>
             </div>
 
-            <div class="relative w-full h-1 bg-zinc-800 rounded-full mb-3 cursor-pointer group" id="progressContainer" onclick="seekMedia(event)">
-                <div id="mediaProgressBar" class="absolute h-full bg-accent rounded-full w-0 pointer-events-none"></div>
-                <div id="mediaProgressSlider" class="absolute w-2.5 h-2.5 bg-white border border-accent rounded-full -top-[3px] -mr-[5px] scale-0 group-hover:scale-100 transition-transform pointer-events-none" style="right: 0%;"></div>
+            <div class="relative w-full h-1.5 bg-zinc-800 rounded-full mb-3 cursor-pointer group" id="progressContainer" dir="ltr">
+                <div id="mediaProgressBar" class="absolute left-0 h-full bg-accent rounded-full w-0 pointer-events-none"></div>
+                <div id="mediaProgressSlider" class="absolute w-3 h-3 bg-white border-2 border-accent rounded-full -top-[3px] -ml-[6px] scale-100 group-hover:scale-125 transition-transform pointer-events-none" style="left: 0%;"></div>
             </div>
 
             <div class="flex justify-between items-center text-[10px] text-textMuted font-mono mb-4">
@@ -448,29 +475,29 @@ INDEX_HTML = """
 
             <div class="flex items-center justify-between gap-2">
                 <div class="flex items-center gap-3">
-                    <button onclick="toggleShuffle()" id="shuffleBtn" class="text-textMuted hover:text-white transition-colors text-xs" title="عشوائي"><i class="fas fa-random"></i></button>
-                    <button onclick="playPrev()" class="text-white hover:text-accent transition-colors text-sm" title="السابق"><i class="fas fa-step-backward"></i></button>
+                    <button onclick="toggleShuffle()" id="shuffleBtn" class="text-textMuted hover:text-white transition-colors transition-transform active:scale-90 text-xs" title="عشوائي"><i class="fas fa-random"></i></button>
+                    <button onclick="playPrev()" class="text-white hover:text-accent transition-colors transition-transform active:scale-90 text-sm" title="السابق"><i class="fas fa-step-backward"></i></button>
                 </div>
 
-                <button onclick="togglePlay()" id="playPauseBtn" class="w-11 h-11 rounded-full bg-accent hover:bg-accentHover text-white flex items-center justify-center text-sm shadow-md shadow-accent/30 active:scale-95 transition-all" title="تشغيل / إيقاف">
+                <button onclick="togglePlay()" id="playPauseBtn" class="w-11 h-11 rounded-full bg-accent hover:bg-accentHover text-white flex items-center justify-center text-sm shadow-md shadow-accent/30 active:scale-90 transition-all" title="تشغيل / إيقاف">
                     <i class="fas fa-play ml-0.5"></i>
                 </button>
 
                 <div class="flex items-center gap-3">
-                    <button onclick="playNext()" class="text-white hover:text-accent transition-colors text-sm" title="التالي"><i class="fas fa-step-forward"></i></button>
-                    <button onclick="toggleRepeat()" id="repeatBtn" class="text-textMuted hover:text-white transition-colors text-xs" title="تكرار"><i class="fas fa-redo"></i></button>
+                    <button onclick="playNext()" class="text-white hover:text-accent transition-colors transition-transform active:scale-90 text-sm" title="التالي"><i class="fas fa-step-forward"></i></button>
+                    <button onclick="toggleRepeat()" id="repeatBtn" class="text-textMuted hover:text-white transition-colors transition-transform active:scale-90 text-xs" title="تكرار"><i class="fas fa-redo"></i></button>
                 </div>
             </div>
 
             <div class="flex items-center justify-between mt-4 pt-3 border-t border-panelBorder/40">
-                <button onclick="changeSpeed()" id="speedBtn" class="text-[9px] font-bold font-mono px-2 py-0.5 border border-panelBorder rounded-md text-textMuted hover:text-white">1.0x</button>
+                <button onclick="changeSpeed()" id="speedBtn" class="text-[9px] font-bold font-mono px-2 py-0.5 border border-panelBorder rounded-md text-textMuted hover:text-white transition-transform active:scale-95">1.0x</button>
                 
                 <div class="flex items-center gap-2">
-                    <button onclick="toggleMute()" id="muteBtn" class="text-textMuted hover:text-white"><i class="fas fa-volume-up text-xs"></i></button>
+                    <button onclick="toggleMute()" id="muteBtn" class="text-textMuted hover:text-white transition-transform active:scale-90"><i class="fas fa-volume-up text-xs"></i></button>
                     <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-16 h-1 bg-zinc-800 accent-accent rounded-lg cursor-pointer">
                 </div>
 
-                <button onclick="triggerPiP()" id="pipBtn" class="text-textMuted hover:text-white hidden" title="تشغيل مصغر"><i class="fas fa-clone text-xs"></i></button>
+                <button onclick="triggerPiP()" id="pipBtn" class="text-textMuted hover:text-white hidden transition-transform active:scale-90" title="تشغيل مصغر"><i class="fas fa-clone text-xs"></i></button>
             </div>
         </div>
     </div>
@@ -503,6 +530,8 @@ INDEX_HTML = """
         let lastVolume = 1;
         let currentPlayingMode = 'audio';
         let visualizerInterval = null;
+        let isScrubbing = false;
+        let lastLoggedPercent = 0; // للاحتفاظ بآخر قيمة للنسبة المئوية وتسهيل عملية العد التصاعدي
 
         const mediaContainer = document.getElementById('floatingPlayer');
         const videoElement = document.getElementById('globalVideoElement');
@@ -528,7 +557,7 @@ INDEX_HTML = """
             updateLibraryCount();
             switchView('searchView');
             setupAdvancedDraggable(mediaContainer, document.getElementById('playerHeader'));
-            animateVisualizerBars(false);
+            setupScrubbing();
         });
 
         function formatTime(secs) { 
@@ -550,13 +579,25 @@ INDEX_HTML = """
         }
 
         function switchView(viewId) {
-            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
-            document.getElementById(viewId).classList.add('active');
+            document.querySelectorAll('.view-section').forEach(el => {
+                el.style.setProperty('display', 'none', 'important');
+                el.classList.remove('active');
+            });
             
             document.querySelectorAll('.nav-btn').forEach(btn => {
                 btn.classList.remove('bg-panelBorder', 'text-accent');
                 btn.classList.add('text-textMuted', 'hover:bg-panelBorder/50', 'hover:text-white');
             });
+            
+            const targetSection = document.getElementById(viewId);
+            if (targetSection) {
+                if (targetSection.classList.contains('flex-layout')) {
+                    targetSection.style.setProperty('display', 'flex', 'important');
+                } else {
+                    targetSection.style.setProperty('display', 'block', 'important');
+                }
+                targetSection.classList.add('active');
+            }
             
             const activeBtn = document.getElementById('nav-' + viewId);
             if (activeBtn) {
@@ -789,12 +830,44 @@ INDEX_HTML = """
 
         function unlockDownload() { if(!adWatched) return; document.getElementById('adGate').classList.add('hidden'); document.getElementById('dlOptions').classList.remove('hidden'); }
 
+        // نظام محاكاة العداد الرقمي المنساب للنسبة المئوية
+        function animatePercentCounter(targetPercent) {
+            let start = lastLoggedPercent;
+            let end = parseFloat(targetPercent) || 0;
+            if (start === end) return;
+            
+            let duration = 500; // مدة حركة الرقم بالميلي ثانية لتغطية ثغرة جلب البيانات
+            let startTime = null;
+            const percentEl = document.getElementById('progPercent');
+            
+            function step(timestamp) {
+                if (!startTime) startTime = timestamp;
+                let progress = timestamp - startTime;
+                let current = start + (end - start) * Math.min(progress / duration, 1);
+                
+                percentEl.innerText = Math.floor(current) + '%';
+                
+                // إضافة نبضة خفيفة للرقم لإعطائه طابعاً حيوياً أثناء تغيره
+                percentEl.style.transform = 'scale(1.08)';
+                
+                if (progress < duration) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    percentEl.innerText = end + '%';
+                    percentEl.style.transform = 'scale(1.0)';
+                    lastLoggedPercent = end;
+                }
+            }
+            window.requestAnimationFrame(step);
+        }
+
         async function startDownload() {
             const btn = event.currentTarget; const original = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
             document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
             document.getElementById('directDownloadArea').classList.add('hidden');
             
+            lastLoggedPercent = 0; // إعادة ضبط الفهرس
             document.getElementById('progPercent').innerText = '0%'; document.getElementById('progBar').style.width = '0%';
             document.getElementById('progSize').innerText = '-- / --'; document.getElementById('progSpeed').innerText = '--';
             document.getElementById('progStatus').innerHTML = '<i class="fas fa-cloud-download-alt"></i> جاري بدء الاتصال...';
@@ -809,18 +882,23 @@ INDEX_HTML = """
                             const progRes = await fetch(`/api/progress/${data.job_id}`); const prog = await progRes.json();
                             if(prog.status === 'downloading') {
                                 document.getElementById('progStatus').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري تحميل الملف...';
-                                document.getElementById('progPercent').innerText = prog.percent + '%';
                                 document.getElementById('progBar').style.width = prog.percent + '%';
                                 document.getElementById('progSize').innerText = prog.dl_mb + ' / ' + prog.total_mb;
                                 document.getElementById('progSpeed').innerText = prog.spd_mb;
+                                
+                                // استدعاء دالة الحركة السلسة للرقم
+                                animatePercentCounter(prog.percent);
                             } 
                             else if(prog.status === 'converting') { 
                                 document.getElementById('progStatus').innerHTML = '<i class="fas fa-cog fa-spin"></i> جاري معالجة الملف...'; 
-                                document.getElementById('progBar').style.width = '100%'; 
+                                document.getElementById('progBar').style.width = '100%';
+                                document.getElementById('progPercent').innerText = '99%';
                             } 
                             else if(prog.status === 'completed') {
                                 clearInterval(interval); 
                                 document.getElementById('progStatus').innerHTML = '<span class="text-green-400"><i class="fas fa-check-circle"></i> اكتمل التحميل</span>';
+                                document.getElementById('progPercent').innerText = '100%';
+                                document.getElementById('progBar').style.width = '100%';
                                 
                                 const dlArea = document.getElementById('directDownloadArea'); const dlBtn = document.getElementById('directDownloadBtn');
                                 dlBtn.href = prog.url; dlBtn.setAttribute('download', prog.title + (prog.is_audio ? '.mp3' : '.mp4'));
@@ -882,7 +960,7 @@ INDEX_HTML = """
                     document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
                     document.getElementById('playerCoverImg').style.animationPlayState = 'paused';
                     animateVisualizerBars(false);
-                    showToast("يرجى النقر لبدء تشغيل المقطع", "success");
+                    showToast("اضغط زر التشغيل للمتابعة", "success");
                 });
             }
             
@@ -936,25 +1014,63 @@ INDEX_HTML = """
         }
 
         function updatePlayerProgress() {
+            if (isScrubbing) return;
             const cur = videoElement.currentTime; const dur = videoElement.duration;
             if (isNaN(dur)) return;
             
             const pct = (cur / dur) * 100;
             document.getElementById('mediaProgressBar').style.width = pct + '%';
-            document.getElementById('mediaProgressSlider').style.right = (100 - pct) + '%';
+            document.getElementById('mediaProgressSlider').style.left = pct + '%';
             document.getElementById('playerTime').innerText = formatTime(cur) + ' / ' + formatTime(dur);
         }
 
-        function seekMedia(e) {
+        function setupScrubbing() {
             const container = document.getElementById('progressContainer');
-            const rect = container.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const pct = Math.max(0, Math.min(1, clickX / rect.width));
             
-            if (!isNaN(videoElement.duration)) {
-                videoElement.currentTime = pct * videoElement.duration;
+            container.addEventListener('pointerdown', (e) => {
+                isScrubbing = true;
+                performScrub(e);
+                container.setPointerCapture(e.pointerId);
+                
+                container.addEventListener('pointermove', performScrub);
+                container.addEventListener('pointerup', endScrub);
+                container.addEventListener('pointercancel', endScrub);
+            });
+
+            function performScrub(e) {
+                if (!isScrubbing) return;
+                const rect = container.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const pct = Math.max(0, Math.min(1, clickX / rect.width));
+                
+                document.getElementById('mediaProgressBar').style.width = (pct * 100) + '%';
+                document.getElementById('mediaProgressSlider').style.left = (pct * 100) + '%';
+                
+                if (!isNaN(videoElement.duration)) {
+                    document.getElementById('playerTime').innerText = formatTime(pct * videoElement.duration) + ' / ' + formatTime(videoElement.duration);
+                }
+            }
+
+            function endScrub(e) {
+                if (!isScrubbing) return;
+                isScrubbing = false;
+                
+                const rect = container.getBoundingClientRect();
+                const clickX = e.clientX - rect.left;
+                const pct = Math.max(0, Math.min(1, clickX / rect.width));
+                
+                if (!isNaN(videoElement.duration)) {
+                    videoElement.currentTime = pct * videoElement.duration;
+                }
+                
+                try { container.releasePointerCapture(e.pointerId); } catch(err) {}
+                container.removeEventListener('pointermove', performScrub);
+                container.removeEventListener('pointerup', endScrub);
+                container.removeEventListener('pointercancel', endScrub);
             }
         }
+
+        document.getElementById('volumeSlider').addEventListener('input', changeVolume);
 
         function changeVolume() {
             const val = document.getElementById('volumeSlider').value;
@@ -1019,18 +1135,12 @@ INDEX_HTML = """
         }
 
         function animateVisualizerBars(run) {
-            clearInterval(visualizerInterval);
-            const bars = document.querySelectorAll('.wave-bar');
-            if (!run) {
-                bars.forEach(b => b.style.height = '6px');
-                return;
+            const visualizer = document.getElementById('visualizerBars');
+            if (run) {
+                visualizer.classList.add('playing-visualizer');
+            } else {
+                visualizer.classList.remove('playing-visualizer');
             }
-            visualizerInterval = setInterval(() => {
-                bars.forEach(b => {
-                    const h = Math.floor(Math.random() * 26) + 6;
-                    b.style.height = h + 'px';
-                });
-            }, 120);
         }
 
         function setupAdvancedDraggable(el, handle) {
@@ -1044,6 +1154,7 @@ INDEX_HTML = """
                 
                 isDragging = true;
                 handle.style.cursor = 'grabbing';
+                el.classList.add('dragging-player');
                 
                 startX = e.clientX;
                 startY = e.clientY;
@@ -1084,7 +1195,8 @@ INDEX_HTML = """
                 if (!isDragging) return;
                 isDragging = false;
                 handle.style.cursor = 'grab';
-                el.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                el.classList.remove('dragging-player');
+                el.style.transition = 'opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
                 
                 try { handle.releasePointerCapture(e.pointerId); } catch(err) {}
                 
