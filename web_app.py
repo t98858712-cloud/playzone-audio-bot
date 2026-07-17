@@ -416,7 +416,7 @@ INDEX_HTML = f"""
         </div>
     </div>
 
-    <!-- كود JavaScript آمن ومتكامل للمشغل السحابي -->
+    <!-- كود JavaScript آمن كلياً ومصحح من تحذيرات سلاش الهروب -->
     <script>
         // المتغيرات العامة
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
@@ -429,7 +429,7 @@ INDEX_HTML = f"""
         const itemsPerPage = 6;
         const audioEl = document.getElementById('globalAudioElement');
 
-        // التهيية عند تشغيل الصفحة
+        // التهيئة عند تشغيل الصفحة
         window.addEventListener('DOMContentLoaded', () => {{
             if (window.Telegram && window.Telegram.WebApp) {{
                 window.Telegram.WebApp.ready();
@@ -492,7 +492,7 @@ INDEX_HTML = f"""
             }}
         }}
 
-        // نظام تصفية وعرض ملفات المكتبة مع إبراز المشغل الحالي تفاعلياً
+        // نظام تصفية وعرض ملفات المكتبة مع إبراز المشغل الحالي تفاعلياً (تم إصلاح سلاش الهروب هنا)
         function applyFilters() {{
             const query = document.getElementById('libSearch').value.toLowerCase();
             const filter = document.getElementById('libFilter').value;
@@ -540,33 +540,33 @@ INDEX_HTML = f"""
                 const fileExt = item.is_audio ? 'mp3' : 'mp4';
                 
                 container.innerHTML += `
-                    <div class="bg-panel rounded-2xl p-4 border ${{activeBorder}} flex gap-4 items-center relative group transition-all duration-300">
-                        <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder flex-shrink-0 cursor-pointer" onclick="${{item.is_audio ? \`playAudioTrack(${{actualIndex}})\` : \`watchVideo('${{item.url}}')\`}}">
-                            <img src="${{item.thumb || 'https://via.placeholder.com/150'}}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150'">
-                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center ${{isCurrentPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}} transition-opacity">
-                                ${{bounceIcon}}
+                    <div class="bg-panel rounded-2xl p-4 border \${activeBorder} flex gap-4 items-center relative group transition-all duration-300">
+                        <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder flex-shrink-0 cursor-pointer" onclick="\${item.is_audio ? \\`playAudioTrack(\${actualIndex})\\` : \\`watchVideo('\${item.url}')\\`}">
+                            <img src="\${item.thumb || 'https://via.placeholder.com/150'}" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150'">
+                            <div class="absolute inset-0 bg-black/40 flex items-center justify-center \${isCurrentPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity">
+                                \${bounceIcon}
                             </div>
-                            <div class="absolute bottom-1 right-1 bg-black/80 text-[10px] px-1 font-mono rounded text-white">${{durationStr}}</div>
+                            <div class="absolute bottom-1 right-1 bg-black/80 text-[10px] px-1 font-mono rounded text-white">\${durationStr}</div>
                         </div>
                         <div class="flex-1 min-w-0 text-right">
-                            <h4 class="${{titleColor}} font-bold text-sm truncate cursor-pointer" onclick="${{item.is_audio ? \`playAudioTrack(${{actualIndex}})\` : \`watchVideo('${{item.url}}')\`}}">${{item.title}}</h4>
-                            <p class="text-textMuted text-xs mt-1 truncate">${{icon}} ${{item.uploader || 'غير معروف'}}</p>
+                            <h4 class="\${titleColor} font-bold text-sm truncate cursor-pointer" onclick="\${item.is_audio ? \\`playAudioTrack(\${actualIndex})\\` : \\`watchVideo('\${item.url}')\\`}">\${item.title}</h4>
+                            <p class="text-textMuted text-xs mt-1 truncate">\${icon} \${item.uploader || 'غير معروف'}</p>
                         </div>
                         <div class="flex items-center gap-2 flex-row-reverse">
-                            <button onclick="deleteFromLibrary('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-400 active:scale-95 transition-transform" title="حذف">
+                            <button onclick="deleteFromLibrary('\${item.id}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-400 active:scale-95 transition-transform" title="حذف">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
                             
                             <!-- زر تحميل للجهاز مضاف هنا -->
-                            <a href="${{item.url}}" download="${{item.title}}.${{fileExt}}" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-green-400 active:scale-95 transition-transform flex items-center justify-center" title="تحميل للجهاز">
+                            <a href="\${item.url}" download="\${item.title}.\${fileExt}" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-green-400 active:scale-95 transition-transform flex items-center justify-center" title="تحميل للجهاز">
                                 <i class="fas fa-download"></i>
                             </a>
                             
-                            <button onclick="triggerSendToTelegram('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-tgBlue active:scale-95 transition-transform" title="إرسال لتيليجرام">
+                            <button onclick="triggerSendToTelegram('\${item.id}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-tgBlue active:scale-95 transition-transform" title="إرسال لتيليجرام">
                                 <i class="fab fa-telegram-plane"></i>
                             </button>
-                            <button onclick="toggleFavorite('${{item.id}}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-500 active:scale-95 transition-transform" title="مفضلة">
-                                <i class="${{favClass}}"></i>
+                            <button onclick="toggleFavorite('\${item.id}')" class="p-2 bg-bgDark rounded-full border border-panelBorder text-textMuted hover:text-red-500 active:scale-95 transition-transform" title="مفضلة">
+                                <i class="\${favClass}"></i>
                             </button>
                         </div>
                     </div>
@@ -674,7 +674,7 @@ INDEX_HTML = f"""
 
         function saveTgIdFromModal() {{
             const val = document.getElementById('tgIdInput').value.trim();
-            if (!val) return showToast("الرجاء إدخال ID صالح", "error");
+            if (!val) return showToast("الرجاء إدخل ID صالح", "error");
             
             localStorage.setItem('pz_tg_id', val);
             document.getElementById('settingTgId').value = val;
@@ -750,15 +750,15 @@ INDEX_HTML = f"""
                         data.entries.forEach((v) => {{
                             const duration = formatTime(v.duration || 0);
                             box.innerHTML += `
-                            <div onclick="renderPreview('https://youtube.com/watch?v=${{v.id}}')" class="w-full flex items-center p-3 bg-panel rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-sm mb-1">
+                            <div onclick="renderPreview('https://youtube.com/watch?v=\${v.id}')" class="w-full flex items-center p-3 bg-panel rounded-2xl border border-panelBorder cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-sm mb-1">
                                 <div class="flex-shrink-0 w-24 h-14 rounded-xl overflow-hidden border border-panelBorder shadow-sm relative ml-3">
-                                    <img src="${{v.thumbnail}}" class="w-full h-full object-cover">
-                                    <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono">${{duration}}</div>
+                                    <img src="\${v.thumbnail}" class="w-full h-full object-cover">
+                                    <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono">\${duration}</div>
                                 </div>
                                 <div class="flex-1 min-w-0 flex flex-col justify-center text-right">
-                                    <h4 class="text-white font-bold text-sm truncate w-full mb-1" dir="auto">${{v.title}}</h4>
+                                    <h4 class="text-white font-bold text-sm truncate w-full mb-1" dir="auto">\${v.title}</h4>
                                     <p class="text-textMuted text-xs truncate w-full" dir="auto">
-                                        <i class="fas fa-user-circle text-accent/70"></i> ${{v.uploader}}
+                                        <i class="fas fa-user-circle text-accent/70"></i> \${v.uploader}
                                     </p>
                                 </div>
                                 <div class="flex-shrink-0 w-8 h-8 rounded-full bg-bgDark border border-panelBorder flex items-center justify-center text-accent mr-2">
@@ -826,7 +826,6 @@ INDEX_HTML = f"""
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
             document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
             
-            // إعادة ضبط وإخفاء زر التحميل المباشر للجهاز لتجنب خلط الروابط السابقة
             document.getElementById('directDownloadArea').classList.add('hidden');
             
             document.getElementById('progPercent').innerText = '0%';
@@ -843,7 +842,7 @@ INDEX_HTML = f"""
                 if(data.success) {{
                     const interval = setInterval(async ()=>{{
                         try {{
-                            const progRes = await fetch(\`/api/progress/\${{data.job_id}}\`); const prog = await progRes.json();
+                            const progRes = await fetch(`/api/progress/${data.job_id}`); const prog = await progRes.json();
                             if(prog.status === 'downloading') {{
                                 document.getElementById('progStatus').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري تحميل الملف...';
                                 document.getElementById('progPercent').innerText = prog.percent + '%';
@@ -859,7 +858,6 @@ INDEX_HTML = f"""
                                 clearInterval(interval); 
                                 document.getElementById('progStatus').innerHTML = '<span class="text-green-400"><i class="fas fa-check-circle"></i> اكتمل التحميل بنجاح</span>';
                                 
-                                // تفعيل وتجهيز زر التحميل المباشر للجهاز فوراً
                                 const dlArea = document.getElementById('directDownloadArea');
                                 const dlBtn = document.getElementById('directDownloadBtn');
                                 dlBtn.href = prog.url;
