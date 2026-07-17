@@ -8,8 +8,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 from telegram.ext import Application
 from core.config import COOKIES_FILE, LOCAL_API_URL, EXECUTOR
-from utils.helpers import cookie_file_is_usable, alert_admins_live
-from utils.format import make_progress_bar, format_size
+from core.helpers import cookie_file_is_usable, alert_admins_live
+from core.format import make_progress_bar, format_size
 from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
@@ -71,7 +71,7 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, re
     with yt_dlp.YoutubeDL(opts) as ydl: return ydl.extract_info(url, download=True)
 
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
-    from utils.helpers import is_public_host
+    from core.helpers import is_public_host
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
