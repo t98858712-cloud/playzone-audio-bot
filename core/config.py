@@ -18,7 +18,17 @@ DB_LOCK = threading.Lock()
 
 DEFAULT_MAX_SIZE = (2000 * 1024 * 1024) if LOCAL_API_URL else (50 * 1024 * 1024)
 MAX_TELEGRAM_SIZE = int(os.getenv("MAX_TELEGRAM_SIZE", str(DEFAULT_MAX_SIZE)))
-COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt"))
+# الكود الجديد ✅
+COOKIES_FILE = Path(os.getenv("COOKIES_FILE", "cookies.txt")) # ملف احتياطي عام
+COOKIES_DIR = Path(os.getenv("COOKIES_DIR", "."))
+
+# مسارات ملفات كوكيز المنصات المستقلة
+COOKIES_YOUTUBE = COOKIES_DIR / "cookies_youtube.txt"
+COOKIES_TIKTOK = COOKIES_DIR / "cookies_tiktok.txt"
+COOKIES_INSTAGRAM = COOKIES_DIR / "cookies_instagram.txt"
+COOKIES_FACEBOOK = COOKIES_DIR / "cookies_facebook.txt"
+COOKIES_X = COOKIES_DIR / "cookies_x.txt"
+COOKIES_SPOTIFY = COOKIES_DIR / "cookies_spotify.txt"
 
 PROGRESS_UPDATE_SECONDS = float(os.getenv("PROGRESS_UPDATE_SECONDS", "3.0"))
 REQUEST_EXPIRE_SECONDS = int(os.getenv("REQUEST_EXPIRE_SECONDS", str(15 * 60)))
