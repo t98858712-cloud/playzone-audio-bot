@@ -80,17 +80,26 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
-    # 🌟 التعرف الذكي على ملفات الكوكيز مهما كان اسمها
     if getattr(update.message, "document", None) and is_admin(uid):
+        # تم تسجيل الأسماء الأصلية للإضافات مباشرةً
+        valid_cookie_files = [
+            "cookies.txt", 
+            "www.youtube.com_cookies.txt", 
+            "www.tiktok.com_cookies.txt", 
+            "www.instagram.com_cookies.txt", 
+            "www.facebook.com_cookies.txt", 
+            "x.com_cookies.txt", 
+            "open.spotify.com_cookies.txt"
+        ]
         file_name = update.message.document.file_name.lower()
         
         target_name = None
-        if "youtube" in file_name: target_name = "cookies_youtube.txt"
-        elif "tiktok" in file_name: target_name = "cookies_tiktok.txt"
-        elif "instagram" in file_name: target_name = "cookies_instagram.txt"
-        elif "facebook" in file_name or "fb" in file_name: target_name = "cookies_facebook.txt"
-        elif "x.com" in file_name or "twitter" in file_name: target_name = "cookies_x.txt"
-        elif "spotify" in file_name: target_name = "cookies_spotify.txt"
+        if "youtube" in file_name: target_name = "www.youtube.com_cookies.txt"
+        elif "tiktok" in file_name: target_name = "www.tiktok.com_cookies.txt"
+        elif "instagram" in file_name: target_name = "www.instagram.com_cookies.txt"
+        elif "facebook" in file_name or "fb" in file_name: target_name = "www.facebook.com_cookies.txt"
+        elif "x.com" in file_name or "twitter" in file_name: target_name = "x.com_cookies.txt"
+        elif "spotify" in file_name: target_name = "open.spotify.com_cookies.txt"
         elif file_name == "cookies.txt": target_name = "cookies.txt"
         
         if target_name:
@@ -104,7 +113,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             try:
                 with open(target_path, 'r', encoding='utf-8', errors='ignore') as f:
                     cookie_content = f.read()
-                save_cookie_to_db(target_name, cookie_content) # رفع الملف بالاسم الداخلي المعتمد
+                save_cookie_to_db(target_name, cookie_content)
                 return await update.message.reply_text(f"✅ تم التعرف على الملف بنجاح!\nالاسم الأصلي: <code>{file_name}</code>\nتم ربطه بمنصة: <b>{target_name}</b>\n☁️ تم الرفع والحفظ السحابي بنجاح.", parse_mode="HTML")
             except Exception as e:
                 return await update.message.reply_text(f"⚠️ تم حفظ الملف محلياً ولكن فشل الرفع السحابي: {e}")
