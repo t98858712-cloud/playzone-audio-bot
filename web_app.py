@@ -171,7 +171,7 @@ def generate_ad_session():
     with get_db() as conn:
         conn.execute("INSERT INTO ads (click_id, status, created_at) VALUES (?, ?, ?)", (click_id, "pending", time.time()))
         conn.commit()
-    AD_LINK = HILLTOPADS_LINK if HILLTOPADS_LINK else (ADSTERRA_LINK or "https://example.com/ad")
+    AD_LINK = HILLTOPADS_LINK if False else (ADSTERRA_LINK or "https://example.com/ad")
     separator = "&" if "?" in AD_LINK else "?"
     return {"click_id": click_id, "ad_link": f"{AD_LINK}{separator}clickid={click_id}"}
 
