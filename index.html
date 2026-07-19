@@ -699,26 +699,12 @@ const BACKEND_URL = window.location.origin.includes('github.io') || window.locat
     let vBtn = document.getElementById('verifyBtn');
     vBtn.className = "btn bg-panel text-accent flex-1 border border-accent/30 text-xs md:text-sm cursor-wait";
     
-    const loadingPhrases = [
-        '<i class="fas fa-sync fa-spin mr-1"></i> جاري فحص استجابة الشبكة...',
-        '<i class="fas fa-shield-alt mr-1 text-purple-400"></i> جاري تشفير بروتوكول الأمان...',
-        '<i class="fas fa-database fa-spin mr-1"></i> جاري فك قفل خادم التحميل...'
-    ];
+    // تم إلغاء المصفوفة والتدوير، وتثبيت نص واحد للمدة كاملة
+    vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> جاري التحقق من الإعلان، يرجى الانتظار...';
     
-    let phraseIndex = 0;
-    vBtn.innerHTML = loadingPhrases[phraseIndex];
-    
-    // تدوير العبارات كل 3 ثوانٍ لتتناسب مع مدة الـ 10 ثوانٍ الإجمالية
-    adCheckInterval = setInterval(() => {
-        phraseIndex++;
-        if (phraseIndex < loadingPhrases.length) {
-            vBtn.innerHTML = loadingPhrases[phraseIndex];
-        }
-    }, 3000);
-    
-    // فتح القفل تلقائياً بعد 10 ثوانٍ (10000 مللي ثانية)
+    // فتح القفل تلقائياً بعد 10 ثوانٍ بالتمام والكمال
     adFallbackTimeout = setTimeout(() => {
-        clearInterval(adCheckInterval);
+        if(adCheckInterval) clearInterval(adCheckInterval);
         document.getElementById('adGate').classList.add('hidden');
         document.getElementById('dlOptions').classList.remove('hidden');
         showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
