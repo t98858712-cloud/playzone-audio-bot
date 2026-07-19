@@ -5,10 +5,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import yt_dlp
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+# تم الإبقاء على اليوزر نيم الخاص بك هنا دون أي تغيير
 BOT_USERNAME = "MusicPlayZoneBot"
 
 try:
@@ -36,7 +37,7 @@ DB_PATH = "playzone_core.db"
 
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
-    conn.execute("PRAGMA journal_mode=WAL;")  # تفعيل نظام WAL للتعامل مع آلاف الطلبات المتزامنة بدون قفل البيانات
+    conn.execute("PRAGMA journal_mode=WAL;")  
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -59,7 +60,6 @@ def init_db():
 
 init_db()
 
-# تنظيم طابور العمليات (Thread Pool) لـ 10 تحميلات متزامنة لحماية موارد المعالج من الاختناق
 DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
 
 def cleanup_cron():
@@ -93,15 +93,15 @@ class SearchRequest(BaseModel):
 
 class TelegramRequest(BaseModel):
     file_url: str
-    chat_id: str  # سيتكفل Pydantic الآن بتحويل أي صيغة واردة (رقم أو نص) إلى نص تلقائياً
+    chat_id: str  
     is_audio: bool
     title: str = "مقطع"
     performer: str = "PlayZone"
     duration: int = 0
     thumb: str = ""
 
-    # دالة تحقق إضافية لضمان تحويل القيمة القادمة إلى نص آمن دائماً
-    @pydantic.field_validator('chat_id', mode='before')
+    @field_validator('chat_id', mode='before')
+    @classmethod
     def coerce_str(cls, v):
         return str(v)
 
@@ -156,7 +156,7 @@ async def api_search(req: SearchRequest):
                     "uploader": entry.get("uploader") or entry.get("channel") or "غير معروف",
                     "thumbnail": thumb_url
                 })
-            if len(valid_videos) == 15: break # إخراج 15 اقتراحاً كاملاً واحترافياً للمستخدم
+            if len(valid_videos) == 15: break 
         return {"success": True, "entries": valid_videos}
     except Exception as e: 
         return {"success": False, "error": str(e)}
@@ -280,7 +280,6 @@ def send_to_telegram(req: TelegramRequest):
         filename = req.file_url.split("/")[-1]
         file_path = WEB_DIR / filename
         
-        # الفحوصات الأمنية وحالة الملف
         if not file_path.exists(): return {"success": False, "error": "الملف غير موجود."}
         if not TELEGRAM_TOKEN: return {"success": False, "error": "البوت غير مفعل بالخلفية."}
         if file_path.stat().st_size / (1024 * 1024) > 49.5: return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
@@ -288,6 +287,8 @@ def send_to_telegram(req: TelegramRequest):
         api_method = "sendAudio" if req.is_audio else "sendVideo"
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(req.duration) if req.duration else 0
+        
+        # هنا تم تثبيت نص اليوزر ليكون @P1ay_Z0ne_Bot مع إبقاء مدة ووقت الملف دون لمس متغير BOT_USERNAME
         caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else f"- @P1ay_Z0ne_Bot"
         reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]]}
         
@@ -297,7 +298,6 @@ def send_to_telegram(req: TelegramRequest):
             data.update({'title': req.title, 'performer': req.performer, 'duration': req.duration})
         else:
             data.update({'supports_streaming': True, 'duration': req.duration})
-            # استخراج أبعاد الفيديو باختصار
             try:
                 cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
                 res = subprocess.run(cmd, capture_output=True, text=True)
@@ -308,7 +308,6 @@ def send_to_telegram(req: TelegramRequest):
         with open(file_path, 'rb') as f: file_data = f.read()
         files = {'audio' if req.is_audio else 'video': (filename, file_data)}
         
-        # جلب وإرفاق الصورة المصغرة للصوتيات
         if req.thumb and req.is_audio:
             try:
                 t_res = requests.get(req.thumb, timeout=4)
