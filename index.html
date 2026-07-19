@@ -579,16 +579,36 @@ const BACKEND_URL = window.location.origin.includes('github.io') || window.locat
         }
 
         let pendingTgItem = null;
-        function triggerSendToTelegram(id) {
-            const item = myLibrary.find(i => i.id === id); if (!item) return;
-            const tgId = localStorage.getItem('pz_tg_id');
-            if (!tgId) {
-                pendingTgItem = item; document.getElementById('tgIdInput').value = "";
-                document.getElementById('tgModal').classList.replace('hidden', 'flex');
-            } else {
-                sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
-            }
+        async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {
+    const chatId = localStorage.getItem('pz_tg_id'); 
+    if (!chatId) return;
+
+    showToast(auto ? "جاري الإرسال لبوت تيليجرام تلقائياً..." : "جاري إرسال الملف إلى تيليجرام...", "success");
+    
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/send_telegram`, {
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                file_url: fileUrl, 
+                chat_id: chatId.toString(), // تم إعادته إلى نص (String) ليتطابق مع الـ Pydantic Model تماماً ويختفي خطأ 422
+                is_audio: isAudio, 
+                title: title, 
+                performer: performer, 
+                duration: Math.floor(Number(duration)) || 0, 
+                thumb: thumb || "" 
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast("تم إرسال الملف إلى حسابك بنجاح! 🎉", "success");
+        } else {
+            showToast("فشل الإرسال للبوت: " + data.error, "error");
         }
+    } catch(e) { 
+        showToast("فشل الاتصال بالخادم لإرسال تيليجرام", "error"); 
+    }
+}
 
         function closeTgModal() { document.getElementById('tgModal').classList.replace('flex', 'hidden'); pendingTgItem = null; }
         
