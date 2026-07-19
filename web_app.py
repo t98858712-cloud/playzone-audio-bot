@@ -318,7 +318,19 @@ def send_to_telegram(req: TelegramRequest):
         api_method = "sendAudio" if req.is_audio else "sendVideo"
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(req.duration) if req.duration else 0
-        caption = f"- @{BOT_USERNAME}"
+        
+        # ----------------------------------------------------
+        # حساب الوقت وتحويله إلى صيغة (دقيقة:ثانية) مثل 3:17
+        # ----------------------------------------------------
+        if dur > 0:
+            minutes = dur // 60
+            seconds = dur % 60
+            time_str = f"{minutes}:{seconds:02d}"
+            caption = f"- @{BOT_USERNAME} , {time_str}"
+        else:
+            caption = f"- @{BOT_USERNAME}"
+        # ----------------------------------------------------
+
         reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"}]]}
         
         data = {'chat_id': req.chat_id, 'caption': caption, 'reply_markup': json.dumps(reply_markup)}
