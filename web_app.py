@@ -10,8 +10,8 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import requests
 import yt_dlp
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -36,6 +36,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# معالج أخطاء عالمي لـ FastAPI لمنع تسريب أخطاء النظام الحساسة للمتصفح
+@app.exception_handler(Exception)
+async def global_fastapi_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "error": "حدث خطأ داخلي في الخادم، يرجى المحاولة لاحقاً."}
+    )
+
 WEB_DIR = BASE_DOWNLOAD_DIR / "web_library"
 WEB_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
@@ -43,7 +51,6 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 DB_PATH = "playzone_core.db"
 
 def get_db():
-    """ دالة موحدة ومحمية لإنشاء الاتصال بقاعدة البيانات لمنع تضارب العمليات المتزامنة """
     conn = sqlite3.connect(DB_PATH, timeout=60.0)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
@@ -137,8 +144,11 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
 
 @app.get("/", response_class=HTMLResponse)
 def home():
-    with open("index.html", "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
+    try:
+        with open("index.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Index file not found")
 
 @app.post("/api/search")
 def api_search(req: SearchRequest):
@@ -207,7 +217,6 @@ def check_ad_status(click_id: str):
         cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (click_id,))
         row = cursor.fetchone()
         if not row: return {"status": "not_found"}
-        # إصلاح ثغرة الإعلانات: الاعتماد بالكامل على التحقق الحقيقي الصادر من الـ callback لضمان الاحتساب المالي للمطور
         return {"status": row["status"]}
 
 def bg_download_worker(job_id: str, url: str, mode: str, res: str):
@@ -315,7 +324,6 @@ def send_to_telegram(req: TelegramRequest):
                 data.update({'width': probe_data['streams'][0]['width'], 'height': probe_data['streams'][0]['height']})
             except Exception: pass
 
-        # تحسين الذاكرة الاستثنائي: استخدام البث المتدفق بدلاً من تحميل الملف بالكامل في الرام f.read()
         with open(file_path, 'rb') as file_object:
             files = {'audio' if req.is_audio else 'video': (filename, file_object, 'audio/mpeg' if req.is_audio else 'video/mp4')}
             
