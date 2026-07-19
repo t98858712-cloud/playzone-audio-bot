@@ -765,44 +765,74 @@
         }
 
         function playMediaTrack(index) {
-            currentPlayingIndex = index; const track = myLibrary[index]; if (!track) return;
-            mediaContainer.classList.add('active-player');
-            if (track.is_audio) {
-                currentPlayingMode = 'audio'; document.getElementById('trackSource').innerText = '🎵 صوت';
-                document.getElementById('videoContainer').classList.add('hidden'); document.getElementById('audioVisualizer').classList.remove('hidden');
-                document.getElementById('pipBtn').classList.add('hidden'); document.getElementById('playerCoverImg').src = track.thumb || 'https://via.placeholder.com/150';
-                document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(true);
-            } else {
-                currentPlayingMode = 'video'; document.getElementById('trackSource').innerText = '🎬 فيديو';
-                document.getElementById('videoContainer').classList.remove('hidden'); document.getElementById('audioVisualizer').classList.add('hidden');
-                document.getElementById('pipBtn').classList.remove('hidden'); document.getElementById('playerCoverImg').style.animationPlayState = 'paused';
-                animateVisualizerBars(false);
-            }
-            videoElement.src = track.url; videoElement.load();
-            const playPromise = videoElement.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => { document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>'; })
-                .catch(error => {
-                    document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
-                    document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(false);
-                    showToast("اضغط زر التشغيل للمتابعة", "success");
-                });
-            }
-            document.getElementById('playerTitle').innerText = track.title;
-            if (mediaContainer.classList.contains('compact-mode')) removeCompactLayout();
-        }
+    currentPlayingIndex = index; const track = myLibrary[index]; if (!track) return;
+    mediaContainer.classList.add('active-player');
+    if (track.is_audio) {
+        currentPlayingMode = 'audio'; document.getElementById('trackSource').innerText = '🎵 صوت';
+        document.getElementById('videoContainer').classList.add('hidden'); document.getElementById('audioVisualizer').classList.remove('hidden');
+        document.getElementById('pipBtn').classList.add('hidden'); document.getElementById('playerCoverImg').src = track.thumb || 'https://via.placeholder.com/150';
+        document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(true);
+    } else {
+        currentPlayingMode = 'video'; document.getElementById('trackSource').innerText = '🎬 فيديو';
+        document.getElementById('videoContainer').classList.remove('hidden'); document.getElementById('audioVisualizer').classList.add('hidden');
+        document.getElementById('pipBtn').classList.remove('hidden'); document.getElementById('playerCoverImg').style.animationPlayState = 'paused';
+        animateVisualizerBars(false);
+    }
+    videoElement.src = track.url; videoElement.load();
+    const playPromise = videoElement.play();
+    if (playPromise !== undefined) {
+        playPromise.then(() => { 
+            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>'; 
+            // التعديل هنا 👇 (لإبلاغ النظام بالتشغيل الفعلي)
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
+        })
+        .catch(error => {
+            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
+            document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(false);
+            showToast("اضغط زر التشغيل للمتابعة", "success");
+        });
+    }
+    document.getElementById('playerTitle').innerText = track.title;
+    if (mediaContainer.classList.contains('compact-mode')) removeCompactLayout();
+
+    // الجزء الجديد بالكامل المضاف هنا لربط غلاف الألبوم 👇
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: track.title,
+            artist: track.uploader || 'PlayZone',
+            album: 'PlayZone Music',
+            artwork: [
+                { src: track.thumb || 'https://via.placeholder.com/150', sizes: '512x512', type: 'image/png' }
+            ]
+        });
+        setupMediaSessionActions();
+    }
+}
 
         function togglePlay() {
-            if (videoElement.paused) {
-                videoElement.play().then(() => {
-                    document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
-                    if(currentPlayingMode === 'audio') { document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(true); }
-                }).catch(()=>{});
-            } else {
-                videoElement.pause(); document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
-                document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(false);
-            }
-        }
+    if (videoElement.paused) {
+        videoElement.play().then(() => {
+            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
+            if(currentPlayingMode === 'audio') { document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(true); }
+            // التعديل هنا 👇
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
+        }).catch(()=>{});
+    } else {
+        videoElement.pause(); document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
+        document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(false);
+        // التعديل هنا 👇
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
+    }
+}
+
+function setupMediaSessionActions() {
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
+        navigator.mediaSession.setActionHandler('pause', () => { togglePlay(); });
+        navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
+        navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
+    }
+}
 
         function playNext() {
             if (myLibrary.length === 0) return;
