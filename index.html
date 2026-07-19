@@ -333,7 +333,10 @@
     </div>
 
     <script>
-        const BACKEND_URL = window.location.origin;
+        // استبدل الرابط أدناه برابط سيرفر Railway الحقيقي الخاص بك لتلافي مشاكل النطاقات في المتصفحات الخارجية
+const BACKEND_URL = window.location.origin.includes('github.io') || window.location.origin.includes('localhost')
+    ? 'https://your-playzone-bot-backend.up.railway.app' 
+    : window.location.origin;
         
         const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
         const isMiniApp = tg && tg.initData && tg.initData !== "";
@@ -681,7 +684,6 @@
     let vBtn = document.getElementById('verifyBtn');
     vBtn.className = "btn bg-panel text-accent flex-1 border border-accent/30 text-xs md:text-sm cursor-wait";
     
-    // مصفوفة من الجمل الوهمية لتغطية الـ 5 ثوانٍ وإيهام المستخدم بوجود فحص حقيقي وسيرفر معقد
     const loadingPhrases = [
         '<i class="fas fa-sync fa-spin mr-1"></i> جاري فحص استجابة الشبكة...',
         '<i class="fas fa-shield-alt mr-1 text-purple-400"></i> جاري تشفير بروتوكول الأمان...',
@@ -691,23 +693,22 @@
     let phraseIndex = 0;
     vBtn.innerHTML = loadingPhrases[phraseIndex];
     
-    // تدوير العبارات كل 1.5 ثانية لإضفاء طابع احترافي وواقعي
+    // تدوير العبارات كل 3 ثوانٍ لتتناسب مع مدة الـ 10 ثوانٍ الإجمالية
     adCheckInterval = setInterval(() => {
         phraseIndex++;
         if (phraseIndex < loadingPhrases.length) {
             vBtn.innerHTML = loadingPhrases[phraseIndex];
         }
-    }, 1500);
+    }, 3000);
     
-    // فتح القفل صامتاً تماماً بعد 5 ثوانٍ بالتمام والكمال
+    // فتح القفل تلقائياً بعد 10 ثوانٍ (10000 مللي ثانية)
     adFallbackTimeout = setTimeout(() => {
         clearInterval(adCheckInterval);
         document.getElementById('adGate').classList.add('hidden');
         document.getElementById('dlOptions').classList.remove('hidden');
         showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
-    }, 5000); 
+    }, 10000); 
 }
-
 // تعطيل الفحص اليدوي لأنه لم يعد هناك حاجة له
 async function manualCheckAdStatus() {
     return; 
