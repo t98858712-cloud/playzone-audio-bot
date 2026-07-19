@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#030305">
-    <title>PlayZone | Music </title>
+    <title>PlayZone | Music</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2 family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script>
         tailwind.config={
             darkMode:'class',
@@ -45,7 +45,7 @@
         .view-section.active.flex-layout { display: flex !important; }
         
         #progBar {
-            transition: width 0.6s cubic-bezier(0.1, 0.8, 0.25, 1);
+            transition: width 0.4s cubic-bezier(0.1, 0.8, 0.25, 1);
             box-shadow: 0 0 12px rgba(168, 85, 247, 0.45);
         }
         
@@ -55,9 +55,9 @@
             left: 25px;
             width: 360px;
             max-width: calc(100vw - 32px);
-            background: rgba(11, 11, 15, 0.82);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            background: rgba(11, 11, 15, 0.85);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 24px;
             box-shadow: 0 35px 70px rgba(0,0,0,0.85), 0 0 25px rgba(168, 85, 247, 0.15);
@@ -158,7 +158,7 @@
                             <p class="text-xs mb-3 text-textMuted font-medium"><i class="fas fa-lock text-accent ml-1"></i> يرجى فتح الإعلان ليفك رابط التحميل قفله تلقائياً.</p>
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <a id="realAdLink" href="#" target="_blank" onclick="startAdVerificationCheck()" class="btn bg-blue-600 text-white flex-1 hover:bg-blue-500 text-xs md:text-sm"><i class="fas fa-external-link-alt"></i> 1. فتح الإعلان</a>
-                                <button id="verifyBtn" onclick="manualCheckAdStatus()" class="btn bg-panel text-textMuted flex-1 border border-panelBorder text-xs md:text-sm cursor-wait"><i class="fas fa-sync fa-spin mr-1"></i> جاري الانتظار تلقائياً...</button>
+                                <button id="verifyBtn" class="btn bg-panel text-textMuted flex-1 border border-panelBorder text-xs md:text-sm cursor-wait"><i class="fas fa-sync fa-spin mr-1"></i> بانتظار فتح الإعلان...</button>
                             </div>
                         </div>
 
@@ -172,7 +172,7 @@
                                     <option value="1080">جودة 1080p</option>
                                 </select>
                             </div>
-                            <button onclick="startDownload()" class="btn bg-gradient-to-r from-accent to-fuchsia-600 text-white w-full hover:from-accentHover hover:to-fuchsia-700 shadow-xl shadow-accent/20 text-xs md:text-sm">
+                            <button onclick="startDownload(event)" class="btn bg-gradient-to-r from-accent to-fuchsia-600 text-white w-full hover:from-accentHover hover:to-fuchsia-700 shadow-xl shadow-accent/20 text-xs md:text-sm">
                                 <i class="fas fa-download"></i> بدء التحميل
                             </button>
                         </div>
@@ -322,7 +322,7 @@
         <div class="bg-panel border border-panelBorder p-6 rounded-3xl max-w-sm w-full text-center shadow-2xl" id="tgModalContent">
             <div class="w-14 h-14 bg-tgBlue/20 text-tgBlue rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl"><i class="fab fa-telegram-plane"></i></div>
             <h3 class="text-base font-bold mb-1 text-white">ربط حساب Telegram</h3>
-            <p class="text-textMuted text-xs mb-5">يرجى إدخال معرف حسابك (User ID) لتفعيل خاصية الإرسات التلقائي عبر البوت.</p>
+            <p class="text-textMuted text-xs mb-5">يرجى إدخال معرف حسابك (User ID) لتفعيل خاصية الإرسال التلقائي عبر البوت.</p>
             <button onclick="window.open('https://t.me/{BOT_USERNAME}', '_blank')" class="btn bg-tgBlue text-white w-full mb-3 text-xs"><i class="fas fa-robot"></i> 1. الدخول للبوت ونسخ المعرف</button>
             <input type="text" id="tgIdInput" placeholder="2. الصق المعرف هنا..." class="modern-input bg-black/60 text-center text-xs mb-4 font-mono py-2">
             <div class="flex gap-2">
@@ -356,6 +356,23 @@
 
         const mediaContainer = document.getElementById('floatingPlayer');
         const videoElement = document.getElementById('globalVideoElement');
+
+        // إصلاح تزامن أزرار الواجهة وسماعات البلوتوث عبر ربط الأنيميشن بأحداث عنصر الميديا الأصلي مباشرة
+        videoElement.onplay = () => {
+            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
+            if (currentPlayingMode === 'audio') {
+                document.getElementById('playerCoverImg').style.animationPlayState = 'running';
+                animateVisualizerBars(true);
+            }
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
+        };
+
+        videoElement.onpause = () => {
+            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
+            document.getElementById('playerCoverImg').style.animationPlayState = 'paused';
+            animateVisualizerBars(false);
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
+        };
 
         function triggerHaptic(style = 'light') {
             if (isMiniApp && tg.HapticFeedback) {
@@ -648,7 +665,7 @@
                     
                     let vBtn = document.getElementById('verifyBtn');
                     vBtn.className = "btn bg-panel text-textMuted flex-1 border border-panelBorder text-xs cursor-wait";
-                    vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> بانتظار الفحص التلقائي...';
+                    vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> بانتظار فحص الإعلان...';
                 } else showToast("الرابط غير صالح للتحميل", "error");
             } catch(e) { showToast("فشل تحميل المعاينة", "error"); }
         }
@@ -656,18 +673,14 @@
         function toggleRes() { document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; }
         
         function startAdVerificationCheck() {
-            showToast("تم فتح الإعلان بنجاح 🌐", "success");
+            showToast("تم فتح صفحة الإعلان 🌐", "success");
             if(adCheckInterval) clearInterval(adCheckInterval);
             if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
             
-            adCheckInterval = setInterval(manualCheckAdStatus, 2000);
+            let vBtn = document.getElementById('verifyBtn');
+            vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> جاري التحقق تلقائياً...';
             
-            adFallbackTimeout = setTimeout(() => {
-                clearInterval(adCheckInterval);
-                document.getElementById('adGate').classList.add('hidden');
-                document.getElementById('dlOptions').classList.remove('hidden');
-                showToast("تم تجاوز الفحص وتفعيل الرابط بنجاح 🔓", "success");
-            }, 10000);
+            adCheckInterval = setInterval(manualCheckAdStatus, 3000);
         }
 
         async function manualCheckAdStatus() {
@@ -677,7 +690,6 @@
                 const data = await res.json();
                 if(data.status === 'verified') {
                     clearInterval(adCheckInterval);
-                    clearTimeout(adFallbackTimeout);
                     document.getElementById('adGate').classList.add('hidden');
                     document.getElementById('dlOptions').classList.remove('hidden');
                     showToast("تم التحقق من شبكة الإعلانات بنجاح! 🔓", "success");
@@ -688,7 +700,7 @@
         function animatePercentCounter(targetPercent) {
             let start = lastLoggedPercent; let end = parseFloat(targetPercent) || 0;
             if (start === end) return;
-            let duration = 500; let startTime = null; const percentEl = document.getElementById('progPercent');
+            let duration = 400; let startTime = null; const percentEl = document.getElementById('progPercent');
             function step(timestamp) {
                 if (!startTime) startTime = timestamp;
                 let progress = timestamp - startTime;
@@ -701,7 +713,7 @@
             window.requestAnimationFrame(step);
         }
 
-        async function startDownload() {
+        async function startDownload(event) {
             const btn = event.currentTarget; const original = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
             document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
@@ -753,9 +765,13 @@
                                     sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
                                 }
                             } 
-                            else if(prog.status === 'error') { clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; }
+                            else if(prog.status === 'error') { 
+                                clearInterval(interval); 
+                                document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; 
+                                showToast("حدث خطأ أثناء معالجة اليوتيوب للملف", "error");
+                            }
                         } catch(err) {}
-                    }, 800);
+                    }, 1000);
                 } else {
                     showToast(data.error, "error");
                     document.getElementById('progStatus').innerHTML = `<span class="text-red-500">${data.error}</span>`;
@@ -765,74 +781,48 @@
         }
 
         function playMediaTrack(index) {
-    currentPlayingIndex = index; const track = myLibrary[index]; if (!track) return;
-    mediaContainer.classList.add('active-player');
-    if (track.is_audio) {
-        currentPlayingMode = 'audio'; document.getElementById('trackSource').innerText = '🎵 صوت';
-        document.getElementById('videoContainer').classList.add('hidden'); document.getElementById('audioVisualizer').classList.remove('hidden');
-        document.getElementById('pipBtn').classList.add('hidden'); document.getElementById('playerCoverImg').src = track.thumb || 'https://via.placeholder.com/150';
-        document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(true);
-    } else {
-        currentPlayingMode = 'video'; document.getElementById('trackSource').innerText = '🎬 فيديو';
-        document.getElementById('videoContainer').classList.remove('hidden'); document.getElementById('audioVisualizer').classList.add('hidden');
-        document.getElementById('pipBtn').classList.remove('hidden'); document.getElementById('playerCoverImg').style.animationPlayState = 'paused';
-        animateVisualizerBars(false);
-    }
-    videoElement.src = track.url; videoElement.load();
-    const playPromise = videoElement.play();
-    if (playPromise !== undefined) {
-        playPromise.then(() => { 
-            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>'; 
-            // التعديل هنا 👇 (لإبلاغ النظام بالتشغيل الفعلي)
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
-        })
-        .catch(error => {
-            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
-            document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(false);
-            showToast("اضغط زر التشغيل للمتابعة", "success");
-        });
-    }
-    document.getElementById('playerTitle').innerText = track.title;
-    if (mediaContainer.classList.contains('compact-mode')) removeCompactLayout();
+            currentPlayingIndex = index; const track = myLibrary[index]; if (!track) return;
+            mediaContainer.classList.add('active-player');
+            if (track.is_audio) {
+                currentPlayingMode = 'audio'; document.getElementById('trackSource').innerText = '🎵 صوت';
+                document.getElementById('videoContainer').classList.add('hidden'); document.getElementById('audioVisualizer').classList.remove('hidden');
+                document.getElementById('pipBtn').classList.add('hidden'); document.getElementById('playerCoverImg').src = track.thumb || 'https://via.placeholder.com/150';
+            } else {
+                currentPlayingMode = 'video'; document.getElementById('trackSource').innerText = '🎬 فيديو';
+                document.getElementById('videoContainer').classList.remove('hidden'); document.getElementById('audioVisualizer').classList.add('hidden');
+                document.getElementById('pipBtn').classList.remove('hidden');
+            }
+            videoElement.src = track.url; videoElement.load();
+            videoElement.play().catch(error => {
+                showToast("اضغط زر التشغيل للمتابعة", "success");
+            });
+            document.getElementById('playerTitle').innerText = track.title;
+            if (mediaContainer.classList.contains('compact-mode')) removeCompactLayout();
 
-    // الجزء الجديد بالكامل المضاف هنا لربط غلاف الألبوم 👇
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: track.title,
-            artist: track.uploader || 'PlayZone',
-            album: 'PlayZone Music',
-            artwork: [
-                { src: track.thumb || 'https://via.placeholder.com/150', sizes: '512x512', type: 'image/png' }
-            ]
-        });
-        setupMediaSessionActions();
-    }
-}
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: track.title,
+                    artist: track.uploader || 'PlayZone',
+                    album: 'PlayZone Music',
+                    artwork: [{ src: track.thumb || 'https://via.placeholder.com/150', sizes: '512x512', type: 'image/png' }]
+                });
+                setupMediaSessionActions();
+            }
+        }
 
         function togglePlay() {
-    if (videoElement.paused) {
-        videoElement.play().then(() => {
-            document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
-            if(currentPlayingMode === 'audio') { document.getElementById('playerCoverImg').style.animationPlayState = 'running'; animateVisualizerBars(true); }
-            // التعديل هنا 👇
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
-        }).catch(()=>{});
-    } else {
-        videoElement.pause(); document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
-        document.getElementById('playerCoverImg').style.animationPlayState = 'paused'; animateVisualizerBars(false);
-        // التعديل هنا 👇
-        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
-    }
-}
+            if (videoElement.paused) videoElement.play().catch(()=>{});
+            else videoElement.pause();
+        }
 
-function setupMediaSessionActions() {
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
-        navigator.mediaSession.setActionHandler('pause', () => { togglePlay(); });
-        navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
-        navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
-    }
-}
+        function setupMediaSessionActions() {
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
+                navigator.mediaSession.setActionHandler('pause', () => { togglePlay(); });
+                navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
+                navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
+            }
+        }
 
         function playNext() {
             if (myLibrary.length === 0) return;
@@ -937,6 +927,5 @@ function setupMediaSessionActions() {
             }
         }
     </script>
-    <script src="https://pl30415120.effectivecpmnetwork.com/4a/6d/62/4a6d62278909f4c7def1f7baaeb9509b.js"></script>
 </body>
 </html>
