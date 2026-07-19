@@ -333,10 +333,9 @@
     </div>
 
     <script>
-        // استبدل الرابط أدناه برابط سيرفر Railway الحقيقي الخاص بك لتلافي مشاكل النطاقات في المتصفحات الخارجية
-const BACKEND_URL = window.location.origin.includes('github.io') || window.location.origin.includes('localhost')
-    ? 'https://your-playzone-bot-backend.up.railway.app' 
-    : window.location.origin;
+        const BACKEND_URL = window.location.origin.includes('github.io') || window.location.origin.includes('localhost')
+            ? 'https://your-playzone-bot-backend.up.railway.app' 
+            : window.location.origin;
         
         const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
         const isMiniApp = tg && tg.initData && tg.initData !== "";
@@ -360,7 +359,6 @@ const BACKEND_URL = window.location.origin.includes('github.io') || window.locat
         const mediaContainer = document.getElementById('floatingPlayer');
         const videoElement = document.getElementById('globalVideoElement');
 
-        // إصلاح تزامن أزرار الواجهة وسماعات البلوتوث عبر ربط الأنيميشن بأحداث عنصر الميديا الأصلي مباشرة
         videoElement.onplay = () => {
             document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
             if (currentPlayingMode === 'audio') {
@@ -579,73 +577,65 @@ const BACKEND_URL = window.location.origin.includes('github.io') || window.locat
         }
 
         let pendingTgItem = null;
-        async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {
-    const chatId = localStorage.getItem('pz_tg_id'); 
-    if (!chatId) return;
-
-    showToast(auto ? "جاري الإرسال لبوت تيليجرام تلقائياً..." : "جاري إرسال الملف إلى تيليجرام...", "success");
-    
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/send_telegram`, {
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                file_url: fileUrl, 
-                chat_id: chatId.toString(), // تم إعادته إلى نص (String) ليتطابق مع الـ Pydantic Model تماماً ويختفي خطأ 422
-                is_audio: isAudio, 
-                title: title, 
-                performer: performer, 
-                duration: Math.floor(Number(duration)) || 0, 
-                thumb: thumb || "" 
-            })
-        });
-        const data = await res.json();
-        if (data.success) {
-            showToast("تم إرسال الملف إلى حسابك بنجاح! 🎉", "success");
-        } else {
-            showToast("فشل الإرسال للبوت: " + data.error, "error");
+        
+        function triggerSendToTelegram(id) {
+            const item = myLibrary.find(i => i.id === id); if (!item) return;
+            const tgId = localStorage.getItem('pz_tg_id');
+            if (!tgId) {
+                pendingTgItem = item; document.getElementById('tgIdInput').value = "";
+                document.getElementById('tgModal').classList.replace('hidden', 'flex');
+            } else {
+                sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
+            }
         }
-    } catch(e) { 
-        showToast("فشل الاتصال بالخادم لإرسال تيليجرام", "error"); 
-    }
-}
-
-        function closeTgModal() { document.getElementById('tgModal').classList.replace('flex', 'hidden'); pendingTgItem = null; }
-        
-        function saveTgIdFromModal() {
-    const val = document.getElementById('tgIdInput').value.trim(); 
-    if (!val) return showToast("أدخل معرف صالح", "error");
-    
-    localStorage.setItem('pz_tg_id', val); 
-    document.getElementById('settingTgId').value = val;
-    closeTgModal(); 
-    showToast("تم الحفظ بنجاح وجاري الإرسال للبوت... 🎉", "success");
-    
-    if (pendingTgItem) {
-        // فحص ما إذا كان العنصر قادم من التنزيل المباشر أو من أرشيف المكتبة
-        const url = pendingTgItem.url;
-        const isAudio = pendingTgItem.is_audio;
-        const title = pendingTgItem.title;
-        const uploader = pendingTgItem.uploader || pendingTgItem.performer || "PlayZone";
-        const duration = pendingTgItem.duration;
-        const thumb = pendingTgItem.thumb;
-        
-        sendToTelegram(url, isAudio, false, title, uploader, duration, thumb);
-    }
-}
 
         async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {
-            const chatId = localStorage.getItem('pz_tg_id'); if (!chatId) return;
+            const chatId = localStorage.getItem('pz_tg_id'); 
+            if (!chatId) return;
+
             showToast(auto ? "جاري الإرسال لبوت تيليجرام تلقائياً..." : "جاري إرسال الملف إلى تيليجرام...", "success");
+            
             try {
                 const res = await fetch(`${BACKEND_URL}/api/send_telegram`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file_url: fileUrl, chat_id: chatId.toString(), is_audio: isAudio, title: title, performer: performer, duration: duration || 0, thumb: thumb || "" })
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        file_url: fileUrl, 
+                        chat_id: chatId.toString(), 
+                        is_audio: isAudio, 
+                        title: title, 
+                        performer: performer, 
+                        duration: Math.floor(Number(duration)) || 0, // فرمتة عدد الثواني بشكل صحيح لمنع خطأ 422
+                        thumb: thumb || "" 
+                    })
                 });
                 const data = await res.json();
                 if (data.success) showToast("تم إرسال الملف إلى حسابك بنجاح! 🎉", "success");
                 else showToast("فشل الإرسال للبوت: " + data.error, "error");
             } catch(e) { showToast("فشل الاتصال بالخادم لإرسال تيليجرام", "error"); }
+        }
+
+        function closeTgModal() { document.getElementById('tgModal').classList.replace('flex', 'hidden'); pendingTgItem = null; }
+        
+        function saveTgIdFromModal() {
+            const val = document.getElementById('tgIdInput').value.trim(); 
+            if (!val) return showToast("أدخل معرف صالح", "error");
+            
+            localStorage.setItem('pz_tg_id', val); 
+            document.getElementById('settingTgId').value = val;
+            closeTgModal(); 
+            showToast("تم الحفظ بنجاح وجاري الإرسال للبوت... 🎉", "success");
+            
+            if (pendingTgItem) {
+                const url = pendingTgItem.url;
+                const isAudio = pendingTgItem.is_audio;
+                const title = pendingTgItem.title;
+                const uploader = pendingTgItem.uploader || pendingTgItem.performer || "PlayZone";
+                const duration = pendingTgItem.duration;
+                const thumb = pendingTgItem.thumb;
+                
+                sendToTelegram(url, isAudio, false, title, uploader, duration, thumb);
+            }
         }
 
         async function processInput() {
@@ -711,42 +701,27 @@ const BACKEND_URL = window.location.origin.includes('github.io') || window.locat
         function toggleRes() { document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; }
         
         function startAdVerificationCheck() {
-    showToast("جاري فحص الاتصال وتأكيد الجلسة... ⏳", "success");
-    
-    if(adCheckInterval) clearInterval(adCheckInterval);
-    if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
-    
-    let vBtn = document.getElementById('verifyBtn');
-    vBtn.className = "btn bg-panel text-accent flex-1 border border-accent/30 text-xs md:text-sm cursor-wait";
-    
-    // تم إلغاء المصفوفة والتدوير، وتثبيت نص واحد للمدة كاملة
-    vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> جاري التحقق من الإعلان، يرجى الانتظار...';
-    
-    // فتح القفل تلقائياً بعد 10 ثوانٍ بالتمام والكمال
-    adFallbackTimeout = setTimeout(() => {
-        if(adCheckInterval) clearInterval(adCheckInterval);
-        document.getElementById('adGate').classList.add('hidden');
-        document.getElementById('dlOptions').classList.remove('hidden');
-        showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
-    }, 10000); 
-}
-// تعطيل الفحص اليدوي لأنه لم يعد هناك حاجة له
-async function manualCheckAdStatus() {
-    return; 
-}
+            showToast("جاري فحص الاتصال وتأكيد الجلسة... ⏳", "success");
+            
+            if(adCheckInterval) clearInterval(adCheckInterval);
+            if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
+            
+            let vBtn = document.getElementById('verifyBtn');
+            vBtn.className = "btn bg-panel text-accent flex-1 border border-accent/30 text-xs md:text-sm cursor-wait";
+            
+            // تثبيت الكلمات بدون تدوير نهائياً بناءً على طلبك
+            vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> جاري التحقق من الإعلان، يرجى الانتظار...';
+            
+            // فتح القفل بعد 10 ثوانٍ كاملة ومستقرة
+            adFallbackTimeout = setTimeout(() => {
+                document.getElementById('adGate').classList.add('hidden');
+                document.getElementById('dlOptions').classList.remove('hidden');
+                showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
+            }, 10000); 
+        }
 
         async function manualCheckAdStatus() {
-            if(!currentClickId) return;
-            try {
-                const res = await fetch(`${BACKEND_URL}/api/check_ad_status/${currentClickId}`);
-                const data = await res.json();
-                if(data.status === 'verified') {
-                    clearInterval(adCheckInterval);
-                    document.getElementById('adGate').classList.add('hidden');
-                    document.getElementById('dlOptions').classList.remove('hidden');
-                    showToast("تم التحقق من شبكة الإعلانات بنجاح! 🔓", "success");
-                }
-            } catch(e){}
+            return; 
         }
 
         function animatePercentCounter(targetPercent) {
@@ -814,7 +789,15 @@ async function manualCheckAdStatus() {
                                 showToast("تم حفظ الملف بنجاح", "success");
 
                                 if(localStorage.getItem('pz_auto_tg') !== 'false') {
-                                    sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
+                                    const tgId = localStorage.getItem('pz_tg_id');
+                                    if (!tgId) {
+                                        pendingTgItem = { url: BACKEND_URL + prog.url, is_audio: prog.is_audio, title: prog.title, uploader: prog.uploader, duration: prog.duration, thumb: prog.thumb };
+                                        document.getElementById('tgIdInput').value = "";
+                                        document.getElementById('tgModal').classList.replace('hidden', 'flex');
+                                        showToast("يرجى ربط حسابك ليتم إرسال هذا الملف إلى البوت ⚠️", "error");
+                                    } else {
+                                        sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
+                                    }
                                 }
                             } 
                             else if(prog.status === 'error') { 
