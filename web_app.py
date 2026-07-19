@@ -20,7 +20,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = "MusicPlayZoneBot"
 
 # مهلة التجاوز الصامت بالثواني (5 ثوانٍ لضمان عدم ملاحظة الثغرة)
-AD_FALLBACK_TIMEOUT = 5 
+AD_FALLBACK_TIMEOUT = 10 
 
 try:
     from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK
