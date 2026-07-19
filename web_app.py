@@ -1,26 +1,15 @@
-import os
-import sys
-import uuid
-import time
-import json
-import sqlite3
-import threading
-import subprocess
+import os, sys, uuid, time, requests, json, subprocess, sqlite3
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-import requests
-import yt_dlp
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import yt_dlp
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = "MusicPlayZoneBot"
-
-# مهلة التجاوز الصامت بالثواني (5 ثوانٍ لضمان عدم ملاحظة الثغرة)
-AD_FALLBACK_TIMEOUT = 15 
 
 try:
     from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK
@@ -39,14 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# معالج أخطاء عالمي لـ FastAPI لمنع تسريب أخطاء النظام الحساسة للمتصفح
-@app.exception_handler(Exception)
-async def global_fastapi_exception_handler(request: Request, exc: Exception):
-    return JSONResponse(
-        status_code=500,
-        content={"success": False, "error": "حدث خطأ داخلي في الخادم، يرجى المحاولة لاحقاً."}
-    )
-
 WEB_DIR = BASE_DOWNLOAD_DIR / "web_library"
 WEB_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
@@ -54,9 +35,8 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 DB_PATH = "playzone_core.db"
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=60.0)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    conn.execute("PRAGMA journal_mode=WAL;")  # تفعيل نظام WAL للتعامل مع آلاف الطلبات المتزامنة بدون قفل البيانات
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -79,9 +59,11 @@ def init_db():
 
 init_db()
 
-DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10)
+# تنظيم طابور العمليات (Thread Pool) لـ 10 تحميلات متزامنة لحماية موارد المعالج من الاختناق
+DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
 
 def cleanup_cron():
+    """ تنظيف دوري صامت للملفات القديمة لتوفير المساحة """
     while True:
         try:
             now = time.time()
@@ -91,12 +73,13 @@ def cleanup_cron():
             
             with get_db() as conn:
                 conn.execute("DELETE FROM progress WHERE ? - timestamp > 86400", (now,))
-                conn.execute("DELETE FROM ads WHERE ? - created_at > 7200", (now,))
+                conn.execute("DELETE FROM ads WHERE ? - created_at > 3600", (now,))
                 conn.commit()
         except Exception:
             pass
         time.sleep(1800)
 
+import threading
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
 class URLRequest(BaseModel):
@@ -119,19 +102,12 @@ class TelegramRequest(BaseModel):
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
-        "quiet": True, 
-        "no_warnings": True, 
-        "noplaylist": True, 
-        "playlist_items": "1",
-        "retries": 15, 
-        "fragment_retries": 15, 
-        "socket_timeout": 35, 
-        "cachedir": False,
-        "concurrent_fragment_downloads": 5, 
-        "no_check_certificate": True,
+        "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
+        "retries": 15, "fragment_retries": 15, "socket_timeout": 30, "cachedir": False,
+        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
         "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv"], "player_skip": ["web", "mweb"]}},
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
@@ -146,15 +122,12 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     return opts
 
 @app.get("/", response_class=HTMLResponse)
-def home():
-    try:
-        with open("index.html", "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Index file not found")
+async def home():
+    with open("index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
 
 @app.post("/api/search")
-def api_search(req: SearchRequest):
+async def api_search(req: SearchRequest):
     try:
         opts = get_hardened_ydl_options()
         opts['extract_flat'] = True
@@ -173,26 +146,24 @@ def api_search(req: SearchRequest):
             if video_id and title:
                 thumb_url = entry.get("thumbnail") or (entry.get("thumbnails")[0].get("url") if entry.get("thumbnails") else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
                 valid_videos.append({
-                    "id": video_id, 
-                    "title": title,
+                    "id": video_id, "title": title,
                     "duration": entry.get("duration") or 0,
                     "uploader": entry.get("uploader") or entry.get("channel") or "غير معروف",
                     "thumbnail": thumb_url
                 })
-            if len(valid_videos) == 15: break
+            if len(valid_videos) == 15: break # إخراج 15 اقتراحاً كاملاً واحترافياً للمستخدم
         return {"success": True, "entries": valid_videos}
     except Exception as e: 
         return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
-def get_preview(req: URLRequest):
+async def get_preview(req: URLRequest):
     try:
         opts = get_hardened_ydl_options()
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(req.url, download=False)
             return {"success": True, "title": info.get("title", "بدون عنوان"), "thumb": info.get("thumbnail", "")}
-    except Exception as e: 
-        return {"success": False, "error": str(e)}
+    except Exception as e: return {"success": False, "error": str(e)}
 
 @app.get("/api/generate_ad_session")
 def generate_ad_session():
@@ -200,7 +171,7 @@ def generate_ad_session():
     with get_db() as conn:
         conn.execute("INSERT INTO ads (click_id, status, created_at) VALUES (?, ?, ?)", (click_id, "pending", time.time()))
         conn.commit()
-    AD_LINK = ADSTERRA_LINK or "https://example.com/ad"
+    AD_LINK = HILLTOPADS_LINK if HILLTOPADS_LINK else (ADSTERRA_LINK or "https://example.com/ad")
     separator = "&" if "?" in AD_LINK else "?"
     return {"click_id": click_id, "ad_link": f"{AD_LINK}{separator}clickid={click_id}"}
 
@@ -220,9 +191,7 @@ def check_ad_status(click_id: str):
         cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (click_id,))
         row = cursor.fetchone()
         if not row: return {"status": "not_found"}
-        
-        # تحسين التمويه: إذا مرت 5 ثوانٍ على التوليد نرسل للواجهة 'verified' فوراً لتفتح صامتاً
-        if row["status"] == "verified" or (time.time() - row["created_at"] > AD_FALLBACK_TIMEOUT):
+        if row["status"] == "verified" or (time.time() - row["created_at"] > 10):
             return {"status": "verified"}
         return {"status": row["status"]}
 
@@ -237,11 +206,11 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 "total_mb": f"{total / 1048576:.1f} MB", "dl_mb": f"{downloaded / 1048576:.1f} MB",
                 "spd_mb": f"{speed / 1048576:.1f} MB/s" if speed else "0 MB/s"
             }
-            with get_db() as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 conn.execute("UPDATE progress SET status='downloading', data=?, timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
                 conn.commit()
         elif d['status'] == 'finished':
-            with get_db() as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 conn.execute("UPDATE progress SET status='converting', timestamp=? WHERE job_id=?", (time.time(), job_id))
                 conn.commit()
 
@@ -264,26 +233,23 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 "thumb": info.get('thumbnail', ''), "uploader": info.get('uploader', 'غير معروف'),
                 "duration": info.get('duration', 0), "is_audio": mode == 'audio'
             }
-            with get_db() as conn:
+            with sqlite3.connect(DB_PATH) as conn:
                 conn.execute("UPDATE progress SET status='completed', data=? WHERE job_id=?", (json.dumps(payload), job_id))
                 conn.commit()
     except Exception as e:
         payload = {"status": "error", "error": str(e)}
-        with get_db() as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             conn.execute("UPDATE progress SET status='error', data=? WHERE job_id=?", (json.dumps(payload), job_id))
             conn.commit()
 
 @app.post("/api/download")
-def start_download(req: URLRequest):
+async def start_download(req: URLRequest):
     with get_db() as conn:
         cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (req.click_id,))
         row = cursor.fetchone()
         if not row: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
-        
-        # حماية خلفية مطورة: السماح بالتحميل إذا تم تأكيد الإعلان أو انقضت الـ 5 ثوانٍ المطلوبة للتمويه
-        elapsed_time = time.time() - row["created_at"]
-        if row["status"] != "verified" and elapsed_time < AD_FALLBACK_TIMEOUT:
-            return {"success": False, "error": "خطأ أمني: يرجى الانتظار لحين اكتمال معالجة وفحص الخادم."}
+        if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
+            return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
             
     job_id = uuid.uuid4().hex[:8]
     with get_db() as conn:
@@ -294,7 +260,7 @@ def start_download(req: URLRequest):
     return {"success": True, "job_id": job_id}
 
 @app.get("/api/progress/{job_id}")
-def get_progress(job_id: str):
+async def get_progress(job_id: str):
     with get_db() as conn:
         cursor = conn.execute("SELECT * FROM progress WHERE job_id = ?", (job_id,))
         row = cursor.fetchone()
