@@ -93,12 +93,17 @@ class SearchRequest(BaseModel):
 
 class TelegramRequest(BaseModel):
     file_url: str
-    chat_id: str
+    chat_id: str  # سيتكفل Pydantic الآن بتحويل أي صيغة واردة (رقم أو نص) إلى نص تلقائياً
     is_audio: bool
     title: str = "مقطع"
     performer: str = "PlayZone"
     duration: int = 0
     thumb: str = ""
+
+    # دالة تحقق إضافية لضمان تحويل القيمة القادمة إلى نص آمن دائماً
+    @pydantic.field_validator('chat_id', mode='before')
+    def coerce_str(cls, v):
+        return str(v)
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
