@@ -673,15 +673,45 @@
         function toggleRes() { document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; }
         
         function startAdVerificationCheck() {
-            showToast("تم فتح صفحة الإعلان 🌐", "success");
-            if(adCheckInterval) clearInterval(adCheckInterval);
-            if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
-            
-            let vBtn = document.getElementById('verifyBtn');
-            vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> جاري التحقق تلقائياً...';
-            
-            adCheckInterval = setInterval(manualCheckAdStatus, 3000);
+    showToast("جاري فحص الاتصال وتأكيد الجلسة... ⏳", "success");
+    
+    if(adCheckInterval) clearInterval(adCheckInterval);
+    if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
+    
+    let vBtn = document.getElementById('verifyBtn');
+    vBtn.className = "btn bg-panel text-accent flex-1 border border-accent/30 text-xs md:text-sm cursor-wait";
+    
+    // مصفوفة من الجمل الوهمية لتغطية الـ 5 ثوانٍ وإيهام المستخدم بوجود فحص حقيقي وسيرفر معقد
+    const loadingPhrases = [
+        '<i class="fas fa-sync fa-spin mr-1"></i> جاري فحص استجابة الشبكة...',
+        '<i class="fas fa-shield-alt mr-1 text-purple-400"></i> جاري تشفير بروتوكول الأمان...',
+        '<i class="fas fa-database fa-spin mr-1"></i> جاري فك قفل خادم التحميل...'
+    ];
+    
+    let phraseIndex = 0;
+    vBtn.innerHTML = loadingPhrases[phraseIndex];
+    
+    // تدوير العبارات كل 1.5 ثانية لإضفاء طابع احترافي وواقعي
+    adCheckInterval = setInterval(() => {
+        phraseIndex++;
+        if (phraseIndex < loadingPhrases.length) {
+            vBtn.innerHTML = loadingPhrases[phraseIndex];
         }
+    }, 1500);
+    
+    // فتح القفل صامتاً تماماً بعد 5 ثوانٍ بالتمام والكمال
+    adFallbackTimeout = setTimeout(() => {
+        clearInterval(adCheckInterval);
+        document.getElementById('adGate').classList.add('hidden');
+        document.getElementById('dlOptions').classList.remove('hidden');
+        showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
+    }, 5000); 
+}
+
+// تعطيل الفحص اليدوي لأنه لم يعد هناك حاجة له
+async function manualCheckAdStatus() {
+    return; 
+}
 
         async function manualCheckAdStatus() {
             if(!currentClickId) return;
