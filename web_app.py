@@ -326,9 +326,9 @@ def send_to_telegram(req: TelegramRequest):
             minutes = dur // 60
             seconds = dur % 60
             time_str = f"{minutes}:{seconds:02d}"
-            caption = f"- @{BOT_USERNAME} , {time_str}"
+            caption = f"- @P1ay_Z0ne_Bot , {time_str}"
         else:
-            caption = f"- @{BOT_USERNAME}"
+            caption = f"- @P1ay_Z0ne_Bot"
         # ----------------------------------------------------
 
         reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"}]]}
