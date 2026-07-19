@@ -1,12 +1,20 @@
-import os, sys, uuid, time, requests, json, subprocess, sqlite3
+import os
+import sys
+import uuid
+import time
+import json
+import sqlite3
+import threading
+import subprocess
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+import requests
+import yt_dlp
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import yt_dlp
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = "MusicPlayZoneBot"
@@ -35,8 +43,10 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 DB_PATH = "playzone_core.db"
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=30.0)
-    conn.execute("PRAGMA journal_mode=WAL;")  # تفعيل نظام WAL للتعامل مع آلاف الطلبات المتزامنة بدون قفل البيانات
+    """ دالة موحدة ومحمية لإنشاء الاتصال بقاعدة البيانات لمنع تضارب العمليات المتزامنة """
+    conn = sqlite3.connect(DB_PATH, timeout=60.0)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -59,11 +69,9 @@ def init_db():
 
 init_db()
 
-# تنظيم طابور العمليات (Thread Pool) لـ 10 تحميلات متزامنة لحماية موارد المعالج من الاختناق
-DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
+DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10)
 
 def cleanup_cron():
-    """ تنظيف دوري صامت للملفات القديمة لتوفير المساحة """
     while True:
         try:
             now = time.time()
@@ -73,13 +81,12 @@ def cleanup_cron():
             
             with get_db() as conn:
                 conn.execute("DELETE FROM progress WHERE ? - timestamp > 86400", (now,))
-                conn.execute("DELETE FROM ads WHERE ? - created_at > 3600", (now,))
+                conn.execute("DELETE FROM ads WHERE ? - created_at > 7200", (now,))
                 conn.commit()
         except Exception:
             pass
         time.sleep(1800)
 
-import threading
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
 class URLRequest(BaseModel):
@@ -102,12 +109,19 @@ class TelegramRequest(BaseModel):
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
-        "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
-        "retries": 15, "fragment_retries": 15, "socket_timeout": 30, "cachedir": False,
-        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
+        "quiet": True, 
+        "no_warnings": True, 
+        "noplaylist": True, 
+        "playlist_items": "1",
+        "retries": 15, 
+        "fragment_retries": 15, 
+        "socket_timeout": 35, 
+        "cachedir": False,
+        "concurrent_fragment_downloads": 5, 
+        "no_check_certificate": True,
         "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv"], "player_skip": ["web", "mweb"]}},
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
@@ -122,12 +136,12 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     return opts
 
 @app.get("/", response_class=HTMLResponse)
-async def home():
+def home():
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
 
 @app.post("/api/search")
-async def api_search(req: SearchRequest):
+def api_search(req: SearchRequest):
     try:
         opts = get_hardened_ydl_options()
         opts['extract_flat'] = True
@@ -146,24 +160,26 @@ async def api_search(req: SearchRequest):
             if video_id and title:
                 thumb_url = entry.get("thumbnail") or (entry.get("thumbnails")[0].get("url") if entry.get("thumbnails") else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
                 valid_videos.append({
-                    "id": video_id, "title": title,
+                    "id": video_id, 
+                    "title": title,
                     "duration": entry.get("duration") or 0,
                     "uploader": entry.get("uploader") or entry.get("channel") or "غير معروف",
                     "thumbnail": thumb_url
                 })
-            if len(valid_videos) == 15: break # إخراج 15 اقتراحاً كاملاً واحترافياً للمستخدم
+            if len(valid_videos) == 15: break
         return {"success": True, "entries": valid_videos}
     except Exception as e: 
         return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
-async def get_preview(req: URLRequest):
+def get_preview(req: URLRequest):
     try:
         opts = get_hardened_ydl_options()
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(req.url, download=False)
             return {"success": True, "title": info.get("title", "بدون عنوان"), "thumb": info.get("thumbnail", "")}
-    except Exception as e: return {"success": False, "error": str(e)}
+    except Exception as e: 
+        return {"success": False, "error": str(e)}
 
 @app.get("/api/generate_ad_session")
 def generate_ad_session():
@@ -171,7 +187,7 @@ def generate_ad_session():
     with get_db() as conn:
         conn.execute("INSERT INTO ads (click_id, status, created_at) VALUES (?, ?, ?)", (click_id, "pending", time.time()))
         conn.commit()
-    AD_LINK = HILLTOPADS_LINK if False else (ADSTERRA_LINK or "https://example.com/ad")
+    AD_LINK = ADSTERRA_LINK or "https://example.com/ad"
     separator = "&" if "?" in AD_LINK else "?"
     return {"click_id": click_id, "ad_link": f"{AD_LINK}{separator}clickid={click_id}"}
 
@@ -191,8 +207,7 @@ def check_ad_status(click_id: str):
         cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (click_id,))
         row = cursor.fetchone()
         if not row: return {"status": "not_found"}
-        if row["status"] == "verified" or (time.time() - row["created_at"] > 10):
-            return {"status": "verified"}
+        # إصلاح ثغرة الإعلانات: الاعتماد بالكامل على التحقق الحقيقي الصادر من الـ callback لضمان الاحتساب المالي للمطور
         return {"status": row["status"]}
 
 def bg_download_worker(job_id: str, url: str, mode: str, res: str):
@@ -206,11 +221,11 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 "total_mb": f"{total / 1048576:.1f} MB", "dl_mb": f"{downloaded / 1048576:.1f} MB",
                 "spd_mb": f"{speed / 1048576:.1f} MB/s" if speed else "0 MB/s"
             }
-            with sqlite3.connect(DB_PATH) as conn:
+            with get_db() as conn:
                 conn.execute("UPDATE progress SET status='downloading', data=?, timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
                 conn.commit()
         elif d['status'] == 'finished':
-            with sqlite3.connect(DB_PATH) as conn:
+            with get_db() as conn:
                 conn.execute("UPDATE progress SET status='converting', timestamp=? WHERE job_id=?", (time.time(), job_id))
                 conn.commit()
 
@@ -233,23 +248,23 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 "thumb": info.get('thumbnail', ''), "uploader": info.get('uploader', 'غير معروف'),
                 "duration": info.get('duration', 0), "is_audio": mode == 'audio'
             }
-            with sqlite3.connect(DB_PATH) as conn:
+            with get_db() as conn:
                 conn.execute("UPDATE progress SET status='completed', data=? WHERE job_id=?", (json.dumps(payload), job_id))
                 conn.commit()
     except Exception as e:
         payload = {"status": "error", "error": str(e)}
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             conn.execute("UPDATE progress SET status='error', data=? WHERE job_id=?", (json.dumps(payload), job_id))
             conn.commit()
 
 @app.post("/api/download")
-async def start_download(req: URLRequest):
+def start_download(req: URLRequest):
     with get_db() as conn:
         cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (req.click_id,))
         row = cursor.fetchone()
         if not row: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
-        if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
-            return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
+        if row["status"] != "verified":
+            return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد من شبكة الإعلانات."}
             
     job_id = uuid.uuid4().hex[:8]
     with get_db() as conn:
@@ -260,7 +275,7 @@ async def start_download(req: URLRequest):
     return {"success": True, "job_id": job_id}
 
 @app.get("/api/progress/{job_id}")
-async def get_progress(job_id: str):
+def get_progress(job_id: str):
     with get_db() as conn:
         cursor = conn.execute("SELECT * FROM progress WHERE job_id = ?", (job_id,))
         row = cursor.fetchone()
@@ -275,24 +290,24 @@ def send_to_telegram(req: TelegramRequest):
         filename = req.file_url.split("/")[-1]
         file_path = WEB_DIR / filename
         
-        # الفحوصات الأمنية وحالة الملف
         if not file_path.exists(): return {"success": False, "error": "الملف غير موجود."}
         if not TELEGRAM_TOKEN: return {"success": False, "error": "البوت غير مفعل بالخلفية."}
-        if file_path.stat().st_size / (1024 * 1024) > 49.5: return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
+        
+        file_size_mb = file_path.stat().st_size / (1024 * 1024)
+        if file_size_mb > 49.5: return {"success": False, "error": "حجم الملف يتجاوز الحد الأقصى لبوتات تيليجرام الافتراضية (50 ميجابايت)."}
 
         api_method = "sendAudio" if req.is_audio else "sendVideo"
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(req.duration) if req.duration else 0
-        caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else f"- @P1ay_Z0ne_Bot"
-        reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]]}
+        caption = f"- @{BOT_USERNAME}"
+        reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"}]]}
         
         data = {'chat_id': req.chat_id, 'caption': caption, 'reply_markup': json.dumps(reply_markup)}
         
         if req.is_audio:
-            data.update({'title': req.title, 'performer': req.performer, 'duration': req.duration})
+            data.update({'title': req.title, 'performer': req.performer, 'duration': dur})
         else:
-            data.update({'supports_streaming': True, 'duration': req.duration})
-            # استخراج أبعاد الفيديو باختصار
+            data.update({'supports_streaming': True, 'duration': dur})
             try:
                 cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
                 res = subprocess.run(cmd, capture_output=True, text=True)
@@ -300,20 +315,22 @@ def send_to_telegram(req: TelegramRequest):
                 data.update({'width': probe_data['streams'][0]['width'], 'height': probe_data['streams'][0]['height']})
             except Exception: pass
 
-        with open(file_path, 'rb') as f: file_data = f.read()
-        files = {'audio' if req.is_audio else 'video': (filename, file_data)}
-        
-        # جلب وإرفاق الصورة المصغرة للصوتيات
-        if req.thumb and req.is_audio:
-            try:
-                t_res = requests.get(req.thumb, timeout=4)
-                if t_res.status_code == 200: files['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
-            except: pass
-                
-        response = requests.post(url, data=data, files=files, timeout=60)
+        # تحسين الذاكرة الاستثنائي: استخدام البث المتدفق بدلاً من تحميل الملف بالكامل في الرام f.read()
+        with open(file_path, 'rb') as file_object:
+            files = {'audio' if req.is_audio else 'video': (filename, file_object, 'audio/mpeg' if req.is_audio else 'video/mp4')}
+            
+            if req.thumb and req.is_audio:
+                try:
+                    t_res = requests.get(req.thumb, timeout=5)
+                    if t_res.status_code == 200: 
+                        files['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
+                except: pass
+                    
+            response = requests.post(url, data=data, files=files, timeout=90)
+            
         res_data = response.json()
-        
         if response.status_code == 200 and res_data.get("ok"): return {"success": True}
-        return {"success": False, "error": res_data.get("description", "تأكد من بدء البوت أولاً.")}
+        return {"success": False, "error": res_data.get("description", "تأكد من بدء البوت أولاً في حسابك.")}
         
-    except Exception as e: return {"success": False, "error": str(e)}
+    except Exception as e: 
+        return {"success": False, "error": str(e)}
