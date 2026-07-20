@@ -5,3 +5,4 @@ httpx
 fastapi
 uvicorn
 jinja2
+libsql-experimental
