@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 import yt_dlp
 
-# محاولة استيراد libsql بشكل آمن
+# محاولة استيراد libsql بشكل آمن لضمان عدم توقف السيرفر
 try:
     import libsql_experimental as libsql
     HAS_LIBSQL = True
@@ -16,9 +16,10 @@ except ImportError:
     HAS_LIBSQL = False
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+# تم الإبقاء على اليوزر نيم الخاص بك هنا دون أي تغيير
 BOT_USERNAME = "MusicPlayZoneBot"
 
-# بيانات الاتصال بقاعدة البيانات السحابية Turso
+# إعدادات قاعدة البيانات السحابية Turso
 TURSO_URL = os.getenv("TURSO_DATABASE_URL", "libsql://musicbot-t98858712-cloud.aws-eu-west-1.turso.io")
 TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODQ1MjQ1MjYsImlkIjoiMDE5ZjdkZjAtZjcwMS03M2YxLTg3OTQtNTU3OTA5OWZmMjQ0Iiwia2lkIjoiOTlnN1pjeElMMUBvUWtBejdETnhCV2RLRXZRN2l1bXVFYXNUYWp1RVBubyIsInJpZCI6IjE5ZTAyMzE3LWZlNDAtNDUwYS05YzZjLWM5Mzg4MmQ1YjA5NiJ9.S-cAb_n7Q8c8pT3CACaehmhjtiQeHGBtZOOphzBTjqjGWvzv3WIUZM1Xhy_p-XmSJ157TGrd1tozzBkRWoXKCA")
 
@@ -43,15 +44,17 @@ WEB_DIR = BASE_DOWNLOAD_DIR / "web_library"
 WEB_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# دالة الاتصال بقاعدة البيانات مع نظام حماية تلقائي
+DB_PATH = "playzone_core.db"
+
+# دالة جلب قاعدة البيانات (تتصل بـ Turso وسحابياً أو بالملف المحلي كخيار احتياطي)
 def get_db():
     if HAS_LIBSQL and TURSO_URL and TURSO_TOKEN:
         try:
             return libsql.connect(database=TURSO_URL, auth_token=TURSO_TOKEN)
         except Exception:
             pass
-    conn = sqlite3.connect("playzone_core.db", timeout=30.0)
-    conn.execute("PRAGMA journal_mode=WAL;")
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    conn.execute("PRAGMA journal_mode=WAL;")  
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -114,7 +117,7 @@ class URLRequest(BaseModel):
     mode: str = "video"
     resolution: str = "720"
     click_id: str = ""
-    user_id: str = "default_user"  # قيمة افتراضية تضمن التوافق مع الفرونت إند القديم
+    user_id: str = "default_user"
 
 class SearchRequest(BaseModel):
     query: str
@@ -232,7 +235,7 @@ def check_ad_status(click_id: str):
         return {"status": "verified"}
     return {"status": status}
 
-def bg_download_worker(job_id: str, url: str, mode: str, res: str, user_id: str):
+def bg_download_worker(job_id: str, url: str, mode: str, res: str, user_id: str = "default_user"):
     def hook(d):
         if d['status'] == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate', 1)
@@ -353,6 +356,7 @@ def send_to_telegram(req: TelegramRequest):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(req.duration) if req.duration else 0
         
+        # هنا تم تثبيت نص اليوزر ليكون @P1ay_Z0ne_Bot مع إبقاء مدة ووقت الملف دون لمس متغير BOT_USERNAME
         caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else f"- @P1ay_Z0ne_Bot"
         reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]]}
         
