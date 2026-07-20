@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 import yt_dlp
 
-# محاولة استيراد libsql مع حماية كاملة
+# محاولة استيراد libsql مع نظام حماية صامت
 try:
     import libsql_experimental as libsql
     HAS_LIBSQL = True
@@ -45,17 +45,14 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
 DB_PATH = "playzone_core.db"
 
-# 🆕 دالة جلب قاعدة البيانات المحدثة لمنع انهيار السيرفر عند وجود خطأ في التوكين
 def get_db():
     if HAS_LIBSQL and TURSO_URL and TURSO_TOKEN:
         try:
             conn = libsql.connect(database=TURSO_URL, auth_token=TURSO_TOKEN)
-            # تجربة استعلام وهمي لاختبار صحة التوكين والاتصال فوراً
             conn.execute("SELECT 1;")
             return conn
         except Exception:
-            pass  # عند فشل Turso يتم التحويل تلقائياً وبصمت للـ SQLite المحلي
-            
+            pass
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL;")  
     conn.row_factory = sqlite3.Row
@@ -96,7 +93,6 @@ init_db()
 DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
 
 def cleanup_cron():
-    """ تنظيف دوري صامت للملفات القديمة لتوفير المساحة """
     while True:
         try:
             now = time.time()
@@ -143,26 +139,15 @@ class TelegramRequest(BaseModel):
     def coerce_str(cls, v):
         return str(v)
 
+# ⏪ إرجاع دالة التحميل والمحرك للأصل تماماً
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-        "playlist_items": "1",
-        "retries": 10,
-        "fragment_retries": 10,
-        "socket_timeout": 15,
-        "cachedir": False,
-        "no_check_certificate": True,
-        # 🆕 حل حظر وتقييد السرعة (Throttling Fix):
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["ios", "android", "mweb"],
-                "player_skip": ["web"]
-            }
-        },
+        "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
+        "retries": 15, "fragment_retries": 15, "socket_timeout": 30, "cachedir": False,
+        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
+        "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv"], "player_skip": ["web", "mweb"]}},
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
@@ -184,21 +169,13 @@ async def home():
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
     try:
-        # إعدادات خاصة ومستقلة بالبحث فقط لتجاوز حظر خوادم الاستضافة
-        search_opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": True,
-            "skip_download": True,
-            "no_check_certificate": True,
-            "http_headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                "Accept-Language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7"
-            }
-        }
+        opts = get_hardened_ydl_options()
+        opts['extract_flat'] = True
+        if 'playlist_items' in opts: del opts['playlist_items']
+        if 'noplaylist' in opts: del opts['noplaylist']
         
-        with yt_dlp.YoutubeDL(search_opts) as ydl:
-            raw_results = ydl.extract_info(f"ytsearch20:{req.query}", download=False) or {}
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            raw_results = ydl.extract_info(f"ytsearch25:{req.query}", download=False) or {}
             
         entries = raw_results.get("entries") or []
         valid_videos = []
@@ -209,8 +186,7 @@ async def api_search(req: SearchRequest):
             if video_id and title:
                 thumb_url = entry.get("thumbnail") or (entry.get("thumbnails")[0].get("url") if entry.get("thumbnails") else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
                 valid_videos.append({
-                    "id": video_id, 
-                    "title": title,
+                    "id": video_id, "title": title,
                     "duration": entry.get("duration") or 0,
                     "uploader": entry.get("uploader") or entry.get("channel") or "غير معروف",
                     "thumbnail": thumb_url
