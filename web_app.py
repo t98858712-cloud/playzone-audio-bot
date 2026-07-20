@@ -13,7 +13,7 @@ import libsql_experimental as libsql
 # 1. إعدادات البوت والاتصال السحابي
 # -------------------------------------------------------------
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot"
+BOT_USERNAME = "P1ay_Z0ne_Bot"
 
 # ضع هنا ID القناة الخاصة التي تم إنشاؤها لتخزين الملفات (مثال: -1001234567890)
 STORAGE_CHANNEL_ID = os.getenv("STORAGE_CHANNEL_ID", "-100XXXXXXXXXX") 
