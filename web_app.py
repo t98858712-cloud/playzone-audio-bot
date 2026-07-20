@@ -8,26 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 import yt_dlp
 
-# محاولة استيراد مكتبة Supabase بشكل آمن
-try:
-    from supabase import create_client, Client
-    HAS_SUPABASE = True
-except ImportError:
-    HAS_SUPABASE = False
-
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+# تم الإبقاء على اليوزر نيم الخاص بك هنا دون أي تغيير
 BOT_USERNAME = "MusicPlayZoneBot"
-
-# 🔑 بيانات Supabase الخاصة بك
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://qnuklkpcyvwaefxclfff.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_publishable_L7HdgLQJ1Z5e3fjKNo7x1g_gSKJSb-x")
-
-supabase: Client = None
-if HAS_SUPABASE and SUPABASE_URL and SUPABASE_KEY:
-    try:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception:
-        supabase = None
 
 try:
     from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK
@@ -52,30 +35,26 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
 DB_PATH = "playzone_core.db"
 
-# ⚡ ذاكرة التتبع السريعة لعدم إبطاء التحميل (In-Memory RAM)
-PROGRESS_STORE = {}
-ADS_STORE = {}
-
-def get_sqlite():
+def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL;")  
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    with get_sqlite() as conn:
+    with get_db() as conn:
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS user_library (
-                id TEXT PRIMARY KEY,
-                user_id TEXT,
-                title TEXT,
-                url TEXT,
-                thumb TEXT,
-                uploader TEXT,
-                duration INTEGER,
-                is_audio INTEGER,
-                favorite INTEGER DEFAULT 0,
+            CREATE TABLE IF NOT EXISTS progress (
+                job_id TEXT PRIMARY KEY,
+                status TEXT,
+                data TEXT,
                 timestamp REAL
+            )""")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ads (
+                click_id TEXT PRIMARY KEY,
+                status TEXT,
+                created_at REAL
             )""")
         conn.commit()
 
@@ -84,7 +63,7 @@ init_db()
 DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
 
 def cleanup_cron():
-    """ تنظيف دوري صامت للملفات والذاكرة المؤقتة """
+    """ تنظيف دوري صامت للملفات القديمة لتوفير المساحة """
     while True:
         try:
             now = time.time()
@@ -92,14 +71,10 @@ def cleanup_cron():
                 if file_path.is_file() and now - file_path.stat().st_mtime > 86400:
                     file_path.unlink(missing_ok=True)
             
-            expired_progress = [k for k, v in PROGRESS_STORE.items() if now - v.get("timestamp", 0) > 86400]
-            for k in expired_progress:
-                PROGRESS_STORE.pop(k, None)
-
-            expired_ads = [k for k, v in ADS_STORE.items() if now - v.get("created_at", 0) > 3600]
-            for k in expired_ads:
-                ADS_STORE.pop(k, None)
-                
+            with get_db() as conn:
+                conn.execute("DELETE FROM progress WHERE ? - timestamp > 86400", (now,))
+                conn.execute("DELETE FROM ads WHERE ? - created_at > 3600", (now,))
+                conn.commit()
         except Exception:
             pass
         time.sleep(1800)
@@ -112,7 +87,6 @@ class URLRequest(BaseModel):
     mode: str = "video"
     resolution: str = "720"
     click_id: str = ""
-    user_id: str = "default_user"
 
 class SearchRequest(BaseModel):
     query: str
@@ -199,57 +173,34 @@ async def get_preview(req: URLRequest):
 @app.get("/api/generate_ad_session")
 def generate_ad_session():
     click_id = uuid.uuid4().hex[:12]
-    ADS_STORE[click_id] = {"status": "pending", "created_at": time.time()}
+    with get_db() as conn:
+        conn.execute("INSERT INTO ads (click_id, status, created_at) VALUES (?, ?, ?)", (click_id, "pending", time.time()))
+        conn.commit()
     AD_LINK = HILLTOPADS_LINK if HILLTOPADS_LINK else (ADSTERRA_LINK or "https://example.com/ad")
     separator = "&" if "?" in AD_LINK else "?"
     return {"click_id": click_id, "ad_link": f"{AD_LINK}{separator}clickid={click_id}"}
 
 @app.get("/api/ad_callback")
 def ad_callback(clickid: str):
-    if clickid in ADS_STORE:
-        ADS_STORE[clickid]["status"] = "verified"
-        return {"status": "success", "message": "Verified"}
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (clickid,))
+        if cursor.fetchone():
+            conn.execute("UPDATE ads SET status = 'verified' WHERE click_id = ?", (clickid,))
+            conn.commit()
+            return {"status": "success", "message": "Verified"}
     return {"status": "error", "message": "Invalid token"}
 
 @app.get("/api/check_ad_status/{click_id}")
 def check_ad_status(click_id: str):
-    row = ADS_STORE.get(click_id)
-    if not row: return {"status": "not_found"}
-    if row["status"] == "verified" or (time.time() - row["created_at"] > 10):
-        return {"status": "verified"}
-    return {"status": row["status"]}
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (click_id,))
+        row = cursor.fetchone()
+        if not row: return {"status": "not_found"}
+        if row["status"] == "verified" or (time.time() - row["created_at"] > 10):
+            return {"status": "verified"}
+        return {"status": row["status"]}
 
-def save_item_to_library(item_data: dict):
-    """ حفظ العناصر المكتملة في Supabase مع محرك احتياطي لـ SQLite """
-    if supabase:
-        try:
-            supabase.table("user_library").upsert({
-                "id": item_data["id"],
-                "user_id": str(item_data["user_id"]),
-                "title": item_data["title"],
-                "url": item_data["url"],
-                "thumb": item_data["thumb"],
-                "uploader": item_data["uploader"],
-                "duration": item_data["duration"],
-                "is_audio": 1 if item_data["is_audio"] else 0,
-                "timestamp": item_data["timestamp"]
-            }).execute()
-            return
-        except Exception:
-            pass
-
-    with get_sqlite() as conn:
-        conn.execute("""
-            INSERT OR REPLACE INTO user_library (id, user_id, title, url, thumb, uploader, duration, is_audio, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            item_data["id"], str(item_data["user_id"]), item_data["title"], item_data["url"],
-            item_data["thumb"], item_data["uploader"], item_data["duration"],
-            1 if item_data["is_audio"] else 0, item_data["timestamp"]
-        ))
-        conn.commit()
-
-def bg_download_worker(job_id: str, url: str, mode: str, res: str, user_id: str = "default_user"):
+def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     def hook(d):
         if d['status'] == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate', 1)
@@ -260,10 +211,13 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str, user_id: str 
                 "total_mb": f"{total / 1048576:.1f} MB", "dl_mb": f"{downloaded / 1048576:.1f} MB",
                 "spd_mb": f"{speed / 1048576:.1f} MB/s" if speed else "0 MB/s"
             }
-            # التحديث في الذاكرة يحدث بسرعة 0ms وبدون إبطاء التنزيل
-            PROGRESS_STORE[job_id] = {"status": "downloading", "data": payload, "timestamp": time.time()}
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute("UPDATE progress SET status='downloading', data=?, timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
+                conn.commit()
         elif d['status'] == 'finished':
-            PROGRESS_STORE[job_id] = {"status": "converting", "timestamp": time.time()}
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute("UPDATE progress SET status='converting', timestamp=? WHERE job_id=?", (time.time(), job_id))
+                conn.commit()
 
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     if mode == 'audio':
@@ -279,72 +233,46 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str, user_id: str 
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = f"{job_id}.mp3" if mode == 'audio' else f"{job_id}.mp4"
-            file_url = f"/files/{filename}"
             payload = {
-                "status": "completed", "url": file_url, "title": info.get('title', 'مقطع'),
+                "status": "completed", "url": f"/files/{filename}", "title": info.get('title', 'مقطع'),
                 "thumb": info.get('thumbnail', ''), "uploader": info.get('uploader', 'غير معروف'),
                 "duration": info.get('duration', 0), "is_audio": mode == 'audio'
             }
-            PROGRESS_STORE[job_id] = {"status": "completed", "data": payload, "timestamp": time.time()}
-
-            # حفظ النتيجة النهائية فقط في Supabase
-            save_item_to_library({
-                "id": job_id, "user_id": user_id, "title": payload["title"],
-                "url": file_url, "thumb": payload["thumb"], "uploader": payload["uploader"],
-                "duration": payload["duration"], "is_audio": payload["is_audio"],
-                "timestamp": time.time()
-            })
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute("UPDATE progress SET status='completed', data=? WHERE job_id=?", (json.dumps(payload), job_id))
+                conn.commit()
     except Exception as e:
         payload = {"status": "error", "error": str(e)}
-        PROGRESS_STORE[job_id] = {"status": "error", "data": payload, "timestamp": time.time()}
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("UPDATE progress SET status='error', data=? WHERE job_id=?", (json.dumps(payload), job_id))
+            conn.commit()
 
 @app.post("/api/download")
 async def start_download(req: URLRequest):
-    row = ADS_STORE.get(req.click_id)
-    if not row: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
-    if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
-        return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (req.click_id,))
+        row = cursor.fetchone()
+        if not row: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
+        if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
+            return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
             
     job_id = uuid.uuid4().hex[:8]
-    PROGRESS_STORE[job_id] = {"status": "starting", "data": {}, "timestamp": time.time()}
+    with get_db() as conn:
+        conn.execute("INSERT INTO progress (job_id, status, data, timestamp) VALUES (?, ?, ?, ?)", (job_id, "starting", "{}", time.time()))
+        conn.commit()
         
-    DOWNLOAD_POOL.submit(bg_download_worker, job_id, req.url, req.mode, req.resolution, req.user_id)
+    DOWNLOAD_POOL.submit(bg_download_worker, job_id, req.url, req.mode, req.resolution)
     return {"success": True, "job_id": job_id}
 
 @app.get("/api/progress/{job_id}")
 async def get_progress(job_id: str):
-    row = PROGRESS_STORE.get(job_id)
-    if not row: return {"status": "waiting"}
-    status = row["status"]
-    if status in ["starting", "converting"]: return {"status": status}
-    return row.get("data", {})
-
-@app.get("/api/library")
-async def get_user_library(user_id: str = "default_user"):
-    if supabase:
-        try:
-            res = supabase.table("user_library").select("*").eq("user_id", str(user_id)).order("timestamp", desc=True).execute()
-            items = []
-            for r in res.data:
-                items.append({
-                    "id": r["id"], "title": r["title"], "url": r["url"], "thumb": r["thumb"],
-                    "uploader": r["uploader"], "duration": r["duration"], "is_audio": bool(r["is_audio"]),
-                    "favorite": bool(r.get("favorite", 0)), "timestamp": r["timestamp"]
-                })
-            return {"success": True, "library": items}
-        except Exception:
-            pass
-
-    with get_sqlite() as conn:
-        rows = conn.execute("SELECT id, title, url, thumb, uploader, duration, is_audio, favorite, timestamp FROM user_library WHERE user_id = ? ORDER BY timestamp DESC", (str(user_id),)).fetchall()
-        items = []
-        for r in rows:
-            items.append({
-                "id": r[0], "title": r[1], "url": r[2], "thumb": r[3],
-                "uploader": r[4], "duration": r[5], "is_audio": bool(r[6]),
-                "favorite": bool(r[7]), "timestamp": r[8]
-            })
-        return {"success": True, "library": items}
+    with get_db() as conn:
+        cursor = conn.execute("SELECT * FROM progress WHERE job_id = ?", (job_id,))
+        row = cursor.fetchone()
+        if not row: return {"status": "waiting"}
+        status = row["status"]
+        if status in ["starting", "converting"]: return {"status": status}
+        return json.loads(row["data"])
 
 @app.post("/api/send_telegram")
 def send_to_telegram(req: TelegramRequest):
@@ -360,6 +288,7 @@ def send_to_telegram(req: TelegramRequest):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(req.duration) if req.duration else 0
         
+        # هنا تم تثبيت نص اليوزر ليكون @P1ay_Z0ne_Bot مع إبقاء مدة ووقت الملف دون لمس متغير BOT_USERNAME
         caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else f"- @P1ay_Z0ne_Bot"
         reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]]}
         
