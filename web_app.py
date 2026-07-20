@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 import yt_dlp
 
-# محاولة استيراد libsql بدون التأثير على تشغيل السيرفر
+# محاولة استيراد libsql بشكل آمن لضمان عدم توقف السيرفر
 try:
     import libsql_experimental as libsql
     HAS_LIBSQL = True
@@ -16,10 +16,9 @@ except ImportError:
     HAS_LIBSQL = False
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-# تم الإبقاء على اليوزر نيم الخاص بك هنا دون أي تغيير
 BOT_USERNAME = "MusicPlayZoneBot"
 
-# بيانات الاتصال بقاعدة البيانات السحابية Turso
+# إعدادات قاعدة البيانات السحابية Turso
 TURSO_URL = os.getenv("TURSO_DATABASE_URL", "libsql://musicbot-t98858712-cloud.aws-eu-west-1.turso.io")
 TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODQ1MjQ1MjYsImlkIjoiMDE5ZjdkZjAtZjcwMS03M2YxLTg3OTQtNTU3OTA5OWZmMjQ0Iiwia2lkIjoiOTlnN1pjeElMMUBvUWtBejdETnhCV2RLRXZRN2l1bXVFYXNUYWp1RVBubyIsInJpZCI6IjE5ZTAyMzE3LWZlNDAtNDUwYS05YzZjLWM5Mzg4MmQ1YjA5NiJ9.S-cAb_n7Q8c8pT3CACaehmhjtiQeHGBtZOOphzBTjqjGWvzv3WIUZM1Xhy_p-XmSJ157TGrd1tozzBkRWoXKCA")
 
@@ -46,6 +45,7 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
 DB_PATH = "playzone_core.db"
 
+# دالة جلب قاعدة البيانات (تتصل بـ Turso سحابياً أو بملف SQLite المحلي كخيار احتياطي)
 def get_db():
     if HAS_LIBSQL and TURSO_URL and TURSO_TOKEN:
         try:
@@ -201,8 +201,8 @@ def generate_ad_session():
 @app.get("/api/ad_callback")
 def ad_callback(clickid: str):
     conn = get_db()
-    res = conn.execute("SELECT * FROM ads WHERE click_id = ?", (clickid,)).fetchone()
-    if res:
+    cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (clickid,))
+    if cursor.fetchone():
         conn.execute("UPDATE ads SET status = 'verified' WHERE click_id = ?", (clickid,))
         conn.commit()
         return {"status": "success", "message": "Verified"}
@@ -211,12 +211,12 @@ def ad_callback(clickid: str):
 @app.get("/api/check_ad_status/{click_id}")
 def check_ad_status(click_id: str):
     conn = get_db()
-    res = conn.execute("SELECT status, created_at FROM ads WHERE click_id = ?", (click_id,)).fetchone()
-    if not res: return {"status": "not_found"}
-    status, created_at = res[0], res[1]
-    if status == "verified" or (time.time() - created_at > 10):
+    cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (click_id,))
+    row = cursor.fetchone()
+    if not row: return {"status": "not_found"}
+    if row["status"] == "verified" or (time.time() - row["created_at"] > 10):
         return {"status": "verified"}
-    return {"status": status}
+    return {"status": row["status"]}
 
 def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     def hook(d):
@@ -268,10 +268,10 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
 @app.post("/api/download")
 async def start_download(req: URLRequest):
     conn = get_db()
-    res = conn.execute("SELECT status, created_at FROM ads WHERE click_id = ?", (req.click_id,)).fetchone()
-    if not res: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
-    status, created_at = res[0], res[1]
-    if not (status == "verified" or (time.time() - created_at > 10)):
+    cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (req.click_id,))
+    row = cursor.fetchone()
+    if not row: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
+    if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
         return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
             
     job_id = uuid.uuid4().hex[:8]
@@ -284,11 +284,12 @@ async def start_download(req: URLRequest):
 @app.get("/api/progress/{job_id}")
 async def get_progress(job_id: str):
     conn = get_db()
-    res = conn.execute("SELECT status, data FROM progress WHERE job_id = ?", (job_id,)).fetchone()
-    if not res: return {"status": "waiting"}
-    status, data = res[0], res[1]
+    cursor = conn.execute("SELECT * FROM progress WHERE job_id = ?", (job_id,))
+    row = cursor.fetchone()
+    if not row: return {"status": "waiting"}
+    status = row["status"]
     if status in ["starting", "converting"]: return {"status": status}
-    return json.loads(data)
+    return json.loads(row["data"])
 
 @app.post("/api/send_telegram")
 def send_to_telegram(req: TelegramRequest):
@@ -304,7 +305,6 @@ def send_to_telegram(req: TelegramRequest):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(req.duration) if req.duration else 0
         
-        # هنا تم تثبيت نص اليوزر ليكون @P1ay_Z0ne_Bot مع إبقاء مدة ووقت الملف دون لمس متغير BOT_USERNAME
         caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else f"- @P1ay_Z0ne_Bot"
         reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]]}
         
