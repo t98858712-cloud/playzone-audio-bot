@@ -52,7 +52,7 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
 DB_PATH = "playzone_core.db"
 
-# ⚡ ذاكرة التتبع السريعة (In-Memory RAM)
+# ⚡ ذاكرة التتبع السريعة لعدم إبطاء التحميل (In-Memory RAM)
 PROGRESS_STORE = {}
 ADS_STORE = {}
 
@@ -220,6 +220,7 @@ def check_ad_status(click_id: str):
     return {"status": row["status"]}
 
 def save_item_to_library(item_data: dict):
+    """ حفظ العناصر المكتملة في Supabase مع محرك احتياطي لـ SQLite """
     if supabase:
         try:
             supabase.table("user_library").upsert({
@@ -259,6 +260,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str, user_id: str 
                 "total_mb": f"{total / 1048576:.1f} MB", "dl_mb": f"{downloaded / 1048576:.1f} MB",
                 "spd_mb": f"{speed / 1048576:.1f} MB/s" if speed else "0 MB/s"
             }
+            # التحديث في الذاكرة يحدث بسرعة 0ms وبدون إبطاء التنزيل
             PROGRESS_STORE[job_id] = {"status": "downloading", "data": payload, "timestamp": time.time()}
         elif d['status'] == 'finished':
             PROGRESS_STORE[job_id] = {"status": "converting", "timestamp": time.time()}
@@ -285,6 +287,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str, user_id: str 
             }
             PROGRESS_STORE[job_id] = {"status": "completed", "data": payload, "timestamp": time.time()}
 
+            # حفظ النتيجة النهائية فقط في Supabase
             save_item_to_library({
                 "id": job_id, "user_id": user_id, "title": payload["title"],
                 "url": file_url, "thumb": payload["thumb"], "uploader": payload["uploader"],
