@@ -8,7 +8,7 @@ def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton(_t("btn_guide", lang)), KeyboardButton(_t("btn_links", lang))],
-            [KeyboardButton(_t("btn_add_group", lang))]
+            #[KeyboardButton(_t("btn_add_group", lang))]
         ],
         resize_keyboard=True, is_persistent=True, input_field_placeholder=_t("txt_placeholder", lang)
     )
