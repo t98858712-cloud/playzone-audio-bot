@@ -20,7 +20,7 @@ STORAGE_CHANNEL_ID = os.getenv("STORAGE_CHANNEL_ID", "-100XXXXXXXXXX")
 
 # بيانات قاعدة بيانات Turso السحابية المباشرة
 TURSO_URL = os.getenv("TURSO_DATABASE_URL", "libsql://musicbot-t98858712-cloud.aws-eu-west-1.turso.io")
-TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "EyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODQ1MjQ1MjYsImlkIjoiMDE5ZjdkZjAtZjcwMS03M2YxLTg3OTQtNTU3OTA5OWZmMjQ0Iiwia2lkIjoiOTlnN1pjeElMMUJvUWtBejdETnhCV2RLRXZRN2l1bXVFYXNUYWp1RVBubyIsInJpZCI6IjE5ZTAyMzE3LWZlNDAtNDUwYS05YzZjLWM5Mzg4MmQ1YjA5NiJ9.S-cAb_n7Q8c8pT3CACaehmhjtiQeHGBtZOOphzBTjqjGWvzv3WIUZM1Xhy_p-XmSJ157TGrd1tozzBkRWoXKCA")
+TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODQ1MjQ1MjYsImlkIjoiMDE5ZjdkZjAtZjcwMS03M2YxLTg3OTQtNTU3OTA5OWZmMjQ0Iiwia2lkIjoiOTlnN1pjeElMMUJvUWtBejdETnhCV2RLRXZRN2l1bXVFYXNUYWp1RVBubyIsInJpZCI6IjE5ZTAyMzE3LWZlNDAtNDUwYS05YzZjLWM5Mzg4MmQ1YjA5NiJ9.S-cAb_n7Q8c8pT3CACaehmhjtiQeHGBtZOOphzBTjqjGWvzv3WIUZM1Xhy_p-XmSJ157TGrd1tozzBkRWoXKCA")
 
 # مجلد التنزيل المؤقت (سيتم مسح الملفات منه فور رفعها لسحابة تيليجرام)
 TEMP_DIR = Path("./temp_downloads")
