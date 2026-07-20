@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 import yt_dlp
 
-# محاولة استيراد libsql مع نظام حماية صامت
+# محاولة استيراد libsql بدون التأثير على تشغيل السيرفر
 try:
     import libsql_experimental as libsql
     HAS_LIBSQL = True
@@ -16,9 +16,10 @@ except ImportError:
     HAS_LIBSQL = False
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+# تم الإبقاء على اليوزر نيم الخاص بك هنا دون أي تغيير
 BOT_USERNAME = "MusicPlayZoneBot"
 
-# إعدادات Turso السحابية
+# بيانات الاتصال بقاعدة البيانات السحابية Turso
 TURSO_URL = os.getenv("TURSO_DATABASE_URL", "libsql://musicbot-t98858712-cloud.aws-eu-west-1.turso.io")
 TURSO_TOKEN = os.getenv("TURSO_AUTH_TOKEN", "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODQ1MjQ1MjYsImlkIjoiMDE5ZjdkZjAtZjcwMS03M2YxLTg3OTQtNTU3OTA5OWZmMjQ0Iiwia2lkIjoiOTlnN1pjeElMMUBvUWtBejdETnhCV2RLRXZRN2l1bXVFYXNUYWp1RVBubyIsInJpZCI6IjE5ZTAyMzE3LWZlNDAtNDUwYS05YzZjLWM5Mzg4MmQ1YjA5NiJ9.S-cAb_n7Q8c8pT3CACaehmhjtiQeHGBtZOOphzBTjqjGWvzv3WIUZM1Xhy_p-XmSJ157TGrd1tozzBkRWoXKCA")
 
@@ -73,19 +74,6 @@ def init_db():
             status TEXT,
             created_at REAL
         )""")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS user_library (
-            id TEXT PRIMARY KEY,
-            user_id TEXT,
-            title TEXT,
-            url TEXT,
-            thumb TEXT,
-            uploader TEXT,
-            duration INTEGER,
-            is_audio INTEGER,
-            favorite INTEGER DEFAULT 0,
-            timestamp REAL
-        )""")
     conn.commit()
 
 init_db()
@@ -93,6 +81,7 @@ init_db()
 DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
 
 def cleanup_cron():
+    """ تنظيف دوري صامت للملفات القديمة لتوفير المساحة """
     while True:
         try:
             now = time.time()
@@ -116,14 +105,9 @@ class URLRequest(BaseModel):
     mode: str = "video"
     resolution: str = "720"
     click_id: str = ""
-    user_id: str = "default_user"
 
 class SearchRequest(BaseModel):
     query: str
-
-class FavRequest(BaseModel):
-    file_id: str
-    user_id: str = "default_user"
 
 class TelegramRequest(BaseModel):
     file_url: str
@@ -139,7 +123,6 @@ class TelegramRequest(BaseModel):
     def coerce_str(cls, v):
         return str(v)
 
-# ⏪ إرجاع دالة التحميل والمحرك للأصل تماماً
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
@@ -235,7 +218,7 @@ def check_ad_status(click_id: str):
         return {"status": "verified"}
     return {"status": status}
 
-def bg_download_worker(job_id: str, url: str, mode: str, res: str, user_id: str = "default_user"):
+def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     def hook(d):
         if d['status'] == 'downloading':
             total = d.get('total_bytes') or d.get('total_bytes_estimate', 1)
@@ -268,21 +251,13 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str, user_id: str 
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
             filename = f"{job_id}.mp3" if mode == 'audio' else f"{job_id}.mp4"
-            file_url = f"/files/{filename}"
             payload = {
-                "status": "completed", "url": file_url, "title": info.get('title', 'مقطع'),
+                "status": "completed", "url": f"/files/{filename}", "title": info.get('title', 'مقطع'),
                 "thumb": info.get('thumbnail', ''), "uploader": info.get('uploader', 'غير معروف'),
                 "duration": info.get('duration', 0), "is_audio": mode == 'audio'
             }
-            
             conn = get_db()
             conn.execute("UPDATE progress SET status='completed', data=? WHERE job_id=?", (json.dumps(payload), job_id))
-            
-            conn.execute("""
-                INSERT OR REPLACE INTO user_library (id, user_id, title, url, thumb, uploader, duration, is_audio, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (job_id, str(user_id), payload["title"], file_url, payload["thumb"], payload["uploader"], payload["duration"], 1 if payload["is_audio"] else 0, time.time()))
-            
             conn.commit()
     except Exception as e:
         payload = {"status": "error", "error": str(e)}
@@ -303,7 +278,7 @@ async def start_download(req: URLRequest):
     conn.execute("INSERT INTO progress (job_id, status, data, timestamp) VALUES (?, ?, ?, ?)", (job_id, "starting", "{}", time.time()))
     conn.commit()
         
-    DOWNLOAD_POOL.submit(bg_download_worker, job_id, req.url, req.mode, req.resolution, req.user_id)
+    DOWNLOAD_POOL.submit(bg_download_worker, job_id, req.url, req.mode, req.resolution)
     return {"success": True, "job_id": job_id}
 
 @app.get("/api/progress/{job_id}")
@@ -314,33 +289,6 @@ async def get_progress(job_id: str):
     status, data = res[0], res[1]
     if status in ["starting", "converting"]: return {"status": status}
     return json.loads(data)
-
-@app.get("/api/library")
-async def get_user_library(user_id: str = "default_user"):
-    conn = get_db()
-    rows = conn.execute("SELECT id, title, url, thumb, uploader, duration, is_audio, favorite, timestamp FROM user_library WHERE user_id = ? ORDER BY timestamp DESC", (str(user_id),)).fetchall()
-    items = []
-    for r in rows:
-        items.append({
-            "id": r[0], "title": r[1], "url": r[2], "thumb": r[3],
-            "uploader": r[4], "duration": r[5], "is_audio": bool(r[6]),
-            "favorite": bool(r[7]), "timestamp": r[8]
-        })
-    return {"success": True, "library": items}
-
-@app.post("/api/library/favorite")
-async def toggle_favorite_db(req: FavRequest):
-    conn = get_db()
-    conn.execute("UPDATE user_library SET favorite = CASE WHEN favorite = 1 THEN 0 ELSE 1 END WHERE id = ? AND user_id = ?", (req.file_id, str(req.user_id)))
-    conn.commit()
-    return {"success": True}
-
-@app.delete("/api/library/{file_id}")
-async def delete_from_library_db(file_id: str, user_id: str = "default_user"):
-    conn = get_db()
-    conn.execute("DELETE FROM user_library WHERE id = ? AND user_id = ?", (file_id, str(user_id)))
-    conn.commit()
-    return {"success": True}
 
 @app.post("/api/send_telegram")
 def send_to_telegram(req: TelegramRequest):
@@ -356,6 +304,7 @@ def send_to_telegram(req: TelegramRequest):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(req.duration) if req.duration else 0
         
+        # هنا تم تثبيت نص اليوزر ليكون @P1ay_Z0ne_Bot مع إبقاء مدة ووقت الملف دون لمس متغير BOT_USERNAME
         caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else f"- @P1ay_Z0ne_Bot"
         reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]]}
         
