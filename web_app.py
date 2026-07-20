@@ -145,12 +145,24 @@ class TelegramRequest(BaseModel):
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
-        "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
-        "retries": 15, "fragment_retries": 15, "socket_timeout": 30, "cachedir": False,
-        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
-        "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv"], "player_skip": ["web", "mweb"]}},
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "playlist_items": "1",
+        "retries": 10,
+        "fragment_retries": 10,
+        "socket_timeout": 15,
+        "cachedir": False,
+        "no_check_certificate": True,
+        # 🆕 حل حظر وتقييد السرعة (Throttling Fix):
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios", "android", "mweb"],
+                "player_skip": ["web"]
+            }
+        },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
