@@ -45,7 +45,7 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
 DB_PATH = "playzone_core.db"
 
-# دالة جلب قاعدة البيانات (تتصل بـ Turso سحابياً أو بملف SQLite المحلي كخيار احتياطي)
+# دالة الاتصال بقاعدة البيانات مع اختبار الاتصال الفوري والتحويل التلقائي
 def get_db():
     if HAS_LIBSQL and TURSO_URL and TURSO_TOKEN:
         try:
@@ -201,8 +201,8 @@ def generate_ad_session():
 @app.get("/api/ad_callback")
 def ad_callback(clickid: str):
     conn = get_db()
-    cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (clickid,))
-    if cursor.fetchone():
+    res = conn.execute("SELECT * FROM ads WHERE click_id = ?", (clickid,)).fetchone()
+    if res:
         conn.execute("UPDATE ads SET status = 'verified' WHERE click_id = ?", (clickid,))
         conn.commit()
         return {"status": "success", "message": "Verified"}
@@ -211,16 +211,24 @@ def ad_callback(clickid: str):
 @app.get("/api/check_ad_status/{click_id}")
 def check_ad_status(click_id: str):
     conn = get_db()
-    cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (click_id,))
-    row = cursor.fetchone()
-    if not row: return {"status": "not_found"}
-    if row["status"] == "verified" or (time.time() - row["created_at"] > 10):
+    res = conn.execute("SELECT status, created_at FROM ads WHERE click_id = ?", (click_id,)).fetchone()
+    if not res: return {"status": "not_found"}
+    status, created_at = res[0], res[1]
+    if status == "verified" or (time.time() - created_at > 10):
         return {"status": "verified"}
-    return {"status": row["status"]}
+    return {"status": status}
 
 def bg_download_worker(job_id: str, url: str, mode: str, res: str):
+    # تتبع الوقت لمنع استدعاء قاعدة البيانات مع كل قطعة تنزيل وإبطاء السرعة
+    last_update_time = [0.0]
+
     def hook(d):
         if d['status'] == 'downloading':
+            now = time.time()
+            if now - last_update_time[0] < 1.0:
+                return
+            last_update_time[0] = now
+
             total = d.get('total_bytes') or d.get('total_bytes_estimate', 1)
             downloaded = d.get('downloaded_bytes', 0)
             speed = d.get('speed', 0)
@@ -229,13 +237,19 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 "total_mb": f"{total / 1048576:.1f} MB", "dl_mb": f"{downloaded / 1048576:.1f} MB",
                 "spd_mb": f"{speed / 1048576:.1f} MB/s" if speed else "0 MB/s"
             }
-            conn = get_db()
-            conn.execute("UPDATE progress SET status='downloading', data=?, timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
-            conn.commit()
+            try:
+                conn = get_db()
+                conn.execute("UPDATE progress SET status='downloading', data=?, timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
+                conn.commit()
+            except Exception:
+                pass
         elif d['status'] == 'finished':
-            conn = get_db()
-            conn.execute("UPDATE progress SET status='converting', timestamp=? WHERE job_id=?", (time.time(), job_id))
-            conn.commit()
+            try:
+                conn = get_db()
+                conn.execute("UPDATE progress SET status='converting', timestamp=? WHERE job_id=?", (time.time(), job_id))
+                conn.commit()
+            except Exception:
+                pass
 
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     if mode == 'audio':
@@ -261,17 +275,20 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             conn.commit()
     except Exception as e:
         payload = {"status": "error", "error": str(e)}
-        conn = get_db()
-        conn.execute("UPDATE progress SET status='error', data=? WHERE job_id=?", (json.dumps(payload), job_id))
-        conn.commit()
+        try:
+            conn = get_db()
+            conn.execute("UPDATE progress SET status='error', data=? WHERE job_id=?", (json.dumps(payload), job_id))
+            conn.commit()
+        except Exception:
+            pass
 
 @app.post("/api/download")
 async def start_download(req: URLRequest):
     conn = get_db()
-    cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (req.click_id,))
-    row = cursor.fetchone()
-    if not row: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
-    if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
+    res = conn.execute("SELECT status, created_at FROM ads WHERE click_id = ?", (req.click_id,)).fetchone()
+    if not res: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
+    status, created_at = res[0], res[1]
+    if not (status == "verified" or (time.time() - created_at > 10)):
         return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
             
     job_id = uuid.uuid4().hex[:8]
@@ -284,12 +301,11 @@ async def start_download(req: URLRequest):
 @app.get("/api/progress/{job_id}")
 async def get_progress(job_id: str):
     conn = get_db()
-    cursor = conn.execute("SELECT * FROM progress WHERE job_id = ?", (job_id,))
-    row = cursor.fetchone()
-    if not row: return {"status": "waiting"}
-    status = row["status"]
+    res = conn.execute("SELECT status, data FROM progress WHERE job_id = ?", (job_id,)).fetchone()
+    if not res: return {"status": "waiting"}
+    status, data = res[0], res[1]
     if status in ["starting", "converting"]: return {"status": status}
-    return json.loads(row["data"])
+    return json.loads(data)
 
 @app.post("/api/send_telegram")
 def send_to_telegram(req: TelegramRequest):
