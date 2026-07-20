@@ -184,13 +184,21 @@ async def home():
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
     try:
-        opts = get_hardened_ydl_options()
-        opts['extract_flat'] = True
-        if 'playlist_items' in opts: del opts['playlist_items']
-        if 'noplaylist' in opts: del opts['noplaylist']
+        # إعدادات خاصة ومستقلة بالبحث فقط لتجاوز حظر خوادم الاستضافة
+        search_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": True,
+            "skip_download": True,
+            "no_check_certificate": True,
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                "Accept-Language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7"
+            }
+        }
         
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            raw_results = ydl.extract_info(f"ytsearch25:{req.query}", download=False) or {}
+        with yt_dlp.YoutubeDL(search_opts) as ydl:
+            raw_results = ydl.extract_info(f"ytsearch20:{req.query}", download=False) or {}
             
         entries = raw_results.get("entries") or []
         valid_videos = []
@@ -201,7 +209,8 @@ async def api_search(req: SearchRequest):
             if video_id and title:
                 thumb_url = entry.get("thumbnail") or (entry.get("thumbnails")[0].get("url") if entry.get("thumbnails") else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
                 valid_videos.append({
-                    "id": video_id, "title": title,
+                    "id": video_id, 
+                    "title": title,
                     "duration": entry.get("duration") or 0,
                     "uploader": entry.get("uploader") or entry.get("channel") or "غير معروف",
                     "thumbnail": thumb_url
