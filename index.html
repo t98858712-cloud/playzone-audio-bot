@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0a0a0f">
     <link data-mgx-overview="icon" rel="icon" href="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6smycajsa/playzone-logo-dark.png" />
+    <link rel="manifest" href="/manifest.json">
     <title data-mgx-overview="title">PlayZone | Music</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -517,6 +518,26 @@
             <div class="space-y-4">
                 <div class="glass-card p-4 sm:p-6">
                     <div class="flex items-center gap-3 mb-3.5">
+                        <div class="w-9 h-9 bg-accent/10 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-mobile-alt text-accent text-xs sm:text-sm"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">تطبيق الهاتف</h3>
+                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">تثبيت التطبيق على جهازك أو إضافته للشاشة الرئيسية</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <button onclick="installAndroidApp()" id="androidInstallBtn" class="btn bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-500/30 text-xs py-2.5">
+                            <i class="fab fa-android text-sm"></i> تثبيت للأندرويد (APK / PWA)
+                        </button>
+                        <button onclick="showIosInstructions()" class="btn bg-gray-800/80 text-white hover:bg-gray-700/80 border border-panelBorder/50 text-xs py-2.5">
+                            <i class="fab fa-apple text-sm"></i> إضافة للشاشة (للآيفون iOS)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="glass-card p-4 sm:p-6">
+                    <div class="flex items-center gap-3 mb-3.5">
                         <div class="w-9 h-9 bg-indigo-500/10 rounded-xl flex items-center justify-center">
                             <i class="fas fa-moon text-indigo-400 text-xs sm:text-sm"></i>
                         </div>
@@ -704,6 +725,21 @@
         </div>
     </div>
 
+    <div id="iosModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] hidden flex-col items-center justify-center p-4">
+        <div class="glass-card p-5 sm:p-7 max-w-sm w-full text-center">
+            <div class="w-14 h-14 bg-white/10 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-white/20">
+                <i class="fab fa-apple"></i>
+            </div>
+            <h3 class="text-base sm:text-lg font-black mb-2 text-white">إضافة التطبيق للآيفون (iOS)</h3>
+            <div class="text-textMuted text-xs mb-5 text-right space-y-2.5 leading-relaxed bg-bgDeep/60 p-3.5 rounded-xl border border-panelBorder/40">
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-accent/20 text-accent font-bold rounded-full inline-flex items-center justify-center text-[10px]">1</span> اضغط على زر المشاركة <i class="fas fa-share-square text-accent"></i> في أسفل متصفح Safari.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-accent/20 text-accent font-bold rounded-full inline-flex items-center justify-center text-[10px]">2</span> اختر <b>"إضافة إلى الشاشة الرئيسية"</b> <i class="far fa-plus-square text-accent"></i>.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-accent/20 text-accent font-bold rounded-full inline-flex items-center justify-center text-[10px]">3</span> اضغط على <b>"إضافة"</b> في الأعلى ليعمل كتطبيق كامل على جهازك.</p>
+            </div>
+            <button onclick="closeIosModal()" class="btn bg-gradient-to-r from-accent to-purple-600 text-white w-full text-xs sm:text-sm shadow-lg glow-accent py-2.5">حسناً، فهمت</button>
+        </div>
+    </div>
+
     <script type="module">
         const BACKEND_URL = window.location.origin.includes('github.io') || window.location.origin.includes('localhost')
             ? 'https://your-playzone-bot-backend.up.railway.app'
@@ -715,6 +751,33 @@
         const DB_NAME = 'PlayZoneOfflineStore_Persistent';
         const DB_VERSION = 1;
         const STORE_NAME = 'media_blobs';
+
+        let deferredPrompt = null;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+        });
+
+        window.installAndroidApp = async function() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    showToast("جاري تثبيت التطبيق على جهازك...", "success");
+                }
+                deferredPrompt = null;
+            } else {
+                showToast("يمكنك تثبيت التطبيق مباشرة عبر خيارات المتصفح (تثبيت التطبيق)", "success");
+            }
+        };
+
+        window.showIosInstructions = function() {
+            document.getElementById('iosModal').classList.replace('hidden', 'flex');
+        };
+
+        window.closeIosModal = function() {
+            document.getElementById('iosModal').classList.replace('flex', 'hidden');
+        };
 
         function openDB() {
             return new Promise((resolve, reject) => {
@@ -880,6 +943,10 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initTypewriter();
+
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').catch(()=>{});
+            }
 
             if (isMiniApp) {
                 tg.ready();
