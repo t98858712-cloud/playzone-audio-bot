@@ -182,6 +182,19 @@
         #floatingPlayer.compact-mode { width: min(340px, calc(100vw - 92px)) !important; height: auto !important; }
         #floatingPlayer.compact-mode #playerBody { display: none; }
 
+        @keyframes marqueeTitle {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .animate-marquee {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marqueeTitle 12s linear infinite;
+        }
+        .animate-marquee:hover {
+            animation-play-state: paused;
+        }
+
         #toast {
             position: fixed;
             top: 20px;
@@ -285,7 +298,6 @@
 <body class="antialiased flex h-[100dvh] w-full select-none overflow-hidden bg-bgDark">
     <div id="toast"></div>
 
-    <!-- Sidebar Navigation -->
     <aside class="sidebar-glow w-[68px] md:w-[82px] bg-panel/80 backdrop-blur-xl border-l border-panelBorder/50 flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
         <div>
             <div class="h-16 md:h-20 flex items-center justify-center border-b border-panelBorder/30">
@@ -320,17 +332,14 @@
         </div>
     </aside>
 
-    <!-- Main Content Area -->
     <main class="flex-1 h-[100dvh] overflow-y-auto pb-28 relative scroll-smooth bg-bgDark w-full">
         <div class="fixed top-0 left-0 w-full h-72 bg-gradient-to-b from-accent/[0.03] to-transparent pointer-events-none z-0"></div>
 
-        <!-- Search View -->
         <section id="searchView" class="view-section active p-3 sm:p-5 md:p-8 max-w-4xl mx-auto relative z-10 w-full">
             <div class="glass-card p-4 sm:p-6 md:p-8 mb-6 mt-2 sm:mt-4 relative overflow-hidden">
                 <div class="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl"></div>
                 <div class="absolute bottom-0 left-0 w-24 h-24 bg-purple-600/5 rounded-full blur-2xl"></div>
                 <div class="relative">
-                    <!-- Dynamic Typewriter Title Header -->
                     <div class="flex items-center gap-2 mb-2 min-h-[40px]">
                         <h2 id="typingTitle" class="text-xl sm:text-2xl md:text-3xl font-black text-white typing-cursor"></h2>
                     </div>
@@ -346,7 +355,6 @@
                     </div>
                 </div>
 
-                <!-- Search Results -->
                 <div id="searchResults" class="hidden mt-6 sm:mt-8">
                     <div class="bg-bgDeep/60 border border-panelBorder/50 rounded-2xl p-3 sm:p-4 backdrop-blur-sm">
                         <div class="mb-3 pb-3 border-b border-panelBorder/40 flex justify-between items-center">
@@ -363,7 +371,6 @@
                 </div>
             </div>
 
-            <!-- Preview Box -->
             <div id="previewBox" class="hidden glass-card p-4 sm:p-6 relative overflow-hidden">
                 <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-accent/30 to-transparent"></div>
                 <div class="flex flex-col md:flex-row gap-5 items-center">
@@ -376,7 +383,6 @@
                     <div class="w-full md:w-2/3 space-y-3.5">
                         <h3 id="title" class="font-bold text-sm sm:text-base md:text-lg text-white line-clamp-2 leading-relaxed"></h3>
                         
-                        <!-- Ad Gate -->
                         <div id="adGate" class="bg-bgDeep/80 border border-panelBorder/50 p-4 rounded-2xl text-center backdrop-blur-sm">
                             <div class="flex items-center justify-center gap-2 mb-2.5">
                                 <i class="fas fa-lock text-accent text-xs sm:text-sm"></i>
@@ -392,7 +398,6 @@
                             </div>
                         </div>
 
-                        <!-- Download Options -->
                         <div id="dlOptions" class="hidden space-y-3.5">
                             <div class="grid grid-cols-2 gap-2.5">
                                 <select id="mode" onchange="toggleRes()" class="modern-input bg-bgDeep/80 py-2.5 text-xs sm:text-sm">
@@ -411,7 +416,6 @@
                             </button>
                         </div>
 
-                        <!-- Progress Box -->
                         <div id="progressBox" class="hidden bg-bgDeep/80 p-4 rounded-2xl border border-panelBorder/50 backdrop-blur-sm">
                             <div class="flex justify-between items-center mb-2.5">
                                 <span id="progStatus" class="text-accent font-bold text-xs flex items-center gap-2">
@@ -439,7 +443,6 @@
             </div>
         </section>
 
-        <!-- Library View -->
         <section id="libraryView" class="view-section flex-layout p-3 sm:p-5 md:p-8 max-w-6xl mx-auto h-full flex flex-col relative z-10 w-full">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 mt-1 sm:mt-2">
                 <div>
@@ -468,7 +471,6 @@
             <div id="pagination" class="mt-6 flex justify-center items-center gap-2 pb-6"></div>
         </section>
 
-        <!-- Recent View -->
         <section id="recentView" class="view-section p-3 sm:p-5 md:p-8 max-w-4xl mx-auto relative z-10 w-full">
             <div class="flex items-center justify-between mb-5 mt-1 sm:mt-2">
                 <div>
@@ -487,7 +489,6 @@
             <div id="recentContainer" class="flex flex-col gap-2.5 w-full"></div>
         </section>
 
-        <!-- Settings View -->
         <section id="settingsView" class="view-section p-3 sm:p-5 md:p-8 max-w-3xl mx-auto relative z-10 w-full">
             <div class="flex items-center gap-3 mb-5 mt-1 sm:mt-2">
                 <span class="w-8 h-8 sm:w-9 sm:h-9 bg-accent/10 rounded-xl flex items-center justify-center">
@@ -496,7 +497,6 @@
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-white">الإعدادات</h2>
             </div>
             <div class="space-y-4">
-                <!-- Sleep Timer -->
                 <div class="glass-card p-4 sm:p-6">
                     <div class="flex items-center gap-3 mb-3.5">
                         <div class="w-9 h-9 bg-indigo-500/10 rounded-xl flex items-center justify-center">
@@ -517,7 +517,6 @@
                         <button onclick="setSleepTimer(45)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">45 د</button>
                         <button onclick="setSleepTimer(60)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">60 د</button>
                     </div>
-                    <!-- Custom Sleep Timer Input -->
                     <div class="flex gap-2">
                         <input type="number" id="customSleepInput" placeholder="تحديد وقت مخصص (بالدقائق)..." min="1" max="1440" class="modern-input font-mono bg-bgDeep/60 text-xs py-2 flex-1">
                         <button onclick="setCustomSleepTimer()" class="btn bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 shadow-lg shadow-indigo-600/20 flex-shrink-0">
@@ -526,7 +525,6 @@
                     </div>
                 </div>
 
-                <!-- Telegram Settings -->
                 <div class="glass-card p-4 sm:p-6">
                     <div class="flex items-center gap-3 mb-3.5">
                         <div class="w-9 h-9 bg-tgBlue/10 rounded-xl flex items-center justify-center">
@@ -553,7 +551,6 @@
                     </div>
                 </div>
 
-                <!-- Storage Settings -->
                 <div class="glass-card p-4 sm:p-6">
                     <div class="flex items-center gap-3 mb-3.5">
                         <div class="w-9 h-9 bg-red-500/10 rounded-xl flex items-center justify-center">
@@ -578,11 +575,12 @@
         </section>
     </main>
 
-    <!-- Floating Player -->
     <div id="floatingPlayer">
         <div id="playerHeader" class="drag-handle p-3 bg-gradient-to-r from-bgDeep/80 to-panel/80 border-b border-panelBorder/30 flex items-center justify-between">
             <div class="flex items-center gap-2 overflow-hidden flex-1 pl-1">
-                <p id="playerTitle" class="font-bold text-xs text-white truncate w-full">جاهز للتشغيل</p>
+                <div class="w-full overflow-hidden whitespace-nowrap">
+                    <p id="playerTitle" class="font-bold text-xs text-white animate-marquee">جاهز للتشغيل</p>
+                </div>
             </div>
             <div class="flex items-center gap-1 flex-shrink-0 mr-1">
                 <button onclick="toggleCompactMode(event)" class="w-6 h-6 rounded-lg bg-panelLight/50 text-textMuted hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all" title="تصغير">
@@ -618,7 +616,6 @@
                     <div class="wave-bar" style="width: 4px; height: 32px;"></div>
                 </div>
             </div>
-            <!-- Progress -->
             <div class="relative w-full h-2 bg-bgDeep rounded-full mb-2 cursor-pointer group border border-panelBorder/30" id="progressContainer" dir="ltr">
                 <div id="mediaProgressBar" class="absolute left-0 h-full bg-gradient-to-r from-accent to-purple-500 rounded-full w-0 pointer-events-none"></div>
                 <div id="mediaProgressSlider" class="absolute w-3 h-3 bg-white border-2 border-accent rounded-full -top-[2px] -ml-[6px] scale-100 group-hover:scale-125 transition-transform shadow-lg shadow-accent/30 pointer-events-none" style="left: 0%;"></div>
@@ -627,37 +624,35 @@
                 <span id="playerTime">0:00 / 0:00</span>
                 <span id="trackSource" class="bg-accent/10 text-accentLight px-2 py-0.5 rounded-lg text-[9px] font-bold border border-accent/20">صوت</span>
             </div>
-            <!-- Controls -->
-<div class="flex items-center justify-between gap-2 px-1">
-    <button onclick="toggleShuffle(event)" id="shuffleBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="عشوائي">
-        <i class="fas fa-random"></i>
-    </button>
+            <div class="flex items-center justify-between gap-2 px-1">
+                <button onclick="toggleShuffle(event)" id="shuffleBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="عشوائي">
+                    <i class="fas fa-random"></i>
+                </button>
 
-    <button onclick="seekMedia(10)" class="px-2 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-1 border border-panelBorder/30 transition-all flex-shrink-0" title="تقديم 10 ثوانٍ">
-        <i class="fas fa-rotate-right text-[9px]"></i>10
-    </button>
+                <button onclick="seekMedia(10)" class="px-2 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-1 border border-panelBorder/30 transition-all flex-shrink-0" title="تقديم 10 ثوانٍ">
+                    <i class="fas fa-rotate-right text-[9px]"></i>10
+                </button>
 
-    <button onclick="playNext()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="التالي">
-        <i class="fas fa-step-forward"></i>
-    </button>
+                <button onclick="playNext()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="التالي">
+                    <i class="fas fa-step-forward"></i>
+                </button>
 
-    <button onclick="togglePlay()" id="playPauseBtn" class="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-purple-700 hover:from-accentHover hover:to-purple-800 text-white flex items-center justify-center text-sm shadow-lg glow-accent active:scale-90 transition-all flex-shrink-0">
-        <i class="fas fa-play ml-0.5"></i>
-    </button>
+                <button onclick="togglePlay()" id="playPauseBtn" class="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-purple-700 hover:from-accentHover hover:to-purple-800 text-white flex items-center justify-center text-sm shadow-lg glow-accent active:scale-90 transition-all flex-shrink-0">
+                    <i class="fas fa-play ml-0.5"></i>
+                </button>
 
-    <button onclick="playPrev()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="السابق">
-        <i class="fas fa-step-backward"></i>
-    </button>
+                <button onclick="playPrev()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="السابق">
+                    <i class="fas fa-step-backward"></i>
+                </button>
 
-    <button onclick="seekMedia(-10)" class="px-2 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-1 border border-panelBorder/30 transition-all flex-shrink-0" title="رجوع 10 ثوانٍ">
-        10<i class="fas fa-rotate-left text-[9px]"></i>
-    </button>
+                <button onclick="seekMedia(-10)" class="px-2 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-1 border border-panelBorder/30 transition-all flex-shrink-0" title="رجوع 10 ثوانٍ">
+                    10<i class="fas fa-rotate-left text-[9px]"></i>
+                </button>
 
-    <button onclick="toggleRepeat(event)" id="repeatBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="تكرار المقطع تلقائياً">
-        <i class="fas fa-repeat"></i>
-    </button>
-</div>
-            <!-- Bottom Controls -->
+                <button onclick="toggleRepeat(event)" id="repeatBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="تكرار المقطع تلقائياً">
+                    <i class="fas fa-repeat"></i>
+                </button>
+            </div>
             <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-panelBorder/30">
                 <button onclick="changeSpeed(event)" id="speedBtn" class="text-[9px] font-bold font-mono px-2 py-0.5 border border-panelBorder/50 rounded-lg text-textMuted hover:text-white hover:border-accent/30 transition-all bg-panelLight/30">1.0x</button>
                 <div class="flex items-center gap-2">
@@ -673,7 +668,6 @@
         </div>
     </div>
 
-    <!-- Telegram Modal -->
     <div id="tgModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] hidden flex-col items-center justify-center p-4">
         <div class="glass-card p-5 sm:p-7 max-w-sm w-full text-center">
             <div class="w-14 h-14 bg-tgBlue/15 text-tgBlue rounded-2xl flex items-center justify-center mx-auto mb-4 text-xl border border-tgBlue/20">
@@ -692,7 +686,6 @@
         </div>
     </div>
 
-    <!-- JavaScript Application Logic -->
     <script type="module">
         const BACKEND_URL = window.location.origin.includes('github.io') || window.location.origin.includes('localhost')
             ? 'https://your-playzone-bot-backend.up.railway.app'
@@ -701,7 +694,6 @@
         const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
         const isMiniApp = tg && tg.initData && tg.initData !== "";
 
-        // ===== IndexedDB Offline Media Store =====
         const DB_NAME = 'PlayZoneOfflineStore_Persistent';
         const DB_VERSION = 1;
         const STORE_NAME = 'media_blobs';
@@ -763,7 +755,6 @@
             } catch(e) {}
         }
 
-        // ===== Typewriter Effect Engine (Random & Non-Repeating) =====
         function initTypewriter() {
             const el = document.getElementById('typingTitle');
             if (!el) return;
@@ -807,12 +798,12 @@
                 let speed = isDeleting ? 30 : 70;
 
                 if (!isDeleting && charIdx === currentPhrase.length) {
-                    speed = 2000; // Pause when phrase is fully typed
+                    speed = 2000;
                     isDeleting = true;
                 } else if (isDeleting && charIdx === 0) {
                     isDeleting = false;
-                    phraseIdx = getRandomNextIdx(phraseIdx); // Pick a new random phrase without immediate repeat
-                    speed = 350; // Short delay before typing next phrase
+                    phraseIdx = getRandomNextIdx(phraseIdx);
+                    speed = 350;
                 }
 
                 setTimeout(typeStep, speed);
@@ -820,7 +811,6 @@
             typeStep();
         }
 
-        // ===== State =====
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
         let recentlyPlayed = JSON.parse(localStorage.getItem('pz_recently_played')) || [];
         let currentUrl = "";
@@ -844,7 +834,6 @@
         const mediaContainer = document.getElementById('floatingPlayer');
         const videoElement = document.getElementById('globalVideoElement');
 
-        // ===== Initialization =====
         window.addEventListener('DOMContentLoaded', () => {
             initTypewriter();
 
@@ -877,13 +866,11 @@
                 if(e.key === 'Enter') { e.preventDefault(); this.blur(); processInput(); }
             });
 
-            // Remove focus/hover lock on buttons after click
             document.addEventListener('click', (e) => {
                 const target = e.target.closest('button, a, input[type="button"]');
                 if (target) target.blur();
             });
 
-            // Restore sleep timer if active
             const savedSleepEnd = localStorage.getItem('pz_sleep_end');
             if (savedSleepEnd && Number(savedSleepEnd) > Date.now()) {
                 sleepTimerEndTime = Number(savedSleepEnd);
@@ -925,7 +912,6 @@
             };
         }
 
-        // ===== Utilities =====
         function formatTime(secs) {
             if(isNaN(secs) || secs === null) return "0:00";
             const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
@@ -971,7 +957,6 @@
             return `منذ ${days} يوم`;
         }
 
-        // ===== Navigation =====
         window.switchView = function(viewId) {
             document.querySelectorAll('.view-section').forEach(el => {
                 el.style.setProperty('display', 'none', 'important'); el.classList.remove('active');
@@ -996,7 +981,6 @@
             if (viewId === 'recentView') renderRecentlyPlayed();
         };
 
-        // ===== Search & Download =====
         window.processInput = async function() {
             const input = document.getElementById('url').value.trim(); if(!input) return;
             const btn = document.getElementById('mainBtn'); btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري...'; btn.disabled = true;
@@ -1135,7 +1119,6 @@
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
                                 showToast("تم حفظ الملف بنجاح", "success");
 
-                                // Caching in persistent IndexedDB
                                 fetchAndCacheTrack(newItem.id, fullFileUrl);
 
                                 if(localStorage.getItem('pz_auto_tg') !== 'false') {
@@ -1175,7 +1158,6 @@
             } catch(e) {}
         }
 
-        // ===== Library =====
         window.applyFilters = function(withHaptic = false) {
             if(withHaptic) triggerHaptic('light');
             const query = document.getElementById('libSearch').value.toLowerCase();
@@ -1304,7 +1286,6 @@
             showToast("تم مسح الملفات وسجل الاستماع والذاكرة بنجاح", "success");
         }
 
-        // ===== Telegram =====
         window.updateTgId = function() {
             const tgId = document.getElementById('settingTgId').value.trim();
             if (!tgId) { localStorage.removeItem('pz_tg_id'); showToast("تمت إزالة المعرف", "success"); }
@@ -1354,7 +1335,6 @@
             }
         };
 
-        // ===== Player =====
         window.playMediaTrack = async function(index) {
             currentPlayingIndex = index; const track = myLibrary[index]; if (!track) return;
             mediaContainer.classList.add('active-player');
@@ -1369,7 +1349,6 @@
                 document.getElementById('pipBtn').classList.remove('hidden');
             }
 
-            // Check IndexedDB for Offline Playback
             let playSrc = track.url;
             const cachedBlob = await getTrackBlob(track.id);
             if (cachedBlob) {
@@ -1533,7 +1512,6 @@
         window.resetPlayerPosition = function() { mediaContainer.style.top = 'auto'; mediaContainer.style.left = '16px'; mediaContainer.style.bottom = '16px'; mediaContainer.style.right = 'auto'; mediaContainer.style.transform = 'none'; };
         function animateVisualizerBars(run) { const visualizer = document.getElementById('visualizerBars'); if (run) visualizer.classList.add('playing-visualizer'); else visualizer.classList.remove('playing-visualizer'); }
 
-        // ===== Draggable Player =====
         function setupAdvancedDraggable(el, handle) {
             let isDragging = false; let startX, startY, initialLeft, initialTop;
             handle.addEventListener('pointerdown', dragStart);
@@ -1559,7 +1537,6 @@
             }
         }
 
-        // ===== Recently Played Feature =====
         function addToRecentlyPlayed(track) {
             recentlyPlayed = recentlyPlayed.filter(r => r.id !== track.id);
             recentlyPlayed.unshift({ ...track, playedAt: Date.now() });
@@ -1570,7 +1547,6 @@
             }
         }
 
-        // Continuous sync across tabs and live update
         window.addEventListener('storage', (e) => {
             if (e.key === 'pz_recently_played') {
                 recentlyPlayed = JSON.parse(e.newValue) || [];
@@ -1636,7 +1612,6 @@
             }
         };
 
-        // ===== Sleep Timer Feature =====
         window.setSleepTimer = function(minutes) {
             sleepTimerEndTime = Date.now() + (minutes * 60 * 1000);
             localStorage.setItem('pz_sleep_end', sleepTimerEndTime);
