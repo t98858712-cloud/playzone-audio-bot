@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, File, UploadFile, Form
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -192,6 +192,24 @@ async def direct_file_download(filename: str):
     )
 
 
+@app.post("/api/upload_file")
+async def upload_file(request: Request):
+    try:
+        form = await request.form()
+        uploaded_file = form.get("file")
+        custom_name = form.get("filename")
+        if uploaded_file and hasattr(uploaded_file, "read"):
+            content = await uploaded_file.read()
+            fn = str(custom_name) if custom_name else (uploaded_file.filename or f"{uuid.uuid4().hex[:8]}.mp3")
+            save_path = WEB_DIR / fn
+            with open(save_path, "wb") as f:
+                f.write(content)
+            return {"success": True, "url": f"/files/{fn}"}
+        return {"success": False, "error": "فشل رفع الملف."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/api/search")
 async def api_search(req: SearchRequest):
     try:
@@ -324,21 +342,54 @@ async def get_progress(job_id: str):
 
 
 @app.post("/api/send_telegram")
-def send_to_telegram(req: TelegramRequest):
+async def send_to_telegram(request: Request):
     try:
-        filename = req.file_url.split("/")[-1]
-        file_path = WEB_DIR / filename
+        content_type = request.headers.get("content-type", "")
+        file_bytes = None
+        filename = "media_file"
 
-        if not file_path.exists():
-            return {"success": False, "error": "الملف غير موجود."}
+        if "multipart/form-data" in content_type:
+            form = await request.form()
+            chat_id = str(form.get("chat_id", ""))
+            is_audio = str(form.get("is_audio", "true")).lower() in ["true", "1"]
+            title = str(form.get("title", "مقطع"))
+            performer = str(form.get("performer", "PlayZone"))
+            duration = int(form.get("duration", 0) or 0)
+            thumb = str(form.get("thumb", ""))
+            file_url = str(form.get("file_url", ""))
+
+            uploaded_file = form.get("file")
+            if uploaded_file and hasattr(uploaded_file, "read"):
+                file_bytes = await uploaded_file.read()
+                filename = uploaded_file.filename or ("audio.mp3" if is_audio else "video.mp4")
+        else:
+            body = await request.json()
+            chat_id = str(body.get("chat_id", ""))
+            is_audio = bool(body.get("is_audio", True))
+            title = str(body.get("title", "مقطع"))
+            performer = str(body.get("performer", "PlayZone"))
+            duration = int(body.get("duration", 0) or 0)
+            thumb = str(body.get("thumb", ""))
+            file_url = str(body.get("file_url", ""))
+
+        if not file_bytes and file_url:
+            fn = file_url.split("/")[-1]
+            file_path = WEB_DIR / fn
+            if file_path.exists():
+                with open(file_path, "rb") as f:
+                    file_bytes = f.read()
+                filename = fn
+
+        if not file_bytes:
+            return {"success": False, "error": "الملف غير موجود على الخادم ولم يتم إرفاقه."}
         if not TELEGRAM_TOKEN:
             return {"success": False, "error": "البوت غير مفعل بالخلفية."}
-        if file_path.stat().st_size / (1024 * 1024) > 49.5:
+        if len(file_bytes) / (1024 * 1024) > 49.5:
             return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
 
-        api_method = "sendAudio" if req.is_audio else "sendVideo"
+        api_method = "sendAudio" if is_audio else "sendVideo"
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
-        dur = int(req.duration) if req.duration else 0
+        dur = int(duration) if duration else 0
 
         caption = f"- @{BOT_USERNAME} , {dur // 60}:{dur % 60:02d}" if dur > 0 else f"- @{BOT_USERNAME}"
         reply_markup = {
@@ -349,15 +400,15 @@ def send_to_telegram(req: TelegramRequest):
         }
 
         data = {
-            'chat_id': req.chat_id,
+            'chat_id': chat_id,
             'caption': caption,
             'reply_markup': json.dumps(reply_markup)
         }
 
-        if req.is_audio:
+        if is_audio:
             data.update({
-                'title': req.title,
-                'performer': req.performer,
+                'title': title,
+                'performer': performer,
                 'duration': dur
             })
         else:
@@ -365,38 +416,21 @@ def send_to_telegram(req: TelegramRequest):
                 'supports_streaming': True,
                 'duration': dur
             })
+
+        files = {
+            'audio' if is_audio else 'video': (filename, file_bytes, 'audio/mpeg' if is_audio else 'video/mp4')
+        }
+
+        if thumb:
             try:
-                cmd = [
-                    'ffprobe', '-v', 'error', '-select_streams', 'v:0',
-                    '-show_entries', 'stream=width,height', '-of', 'json',
-                    str(file_path)
-                ]
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-                if res.returncode == 0 and res.stdout:
-                    probe_data = json.loads(res.stdout)
-                    if 'streams' in probe_data and len(probe_data['streams']) > 0:
-                        data.update({
-                            'width': probe_data['streams'][0].get('width', 1280),
-                            'height': probe_data['streams'][0].get('height', 720)
-                        })
+                t_res = requests.get(thumb, timeout=5)
+                if t_res.status_code == 200:
+                    files['thumbnail'] = ('thumb.jpg', t_res.content, 'image/jpeg')
             except Exception:
                 pass
 
-        with open(file_path, 'rb') as media_file:
-            files = {
-                'audio' if req.is_audio else 'video': (filename, media_file, 'audio/mpeg' if req.is_audio else 'video/mp4')
-            }
-
-            if req.thumb:
-                try:
-                    t_res = requests.get(req.thumb, timeout=5)
-                    if t_res.status_code == 200:
-                        files['thumbnail'] = ('thumb.jpg', t_res.content, 'image/jpeg')
-                except Exception:
-                    pass
-
-            response = requests.post(url, data=data, files=files, timeout=300)
-            res_data = response.json()
+        response = requests.post(url, data=data, files=files, timeout=300)
+        res_data = response.json()
 
         if response.status_code == 200 and res_data.get("ok"):
             return {"success": True}
