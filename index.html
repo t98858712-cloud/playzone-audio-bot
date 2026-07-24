@@ -451,9 +451,9 @@
                                 <span id="progSpeed">-- MB/s</span>
                             </div>
                             <div id="directDownloadArea" class="hidden mt-3 pt-3 border-t border-panelBorder/40">
-                                <a id="directDownloadBtn" href="#" download class="btn bg-gradient-to-r from-emerald-600 to-emerald-500 text-white w-full hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-600/20 text-xs sm:text-sm">
+                                <button id="directDownloadBtn" onclick="downloadCurrentActiveTrack()" class="btn bg-gradient-to-r from-emerald-600 to-emerald-500 text-white w-full hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-600/20 text-xs sm:text-sm">
                                     <i class="fas fa-arrow-alt-circle-down"></i> تحميل إلى جهازك 💾
-                                </a>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -856,6 +856,7 @@
         let recentlyPlayed = JSON.parse(localStorage.getItem('pz_recently_played')) || [];
         let currentUrl = "";
         let currentClickId = "";
+        let lastDownloadedItem = null;
         let adCheckInterval = null;
         let adFallbackTimeout = null;
         let currentPlayingIndex = -1;
@@ -1109,6 +1110,42 @@
             window.requestAnimationFrame(step);
         }
 
+        window.downloadTrack = async function(id) {
+            const item = myLibrary.find(i => i.id === id);
+            if (!item) return;
+            showToast("جاري تحضير ملف التحميل... 💾", "success");
+            try {
+                const blob = await getTrackBlob(id);
+                let downloadUrl = "";
+                let isBlobUrl = false;
+                if (blob) {
+                    downloadUrl = URL.createObjectURL(blob);
+                    isBlobUrl = true;
+                } else {
+                    const filename = item.url.split('/').pop();
+                    downloadUrl = BACKEND_URL + '/api/download_file/' + filename;
+                }
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = item.title + (item.is_audio ? '.mp3' : '.mp4');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                if (isBlobUrl) {
+                    setTimeout(() => URL.revokeObjectURL(downloadUrl), 15000);
+                }
+                showToast("تم بدء التحميل بنجاح!", "success");
+            } catch(e) {
+                showToast("حدث خطأ أثناء تحميل الملف", "error");
+            }
+        };
+
+        window.downloadCurrentActiveTrack = function() {
+            if (lastDownloadedItem) {
+                downloadTrack(lastDownloadedItem.id);
+            }
+        };
+
         window.startDownload = async function(event) {
             const btn = event.currentTarget; const original = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
@@ -1144,15 +1181,12 @@
                                 clearInterval(interval);
                                 document.getElementById('progStatus').innerHTML = '<span class="text-emerald-400"><i class="fas fa-check-circle"></i> اكتمل التحميل</span>';
                                 document.getElementById('progPercent').innerText = '100%'; document.getElementById('progBar').style.width = '100%';
-                                const dlArea = document.getElementById('directDownloadArea'); const dlBtn = document.getElementById('directDownloadBtn');
-                                const fullFileUrl = BACKEND_URL + prog.url;
-                                const filename = prog.url.split('/').pop();
-                                const downloadEndpoint = BACKEND_URL + '/api/download_file/' + filename;
-                                dlBtn.href = downloadEndpoint;
-                                dlBtn.setAttribute('download', prog.title + (prog.is_audio ? '.mp3' : '.mp4'));
+                                const dlArea = document.getElementById('directDownloadArea');
                                 dlArea.classList.remove('hidden');
                                 
+                                const fullFileUrl = BACKEND_URL + prog.url;
                                 const newItem = { id: Date.now().toString(), title: prog.title, url: fullFileUrl, thumb: prog.thumb, uploader: prog.uploader, duration: prog.duration, is_audio: prog.is_audio, timestamp: Date.now(), favorite: false };
+                                lastDownloadedItem = newItem;
                                 myLibrary.unshift(newItem);
                                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
@@ -1163,12 +1197,12 @@
                                 if(localStorage.getItem('pz_auto_tg') !== 'false') {
                                     const tgId = localStorage.getItem('pz_tg_id');
                                     if (!tgId) {
-                                        pendingTgItem = { url: fullFileUrl, is_audio: prog.is_audio, title: prog.title, uploader: prog.uploader, duration: prog.duration, thumb: prog.thumb };
+                                        pendingTgItem = newItem;
                                         document.getElementById('tgIdInput').value = "";
                                         document.getElementById('tgModal').classList.replace('hidden', 'flex');
                                         showToast("يرجى ربط حسابك ليتم إرسال هذا الملف إلى البوت ⚠️", "error");
                                     } else {
-                                        sendToTelegram(fullFileUrl, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
+                                        triggerSendToTelegram(newItem.id);
                                     }
                                 }
                             }
@@ -1228,8 +1262,6 @@
                 const durationStr = formatTime(item.duration || 0);
                 const favClass = item.favorite ? 'fas fa-heart text-red-400' : 'far fa-heart';
                 const typeTag = item.is_audio ? '<span class="bg-accent/10 text-accentLight text-[9px] px-2 py-0.5 rounded-md font-bold">MP3</span>' : '<span class="bg-fuchsia-500/10 text-fuchsia-400 text-[9px] px-2 py-0.5 rounded-md font-bold">MP4</span>';
-                const filename = item.url.split('/').pop();
-                const downloadUrl = BACKEND_URL + '/api/download_file/' + filename;
                 container.innerHTML += `
                     <div class="lib-card bg-panel/60 backdrop-blur-sm rounded-2xl p-3.5 border border-panelBorder/40 flex gap-3 items-center relative group w-full">
                         <div class="relative w-20 h-12 rounded-xl overflow-hidden border border-panelBorder/40 flex-shrink-0 cursor-pointer shadow-lg" onclick="playMediaTrack(${actualIndex})">
@@ -1252,9 +1284,9 @@
                             <button onclick="deleteFromLibrary('${item.id}')" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 active:scale-90 transition-all flex items-center justify-center" title="حذف">
                                 <i class="fas fa-trash-alt text-[10px]"></i>
                             </button>
-                            <a href="${downloadUrl}" download="${item.title}.${item.is_audio ? 'mp3' : 'mp4'}" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 active:scale-90 transition-all flex items-center justify-center" title="تحميل">
+                            <button onclick="downloadTrack('${item.id}')" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 active:scale-90 transition-all flex items-center justify-center" title="تحميل">
                                 <i class="fas fa-download text-[10px]"></i>
-                            </a>
+                            </button>
                             <button onclick="triggerSendToTelegram('${item.id}')" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-tgBlue hover:bg-tgBlue/10 hover:border-tgBlue/20 active:scale-90 transition-all flex items-center justify-center" title="إرسال لتيليجرام">
                                 <i class="fab fa-telegram-plane text-[10px]"></i>
                             </button>
@@ -1338,15 +1370,15 @@
             showToast(val ? "تم تفعيل الإرسال التلقائي" : "تم تعطيل الإرسال التلقائي", "success");
         };
 
-        window.triggerSendToTelegram = function(id) {
+        window.triggerSendToTelegram = async function(id) {
             const item = myLibrary.find(i => i.id === id); if (!item) return;
             const tgId = localStorage.getItem('pz_tg_id');
             if (!tgId) {
                 pendingTgItem = item; document.getElementById('tgIdInput').value = "";
                 document.getElementById('tgModal').classList.replace('hidden', 'flex');
-            } else {
-                sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
+                return;
             }
+            sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
         };
 
         async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {
@@ -1371,7 +1403,7 @@
             localStorage.setItem('pz_tg_id', val); document.getElementById('settingTgId').value = val;
             closeTgModal(); showToast("تم الحفظ بنجاح وجاري الإرسال للبوت... 🎉", "success");
             if (pendingTgItem) {
-                sendToTelegram(pendingTgItem.url, pendingTgItem.is_audio, false, pendingTgItem.title, pendingTgItem.uploader || "PlayZone", pendingTgItem.duration, pendingTgItem.thumb);
+                triggerSendToTelegram(pendingTgItem.id);
             }
         };
 
