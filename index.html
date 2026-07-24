@@ -351,7 +351,7 @@
             </nav>
         </div>
         <div class="p-2 pb-4 flex flex-col items-center gap-2">
-            <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20 hover:scale-105 flex items-center justify-center transition-all duration-300 border border-tgBlue/20">
+            <a href="https://t.me/MusicPlayZoneBot" target="_blank" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20 hover:scale-105 flex items-center justify-center transition-all duration-300 border border-tgBlue/20">
                 <i class="fab fa-telegram-plane text-base md:text-lg"></i>
             </a>
         </div>
@@ -360,8 +360,8 @@
     <main class="flex-1 h-[100dvh] overflow-y-auto pb-28 relative scroll-smooth bg-bgDark w-full">
         <div class="fixed top-0 left-0 w-full h-72 bg-gradient-to-b from-accent/[0.03] to-transparent pointer-events-none z-0"></div>
 
-        <!-- شريط الاختصار المباشر السريع -->
-        <div class="bg-gradient-to-r from-accent/20 via-purple-900/30 to-accent/20 border-b border-accent/20 px-4 py-2 flex items-center justify-between text-xs text-white relative z-20">
+        <!-- شريط الاختصار المباشر السريع الثابت -->
+        <div id="topShortcutBar" class="sticky top-0 z-30 backdrop-blur-md bg-gradient-to-r from-accent/20 via-purple-900/40 to-accent/20 border-b border-accent/20 px-4 py-2 flex items-center justify-between text-xs text-white shadow-lg">
             <div class="flex items-center gap-2">
                 <i class="fas fa-bolt text-amber-400"></i>
                 <span>احصل على تجربة تطبيق كاملة بإنشاء اختصار على شاشتك</span>
@@ -516,7 +516,10 @@
                         </span>
                         الاستماع مؤخراً
                     </h2>
-                    <p class="text-textMuted text-xs mt-1 mr-9">آخر المقاطع التي استمعت إليها (مُحدّث باستمرار)</p>
+                    <p class="text-textMuted text-xs mt-1 mr-9 flex items-center gap-1.5">
+                        <span class="w-2 h-2 bg-emerald-400 rounded-full pulse-dot"></span>
+                        سجل حي يتحدث مستمراً وتلقائياً
+                    </p>
                 </div>
                 <button onclick="clearRecentHistory()" class="btn bg-panel/60 text-textMuted hover:text-red-400 text-xs border border-panelBorder/40 py-2 px-3">
                     <i class="fas fa-trash-alt"></i> مسح السجل
@@ -588,7 +591,7 @@
                         </div>
                         <div>
                             <h3 class="text-xs sm:text-sm font-bold text-white">ربط حساب تيليجرام</h3>
-                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">أدخل معرف حسابك لتلقي الملفات عبر البوت</p>
+                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">أدخل معرف حسابك لتلقي الملفات عبر البوت @MusicPlayZoneBot</p>
                         </div>
                     </div>
                     <div class="flex gap-2.5 mb-4">
@@ -730,8 +733,8 @@
                 <i class="fab fa-telegram-plane"></i>
             </div>
             <h3 class="text-base sm:text-lg font-black mb-1.5 text-white">ربط حساب Telegram</h3>
-            <p class="text-textMuted text-xs mb-4 leading-relaxed">يرجى إدخال معرف حسابك (User ID) لتفعيل خاصية الإرسال التلقائي عبر البوت.</p>
-            <button onclick="window.open('https://t.me/{BOT_USERNAME}', '_blank')" class="btn bg-tgBlue text-white w-full mb-3 text-xs sm:text-sm hover:bg-tgBlueHover shadow-lg shadow-tgBlue/20 py-2.5">
+            <p class="text-textMuted text-xs mb-4 leading-relaxed">يرجى إدخال معرف حسابك (User ID) لتفعيل خاصية الإرسال التلقائي عبر البوت @MusicPlayZoneBot.</p>
+            <button onclick="window.open('https://t.me/MusicPlayZoneBot', '_blank')" class="btn bg-tgBlue text-white w-full mb-3 text-xs sm:text-sm hover:bg-tgBlueHover shadow-lg shadow-tgBlue/20 py-2.5">
                 <i class="fas fa-robot"></i> الدخول للبوت ونسخ المعرف
             </button>
             <input type="text" id="tgIdInput" placeholder="الصق المعرف هنا..." class="modern-input bg-bgDeep/80 text-center text-xs sm:text-sm mb-3.5 font-mono py-2.5">
@@ -789,6 +792,15 @@
             e.preventDefault();
             deferredPrompt = e;
         });
+
+        // التحقق من فتح التطبيق عبر الاختصار/Standalone وإخفاء الشريط العلوي تلقائياً
+        function checkStandaloneAndHideBar() {
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone || isMiniApp;
+            if (isStandalone) {
+                const bar = document.getElementById('topShortcutBar');
+                if (bar) bar.style.display = 'none';
+            }
+        }
 
         window.triggerDirectInstall = async function() {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -1010,6 +1022,7 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             initTypewriter();
+            checkStandaloneAndHideBar();
 
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/sw.js').catch(()=>{});
@@ -1070,13 +1083,14 @@
             }
         });
 
+        // مؤشر التحديث الفوري المباشر والمستمر لسجل الاستماع
         function setupContinuousRecentUpdates() {
             if (recentLiveTickerInterval) clearInterval(recentLiveTickerInterval);
             recentLiveTickerInterval = setInterval(() => {
                 if (document.getElementById('recentView') && document.getElementById('recentView').classList.contains('active')) {
                     renderRecentlyPlayed();
                 }
-            }, 15000);
+            }, 3000);
         }
 
         function updateSidebarPlayingState(isPlaying) {
@@ -1131,8 +1145,10 @@
 
         function timeAgo(timestamp) {
             const diff = Date.now() - timestamp;
-            const mins = Math.floor(diff / 60000);
-            if (mins < 1) return 'الآن';
+            const secs = Math.floor(diff / 1000);
+            if (secs < 20) return 'الآن';
+            if (secs < 60) return `منذ ثوانٍ`;
+            const mins = Math.floor(secs / 60);
             if (mins < 60) return `منذ ${mins} دقيقة`;
             const hours = Math.floor(mins / 60);
             if (hours < 24) return `منذ ${hours} ساعة`;
@@ -1804,17 +1820,14 @@
             }
         }
 
+        // إضافة وتحديث لسجل الاستماع
         function addToRecentlyPlayed(track, reorderDOM = true) {
             recentlyPlayed = recentlyPlayed.filter(r => r.id !== track.id);
             recentlyPlayed.unshift({ ...track, playedAt: Date.now() });
             if (recentlyPlayed.length > 20) recentlyPlayed = recentlyPlayed.slice(0, 20);
             localStorage.setItem('pz_recently_played', JSON.stringify(recentlyPlayed));
             
-            if (reorderDOM) {
-                renderRecentlyPlayed();
-            } else {
-                updateActivePlayingHighlight();
-            }
+            renderRecentlyPlayed();
         }
 
         function updateActivePlayingHighlight() {
@@ -1835,6 +1848,7 @@
             }
         });
 
+        // عرض وتحديث سجل الاستماع حياً
         function renderRecentlyPlayed() {
             const container = document.getElementById('recentContainer');
             if (!container) return;
@@ -1863,7 +1877,7 @@
                             <h4 class="text-white font-bold text-xs truncate">${item.title}</h4>
                             <div class="flex items-center gap-2 mt-0.5">
                                 ${typeIcon}
-                                <span class="text-textDim text-[10px]">${timeAgo(item.playedAt)}</span>
+                                <span class="text-textDim text-[10px] font-mono">${timeAgo(item.playedAt)}</span>
                             </div>
                         </div>
                         <div class="w-7 h-7 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent flex-shrink-0">
