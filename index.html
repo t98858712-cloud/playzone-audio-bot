@@ -276,7 +276,7 @@
 
         .active-playing-item {
             border-color: rgba(139, 92, 246, 0.8) !important;
-            background: rgba(139, 92, 246, 0.15) !important;
+            background: rgba(139, 92, 246, 0.12) !important;
             box-shadow: 0 0 20px rgba(139, 92, 246, 0.2) !important;
         }
 
@@ -350,7 +350,10 @@
                 </button>
             </nav>
         </div>
-        <div class="p-2 pb-4 flex justify-center">
+        <div class="p-2 pb-4 flex flex-col items-center gap-2">
+            <button onclick="triggerDirectInstall()" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-accent/20 text-accentLight hover:bg-accent/30 flex items-center justify-center transition-all border border-accent/30 shadow-lg glow-accent" title="إنشاء اختصار مباشر">
+                <i class="fas fa-plus-circle text-base md:text-lg"></i>
+            </button>
             <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20 hover:scale-105 flex items-center justify-center transition-all duration-300 border border-tgBlue/20">
                 <i class="fab fa-telegram-plane text-base md:text-lg"></i>
             </a>
@@ -360,14 +363,15 @@
     <main class="flex-1 h-[100dvh] overflow-y-auto pb-28 relative scroll-smooth bg-bgDark w-full">
         <div class="fixed top-0 left-0 w-full h-72 bg-gradient-to-b from-accent/[0.03] to-transparent pointer-events-none z-0"></div>
 
-        <!-- شريط متحرك للانتقال المباشر للإعدادات عند الضغط عليه -->
-        <div onclick="switchView('settingsView')" class="bg-gradient-to-r from-accent/20 via-purple-900/30 to-accent/20 border-b border-accent/20 py-2 px-3 text-xs text-white relative z-20 cursor-pointer hover:bg-accent/30 transition-colors flex items-center overflow-hidden" title="اضغط للانتقال للإعدادات">
-            <div class="marquee-wrapper">
-                <div class="animate-marquee flex items-center gap-2">
-                    <i class="fas fa-bolt text-amber-400"></i>
-                    <span class="font-bold">✨ احصل على تجربة تطبيق كاملة بإنشاء اختصار على شاشتك! اضغط هنا للانتقال إلى الإعدادات وإنشاء الاختصار فوراً 📲</span>
-                </div>
+        <!-- شريط الاختصار المباشر السريع -->
+        <div class="bg-gradient-to-r from-accent/20 via-purple-900/30 to-accent/20 border-b border-accent/20 px-4 py-2 flex items-center justify-between text-xs text-white relative z-20">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-bolt text-amber-400"></i>
+                <span>احصل على تجربة تطبيق كاملة بإنشاء اختصار على شاشتك</span>
             </div>
+            <button onclick="triggerDirectInstall()" class="bg-accent hover:bg-accentHover text-white px-3 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-md cursor-pointer transition-transform active:scale-95">
+                <i class="fas fa-plus-circle"></i> إنشاء اختصار
+            </button>
         </div>
 
         <section id="searchView" class="view-section active p-3 sm:p-5 md:p-8 max-w-4xl mx-auto relative z-10 w-full">
@@ -788,6 +792,22 @@
             e.preventDefault();
             deferredPrompt = e;
         });
+
+        window.triggerDirectInstall = async function() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            if (isIOS) {
+                showIosInstructions();
+            } else if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    showToast("تمت إضافة الاختصار إلى الشاشة الرئيسية بنجاح! 🎉", "success");
+                }
+                deferredPrompt = null;
+            } else {
+                installAndroidApp();
+            }
+        };
 
         window.installAndroidApp = async function() {
             if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
@@ -1561,7 +1581,7 @@
             }
         }
 
-        window.playMediaTrack = async function(index) {
+        window.playMediaTrack = async function(index, reorderRecent = true) {
             currentPlayingIndex = index; const track = myLibrary[index]; if (!track) return;
             currentPlayingId = track.id;
             mediaContainer.classList.add('active-player');
@@ -1589,7 +1609,7 @@
             document.getElementById('playerTitle').innerText = track.title;
             if (mediaContainer.classList.contains('compact-mode')) removeCompactLayout();
 
-            addToRecentlyPlayed(track);
+            addToRecentlyPlayed(track, reorderRecent);
 
             if ('mediaSession' in navigator) {
                 navigator.mediaSession.metadata = new MediaMetadata({
@@ -1775,13 +1795,28 @@
             }
         }
 
-        // تحديث مستمر ولحظي لسجل الاستماع مؤخراً
-        function addToRecentlyPlayed(track) {
+        function addToRecentlyPlayed(track, reorderDOM = true) {
             recentlyPlayed = recentlyPlayed.filter(r => r.id !== track.id);
             recentlyPlayed.unshift({ ...track, playedAt: Date.now() });
             if (recentlyPlayed.length > 20) recentlyPlayed = recentlyPlayed.slice(0, 20);
             localStorage.setItem('pz_recently_played', JSON.stringify(recentlyPlayed));
-            renderRecentlyPlayed();
+            
+            if (reorderDOM) {
+                renderRecentlyPlayed();
+            } else {
+                updateActivePlayingHighlight();
+            }
+        }
+
+        function updateActivePlayingHighlight() {
+            document.querySelectorAll('.recent-item').forEach(el => {
+                const id = el.getAttribute('data-id');
+                if (id === currentPlayingId) {
+                    el.classList.add('active-playing-item');
+                } else {
+                    el.classList.remove('active-playing-item');
+                }
+            });
         }
 
         window.addEventListener('storage', (e) => {
@@ -1805,12 +1840,12 @@
                 </div>`;
                 return;
             }
-            recentlyPlayed.forEach((item, idx) => {
+            recentlyPlayed.forEach((item) => {
                 const durationStr = formatTime(item.duration || 0);
                 const typeIcon = item.is_audio ? '<i class="fas fa-music text-accent text-[9px]"></i>' : '<i class="fas fa-video text-fuchsia-400 text-[9px]"></i>';
                 const isActive = (item.id === currentPlayingId) ? 'active-playing-item' : '';
                 container.innerHTML += `
-                    <div data-id="${item.id}" class="recent-item bg-panel/50 border border-panelBorder/40 rounded-2xl p-3 flex items-center gap-3 cursor-pointer w-full ${isActive}" onclick="playRecentTrack(${idx})">
+                    <div data-id="${item.id}" class="recent-item bg-panel/50 border border-panelBorder/40 rounded-2xl p-3 flex items-center gap-3 cursor-pointer w-full ${isActive}" onclick="playRecentTrackById('${item.id}')">
                         <div class="relative w-16 h-10 rounded-xl overflow-hidden border border-panelBorder/30 flex-shrink-0 shadow-md">
                             <img src="${item.thumb || 'https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png'}" class="w-full h-full object-cover" alt="${item.title}">
                             <div class="absolute bottom-0.5 right-0.5 bg-black/80 text-[8px] px-1 py-0.5 font-mono rounded text-white/80">${durationStr}</div>
@@ -1829,8 +1864,8 @@
             });
         }
 
-        window.playRecentTrack = function(recentIndex) {
-            const track = recentlyPlayed[recentIndex];
+        window.playRecentTrackById = function(trackId) {
+            const track = recentlyPlayed.find(r => r.id === trackId);
             if (!track) return;
             let libIndex = myLibrary.findIndex(i => i.id === track.id);
             if (libIndex === -1) {
@@ -1839,7 +1874,7 @@
                 libIndex = 0;
                 applyFilters();
             }
-            playMediaTrack(libIndex);
+            playMediaTrack(libIndex, false);
         };
 
         window.clearRecentHistory = function() {
