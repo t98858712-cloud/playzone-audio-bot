@@ -744,27 +744,36 @@
             } catch(e) {}
         }
 
-        // ===== Typewriter Effect Engine =====
+        // ===== Typewriter Effect Engine (Random & Non-Repeating) =====
         function initTypewriter() {
             const el = document.getElementById('typingTitle');
             if (!el) return;
             const phrases = [
-                "الصق الرابط أو ابدأ بالبحث…",
-                "ابحث عن موسيقاك المفضلة…",
-                "اكتب ما تريد تحميله…",
-                "ابحث واستمتع…",
-                "اعثر على ما تريد…",
-                "ابدأ البحث…",
-                "اكتشف أغنيتك القادمة…",
-                "ماذا تريد الاستماع إليه؟",
-                "ما الأغنية التي تبحث عنها؟",
-                "ماذا ستشغّل اليوم؟",
-                "ماذا ستستمع اليوم؟",
-                "ما الذي ترغب بتحميله؟"
+                "✨ الصق الرابط أو ابدأ بالبحث…",
+                "✨ ابحث عن موسيقاك المفضلة…",
+                "✨ اكتب ما تريد تحميله…",
+                "✨ ابحث واستمتع…",
+                "✨ اعثر على ما تريد…",
+                "✨ ابدأ البحث…",
+                "✨ اكتشف أغنيتك القادمة…",
+                "✨ ما الذي تريد الاستماع إليه؟",
+                "✨ ما الأغنية التي تبحث عنها؟",
+                "✨ ماذا ستشغّل اليوم؟",
+                "✨ ماذا ستستمع اليوم؟",
+                "✨ ما الذي ترغب بتحميله؟"
             ];
-            let phraseIdx = 0;
+
+            let phraseIdx = Math.floor(Math.random() * phrases.length);
             let charIdx = 0;
             let isDeleting = false;
+
+            function getRandomNextIdx(current) {
+                let next;
+                do {
+                    next = Math.floor(Math.random() * phrases.length);
+                } while (next === current && phrases.length > 1);
+                return next;
+            }
 
             function typeStep() {
                 const currentPhrase = phrases[phraseIdx];
@@ -783,7 +792,7 @@
                     isDeleting = true;
                 } else if (isDeleting && charIdx === 0) {
                     isDeleting = false;
-                    phraseIdx = (phraseIdx + 1) % phrases.length;
+                    phraseIdx = getRandomNextIdx(phraseIdx); // Pick a new random phrase without immediate repeat
                     speed = 350; // Short delay before typing next phrase
                 }
 
