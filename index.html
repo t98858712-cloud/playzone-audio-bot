@@ -7,18 +7,28 @@
     <title>PlayZone | Music</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2 family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script>
         tailwind.config={
             darkMode:'class',
             theme:{
                 extend:{
-                    fontFamily: { sans: ['Tajawal', 'sans-serif'] }, 
-                    colors:{ 
-                        accent:'#a855f7', accentHover:'#9333ea', 
+                    fontFamily: { sans: ['Tajawal', 'sans-serif'] },
+                    colors:{
+                        accent:'#a855f7', accentHover:'#9333ea',
                         bgDark:'#030303', panel:'#0b0b0f', panelBorder:'#1f1f2e',
                         textMuted:'#8e8e9f', tgBlue: '#0088cc'
+                    },
+                    animation: {
+                        'spin-slow': 'spin 18s linear infinite',
+                        'bounce-bar': 'bounceBar 0.7s ease-in-out infinite alternate',
+                    },
+                    keyframes: {
+                        bounceBar: {
+                            '0%': { transform: 'scaleY(0.2)' },
+                            '100%': { transform: 'scaleY(1.0)' },
+                        }
                     }
                 }
             }
@@ -29,54 +39,55 @@
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #1f1f2e; border-radius: 10px; }
-        
-        .modern-input { background: #07070a; border: 1px solid #1f1f2e; color: white; border-radius: 1rem; padding: 0.8rem 1.2rem; outline: none; transition: all 0.3s; width: 100%; }
+
+        .modern-input { background: #07070a; border: 1px solid #1f1f2e; color: white; border-radius: 1rem; padding: 0.8rem 1.2rem; outline: none; transition: all 0.3s; width: 100%; font-family: 'Tajawal', sans-serif; }
         .modern-input:focus { border-color: #a855f7; box-shadow: 0 0 15px rgba(168, 85, 247, 0.2); }
-        
-        .btn { padding: 0.8rem 1.5rem; border-radius: 1rem; font-weight: bold; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; cursor: pointer; user-select: none; position: relative; overflow: hidden; }
+        .modern-input::placeholder { color: #5a5a6e; }
+
+        .btn { padding: 0.8rem 1.5rem; border-radius: 1rem; font-weight: bold; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; cursor: pointer; user-select: none; position: relative; overflow: hidden; border: none; font-family: 'Tajawal', sans-serif; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
         .btn:active:not(:disabled) { transform: scale(0.95); }
-        
+
         @keyframes shimmer { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
         .shimmer-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent); animation: shimmer 1.2s infinite linear; }
 
         .view-section { display: none !important; }
         .view-section.active { display: block !important; }
         .view-section.active.flex-layout { display: flex !important; }
-        
+
         #progBar {
             transition: width 0.4s cubic-bezier(0.1, 0.8, 0.25, 1);
             box-shadow: 0 0 12px rgba(168, 85, 247, 0.45);
         }
-        
+
         #floatingPlayer {
             position: fixed;
             bottom: 25px;
             left: 25px;
             width: 360px;
             max-width: calc(100vw - 32px);
-            background: rgba(11, 11, 15, 0.85);
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(11, 11, 15, 0.92);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
             border-radius: 24px;
-            box-shadow: 0 35px 70px rgba(0,0,0,0.85), 0 0 25px rgba(168, 85, 247, 0.15);
+            box-shadow: 0 35px 70px rgba(0,0,0,0.85), 0 0 30px rgba(168, 85, 247, 0.12);
             z-index: 100;
             overflow: hidden;
             display: none;
             opacity: 0;
-            transform: scale(0.95);
-            transition: opacity 0.2s ease, transform 0.2s ease;
+            transform: scale(0.95) translateY(10px);
+            transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        #floatingPlayer.active-player { display: block !important; opacity: 1; transform: scale(1); }
+        #floatingPlayer.active-player { display: block !important; opacity: 1; transform: scale(1) translateY(0); }
         #floatingPlayer.dragging-player { transform: scale(0.97) !important; opacity: 0.9 !important; border-color: rgba(168, 85, 247, 0.4) !important; box-shadow: 0 45px 90px rgba(0,0,0,0.9), 0 0 35px rgba(168, 85, 247, 0.3) !important; }
-        
+
         .drag-handle { cursor: grab; user-select: none; touch-action: none; }
         .drag-handle:active { cursor: grabbing; }
 
         @keyframes spinDisk { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .album-spin { animation: spinDisk 18s linear infinite; }
-        
+
         @keyframes bounceGpu { 0% { transform: scaleY(0.2); } 100% { transform: scaleY(1.0); } }
         .wave-bar { width: 3px; height: 24px; background-color: #a855f7; border-radius: 3px; transform-origin: bottom; transform: scaleY(0.2); transition: transform 0.15s ease; }
         .playing-visualizer .wave-bar { animation: bounceGpu 0.7s ease-in-out infinite alternate; }
@@ -87,22 +98,44 @@
         .playing-visualizer .wave-bar:nth-child(5) { animation-delay: 0.15s; animation-duration: 0.45s; }
         .playing-visualizer .wave-bar:nth-child(6) { animation-delay: 0.45s; animation-duration: 0.7s; }
         .playing-visualizer .wave-bar:nth-child(7) { animation-delay: 0.2s; animation-duration: 0.6s; }
-        
+
         #floatingPlayer.compact-mode { width: 340px !important; height: auto !important; }
         #floatingPlayer.compact-mode #playerBody { display: none; }
 
-        #toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100%); opacity: 0; z-index: 1000; padding: 12px 24px; border-radius: 50px; font-weight: bold; color: white; transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); box-shadow: 0 10px 25px rgba(0,0,0,0.5); pointer-events: none; }
+        #toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100%); opacity: 0; z-index: 1000; padding: 12px 24px; border-radius: 50px; font-weight: bold; color: white; transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); box-shadow: 0 10px 25px rgba(0,0,0,0.5); pointer-events: none; font-size: 13px; }
         #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+        /* Card hover effects */
+        .result-card { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        .result-card:hover { border-color: rgba(168, 85, 247, 0.4); transform: translateX(-2px); }
+        .result-card:active { transform: scale(0.98); }
+
+        .lib-card { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        .lib-card:hover { border-color: rgba(168, 85, 247, 0.35); }
+
+        /* Pulse animation for loading */
+        @keyframes pulse-glow { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+        .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+        /* Smooth page transitions */
+        .view-section { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            #floatingPlayer { width: calc(100vw - 24px) !important; left: 12px !important; bottom: 12px !important; border-radius: 20px; }
+        }
     </style>
 </head>
 <body class="antialiased flex h-[100dvh] w-full select-none">
     <div id="toast"></div>
 
+    <!-- Sidebar Navigation -->
     <aside class="w-16 md:w-20 bg-panel border-l border-panelBorder flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
         <div>
             <div class="h-20 flex items-center justify-center border-b border-panelBorder">
                 <div class="w-10 h-10 bg-accent/10 rounded-2xl flex items-center justify-center text-accent text-xl relative group cursor-pointer">
-                    <div class="absolute inset-0 bg-accent/20 rounded-2xl blur-md opacity-50"></div>
+                    <div class="absolute inset-0 bg-accent/20 rounded-2xl blur-md opacity-50 group-hover:opacity-80 transition-opacity"></div>
                     <i class="fas fa-play z-10 text-xs"></i>
                 </div>
             </div>
@@ -128,21 +161,25 @@
         </div>
     </aside>
 
+    <!-- Main Content -->
     <main class="flex-1 h-[100dvh] overflow-y-auto pb-24 relative scroll-smooth bg-[#030305]">
+
+        <!-- Search View -->
         <section id="searchView" class="view-section active p-4 md:p-8 max-w-4xl mx-auto">
             <div class="bg-panel/60 backdrop-blur-md rounded-3xl p-6 md:p-8 border border-panelBorder/60 mb-6 relative overflow-hidden shadow-2xl mt-4">
-                <h2 class="text-2xl md:text-3xl font-bold mb-2 text-white flex items-center gap-2"><span>Music</span> ⚡</h2>
-                <p class="text-textMuted mb-6 text-xs md:text-sm">ابحث عن مقاطع الفيديو أو الأغاني لتحميلها وتشغيلها مباشرة.</p>
-                <div class="flex flex-col md:flex-row gap-3">
+                <div class="absolute top-0 right-0 w-64 h-64 bg-accent/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                <h2 class="text-2xl md:text-3xl font-bold mb-2 text-white flex items-center gap-2 relative z-10"><span>Music</span> ⚡</h2>
+                <p class="text-textMuted mb-6 text-xs md:text-sm relative z-10">ابحث عن مقاطع الفيديو أو الأغاني لتحميلها وتشغيلها مباشرة.</p>
+                <div class="flex flex-col md:flex-row gap-3 relative z-10">
                     <input type="text" id="url" placeholder="أدخل كلمة البحث أو رابط المقطع..." class="modern-input flex-1">
                     <button onclick="processInput()" id="mainBtn" class="btn bg-accent hover:bg-accentHover text-white md:w-36 shadow-lg shadow-accent/25"><i class="fas fa-search"></i> بحث</button>
                 </div>
                 <div id="searchResults" class="hidden mt-8 bg-black/40 border border-panelBorder rounded-2xl p-4">
                     <div class="mb-4 pb-2 border-b border-panelBorder/60 flex justify-between items-center">
                         <h3 class="text-white font-bold text-xs md:text-sm flex items-center gap-2">🎬 نتائج البحث:</h3>
-                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-1"><i class="fas fa-times"></i></button>
+                        <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="text-textMuted hover:text-red-400 p-1 transition-colors"><i class="fas fa-times"></i></button>
                     </div>
-                    <div id="searchResultsList" class="flex flex-col gap-3 w-full"></div>
+                    <div id="searchResultsList" class="flex flex-col gap-3 w-full max-h-[50vh] overflow-y-auto"></div>
                 </div>
             </div>
 
@@ -153,7 +190,7 @@
                     </div>
                     <div class="w-full md:w-2/3 space-y-4">
                         <h3 id="title" class="font-bold text-sm md:text-base text-white line-clamp-2"></h3>
-                        
+
                         <div id="adGate" class="bg-black/50 border border-panelBorder p-4 rounded-2xl text-center">
                             <p class="text-xs mb-3 text-textMuted font-medium"><i class="fas fa-lock text-accent ml-1"></i> يرجى فتح الإعلان ليفك رابط التحميل قفله تلقائياً.</p>
                             <div class="flex flex-col sm:flex-row gap-3">
@@ -180,10 +217,10 @@
                         <div id="progressBox" class="hidden bg-black/50 p-5 rounded-2xl border border-panelBorder">
                             <div class="flex justify-between items-center mb-3">
                                 <span id="progStatus" class="text-accent font-bold text-xs flex items-center gap-2"><i class="fas fa-circle-notch fa-spin"></i> جاري التحميل...</span>
-                                <span id="progPercent" class="font-mono font-bold text-white text-sm transition-all duration-300 transform scale-100">0%</span>
+                                <span id="progPercent" class="font-mono font-bold text-white text-sm transition-all duration-300">0%</span>
                             </div>
                             <div class="w-full bg-zinc-900 rounded-full h-2.5 mb-2 overflow-hidden relative">
-                                <div id="progBar" class="bg-gradient-to-r from-accent to-fuchsia-500 h-full relative w-0">
+                                <div id="progBar" class="bg-gradient-to-r from-accent to-fuchsia-500 h-full relative w-0 rounded-full">
                                     <div class="shimmer-bg"></div>
                                 </div>
                             </div>
@@ -200,6 +237,7 @@
             </div>
         </section>
 
+        <!-- Library View -->
         <section id="libraryView" class="view-section flex-layout p-4 md:p-8 max-w-6xl mx-auto h-full flex flex-col">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 mt-2">
                 <div>
@@ -223,6 +261,7 @@
             <div id="pagination" class="mt-8 flex justify-center items-center gap-3 pb-8"></div>
         </section>
 
+        <!-- Settings View -->
         <section id="settingsView" class="view-section p-4 md:p-8 max-w-3xl mx-auto">
             <h2 class="text-xl md:text-2xl font-bold mb-6 text-white mt-2">الإعدادات ⚙️</h2>
             <div class="space-y-6">
@@ -258,6 +297,7 @@
         </section>
     </main>
 
+    <!-- Floating Media Player -->
     <div id="floatingPlayer">
         <div id="playerHeader" class="drag-handle p-3 bg-black/60 border-b border-panelBorder/50 flex items-center justify-between">
             <div class="flex items-center gap-2 overflow-hidden flex-1">
@@ -267,9 +307,9 @@
                 </div>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0 mr-2">
-                <button onclick="toggleCompactMode(event)" class="text-textMuted hover:text-accent p-1 transition-colors transition-transform active:scale-90" title="تصغير"><i class="fas fa-compress-alt text-xs"></i></button>
-                <button onclick="resetPlayerPosition()" class="text-textMuted hover:text-white p-1 transition-colors transition-transform active:scale-90" title="إعادة تعيين الموضع"><i class="fas fa-location-arrow text-[10px]"></i></button>
-                <button onclick="closePlayer()" class="text-textMuted hover:text-red-400 p-1 transition-colors transition-transform active:scale-90"><i class="fas fa-times text-xs"></i></button>
+                <button onclick="toggleCompactMode(event)" class="text-textMuted hover:text-accent p-1 transition-colors active:scale-90" title="تصغير"><i class="fas fa-compress-alt text-xs"></i></button>
+                <button onclick="resetPlayerPosition()" class="text-textMuted hover:text-white p-1 transition-colors active:scale-90" title="إعادة تعيين الموضع"><i class="fas fa-location-arrow text-[10px]"></i></button>
+                <button onclick="closePlayer()" class="text-textMuted hover:text-red-400 p-1 transition-colors active:scale-90"><i class="fas fa-times text-xs"></i></button>
             </div>
         </div>
         <div id="playerBody" class="p-4 select-none">
@@ -278,7 +318,7 @@
             </div>
             <div id="audioVisualizer" class="flex flex-col items-center justify-center py-2 mb-1">
                 <div class="relative w-24 h-24 rounded-full border-2 border-zinc-800 shadow-2xl overflow-hidden mb-3 bg-zinc-950">
-                    <img id="playerCoverImg" src="https://via.placeholder.com/150" class="w-full h-full object-cover album-spin">
+                    <img id="playerCoverImg" src="https://via.placeholder.com/150/1a1a2e/a855f7?text=♪" class="w-full h-full object-cover album-spin">
                     <div class="absolute inset-0 bg-gradient-to-tr from-black/40 to-transparent"></div>
                     <div class="absolute w-5 h-5 bg-zinc-900 rounded-full top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 border border-zinc-700 flex items-center justify-center">
                         <div class="w-1 h-1 bg-white rounded-full"></div>
@@ -289,7 +329,7 @@
                 </div>
             </div>
             <div class="relative w-full h-1.5 bg-zinc-800 rounded-full mb-3 cursor-pointer group" id="progressContainer" dir="ltr">
-                <div id="mediaProgressBar" class="absolute left-0 h-full bg-accent rounded-full w-0 pointer-events-none"></div>
+                <div id="mediaProgressBar" class="absolute left-0 h-full bg-accent rounded-full w-0 pointer-events-none transition-[width] duration-150"></div>
                 <div id="mediaProgressSlider" class="absolute w-3 h-3 bg-white border-2 border-accent rounded-full -top-[3px] -ml-[6px] scale-100 group-hover:scale-125 transition-transform pointer-events-none" style="left: 0%;"></div>
             </div>
             <div class="flex justify-between items-center text-[10px] text-textMuted font-mono mb-4">
@@ -308,16 +348,17 @@
                 </div>
             </div>
             <div class="flex items-center justify-between mt-4 pt-3 border-t border-panelBorder/40">
-                <button onclick="changeSpeed()" id="speedBtn" class="text-[9px] font-bold font-mono px-2 py-0.5 border border-panelBorder rounded-md text-textMuted hover:text-white">1.0x</button>
+                <button onclick="changeSpeed()" id="speedBtn" class="text-[9px] font-bold font-mono px-2 py-0.5 border border-panelBorder rounded-md text-textMuted hover:text-white transition-colors">1.0x</button>
                 <div class="flex items-center gap-2">
-                    <button onclick="toggleMute()" id="muteBtn" class="text-textMuted hover:text-white"><i class="fas fa-volume-up text-xs"></i></button>
+                    <button onclick="toggleMute()" id="muteBtn" class="text-textMuted hover:text-white transition-colors"><i class="fas fa-volume-up text-xs"></i></button>
                     <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-16 h-1 bg-zinc-800 accent-accent rounded-lg cursor-pointer">
                 </div>
-                <button onclick="triggerPiP()" id="pipBtn" class="text-textMuted hover:text-white hidden" title="تشغيل مصغر"><i class="fas fa-clone text-xs"></i></button>
+                <button onclick="triggerPiP()" id="pipBtn" class="text-textMuted hover:text-white hidden transition-colors" title="تشغيل مصغر"><i class="fas fa-clone text-xs"></i></button>
             </div>
         </div>
     </div>
 
+    <!-- Telegram ID Modal -->
     <div id="tgModal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[200] hidden flex-col items-center justify-center p-4">
         <div class="bg-panel border border-panelBorder p-6 rounded-3xl max-w-sm w-full text-center shadow-2xl" id="tgModalContent">
             <div class="w-14 h-14 bg-tgBlue/20 text-tgBlue rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl"><i class="fab fa-telegram-plane"></i></div>
@@ -333,18 +374,20 @@
     </div>
 
     <script>
+        // ═══════════════════════════════════════════════════════════════
+        // Configuration & State
+        // ═══════════════════════════════════════════════════════════════
         const BACKEND_URL = window.location.origin.includes('github.io') || window.location.origin.includes('localhost')
-            ? 'https://your-playzone-bot-backend.up.railway.app' 
+            ? 'https://your-playzone-bot-backend.up.railway.app'
             : window.location.origin;
-        
+
         const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
         const isMiniApp = tg && tg.initData && tg.initData !== "";
 
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
         let currentUrl = "";
         let currentClickId = "";
-        let adCheckInterval = null;
-        let adFallbackTimeout = null; 
+        let adFallbackTimeout = null;
         let currentPlayingIndex = -1;
         let isShuffle = false;
         let isRepeat = false;
@@ -359,6 +402,9 @@
         const mediaContainer = document.getElementById('floatingPlayer');
         const videoElement = document.getElementById('globalVideoElement');
 
+        // ═══════════════════════════════════════════════════════════════
+        // Media Element Events
+        // ═══════════════════════════════════════════════════════════════
         videoElement.onplay = () => {
             document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
             if (currentPlayingMode === 'audio') {
@@ -375,31 +421,26 @@
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
         };
 
+        // ═══════════════════════════════════════════════════════════════
+        // Haptic Feedback
+        // ═══════════════════════════════════════════════════════════════
         function triggerHaptic(style = 'light') {
-            if (isMiniApp && tg.HapticFeedback) {
-                tg.HapticFeedback.impactOccurred(style);
-            } else if (navigator.vibrate) {
-                if (style === 'light') navigator.vibrate(10);
-                else if (style === 'medium') navigator.vibrate(20);
-                else if (style === 'heavy') navigator.vibrate(40);
-            }
+            if (isMiniApp && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style);
+            else if (navigator.vibrate) navigator.vibrate(style === 'light' ? 10 : style === 'medium' ? 20 : 40);
         }
 
         function triggerNotification(type = 'success') {
-            if (isMiniApp && tg.HapticFeedback) {
-                tg.HapticFeedback.notificationOccurred(type);
-            } else if (navigator.vibrate) {
-                if (type === 'success') navigator.vibrate([20, 50, 20]);
-                else navigator.vibrate([50, 50, 50]);
-            }
+            if (isMiniApp && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(type);
+            else if (navigator.vibrate) navigator.vibrate(type === 'success' ? [20, 50, 20] : [50, 50, 50]);
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // Initialization
+        // ═══════════════════════════════════════════════════════════════
         window.addEventListener('DOMContentLoaded', () => {
             if (isMiniApp) {
-                tg.ready();
-                tg.expand();
+                tg.ready(); tg.expand();
                 try { tg.setHeaderColor('#030305'); tg.setBackgroundColor('#030305'); } catch(e){}
-                
                 const tgUser = tg.initDataUnsafe && tg.initDataUnsafe.user;
                 if (tgUser && tgUser.id) {
                     localStorage.setItem('pz_tg_id', tgUser.id);
@@ -408,38 +449,40 @@
                 }
             }
             const savedId = localStorage.getItem('pz_tg_id') || "";
-            if(savedId && !document.getElementById('settingTgId').disabled) {
-                document.getElementById('settingTgId').value = savedId;
-            }
+            if(savedId && !document.getElementById('settingTgId').disabled) document.getElementById('settingTgId').value = savedId;
             document.getElementById('tgIdInput').value = savedId;
-            const autoFwd = localStorage.getItem('pz_auto_tg') !== 'false';
-            document.getElementById('autoForwardToggle').checked = autoFwd;
-
+            document.getElementById('autoForwardToggle').checked = localStorage.getItem('pz_auto_tg') !== 'false';
             updateLibraryCount();
             switchView('searchView');
             setupAdvancedDraggable(mediaContainer, document.getElementById('playerHeader'));
             setupScrubbing();
-
             document.getElementById('url').addEventListener('keydown', function(e) {
                 if(e.key === 'Enter') { e.preventDefault(); this.blur(); processInput(); }
             });
         });
 
-        function formatTime(secs) { 
-            if(isNaN(secs) || secs === null) return "0:00"; 
-            const m = Math.floor(secs / 60), s = Math.floor(secs % 60); 
-            return m + ":" + (s < 10 ? '0' + s : s); 
+        // ═══════════════════════════════════════════════════════════════
+        // Utility Functions
+        // ═══════════════════════════════════════════════════════════════
+        function formatTime(secs) {
+            if(isNaN(secs) || secs === null) return "0:00";
+            const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
+            return m + ":" + (s < 10 ? '0' + s : s);
         }
 
         function showToast(message, type = "success") {
             const toast = document.getElementById('toast');
             toast.innerText = message; toast.className = "show";
-            if (type === "error") toast.style.background = "linear-gradient(135deg, #f43f5e, #e11d48)";
-            else toast.style.background = "linear-gradient(135deg, #a855f7, #7c3aed)";
+            toast.style.background = type === "error"
+                ? "linear-gradient(135deg, #f43f5e, #e11d48)"
+                : "linear-gradient(135deg, #a855f7, #7c3aed)";
             setTimeout(() => { toast.className = ""; }, 3000);
-            setTimeout(() => { triggerNotification(type === "error" ? "error" : "success"); }, 50);
+            setTimeout(() => triggerNotification(type === "error" ? "error" : "success"), 50);
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // Navigation
+        // ═══════════════════════════════════════════════════════════════
         function switchView(viewId) {
             document.querySelectorAll('.view-section').forEach(el => {
                 el.style.setProperty('display', 'none', 'important'); el.classList.remove('active');
@@ -462,6 +505,9 @@
             if (viewId === 'libraryView') applyFilters();
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // Library Management
+        // ═══════════════════════════════════════════════════════════════
         function applyFilters(withHaptic = false) {
             if(withHaptic) triggerHaptic('light');
             const query = document.getElementById('libSearch').value.toLowerCase();
@@ -479,7 +525,7 @@
             const start = (libraryPage - 1) * itemsPerPage; const pageItems = filtered.slice(start, start + itemsPerPage);
             const container = document.getElementById('libraryContainer'); container.innerHTML = "";
             if (pageItems.length === 0) {
-                container.innerHTML = `<div class="col-span-full py-16 text-center text-textMuted"><i class="fas fa-folder-open text-4xl mb-4 text-zinc-800 block"></i> لا توجد ملفات حالياً.</div>`;
+                container.innerHTML = `<div class="col-span-full py-16 text-center text-textMuted"><i class="fas fa-folder-open text-4xl mb-4 text-zinc-800 block"></i><p class="text-sm">لا توجد ملفات حالياً.</p></div>`;
                 document.getElementById('pagination').innerHTML = ""; return;
             }
             pageItems.forEach((item) => {
@@ -489,9 +535,9 @@
                 const icon = item.is_audio ? '<i class="fas fa-music text-accent"></i>' : '<i class="fas fa-video text-fuchsia-500"></i>';
                 const fileExt = item.is_audio ? 'mp3' : 'mp4';
                 container.innerHTML += `
-                    <div class="bg-panel/50 rounded-2xl p-4 border border-panelBorder/60 flex gap-4 items-center relative group hover:border-accent/40 transition-all duration-300">
+                    <div class="lib-card bg-panel/50 rounded-2xl p-4 border border-panelBorder/60 flex gap-4 items-center relative group">
                         <div class="relative w-24 h-16 rounded-xl overflow-hidden border border-panelBorder/60 flex-shrink-0 cursor-pointer" onclick="playMediaTrack(${actualIndex})">
-                            <img src="${item.thumb || 'https://via.placeholder.com/150'}" class="w-full h-full object-cover">
+                            <img src="${item.thumb || 'https://via.placeholder.com/150/1a1a2e/a855f7?text=♪'}" class="w-full h-full object-cover" loading="lazy">
                             <div class="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-play text-white text-sm"></i></div>
                             <div class="absolute bottom-1 right-1 bg-black/80 text-[9px] px-1.5 font-mono rounded text-white">${durationStr}</div>
                         </div>
@@ -512,137 +558,107 @@
 
         function renderPagination(totalPages) {
             const pagBox = document.getElementById('pagination'); pagBox.innerHTML = ""; if (totalPages <= 1) return;
-            let html = '<button onclick="changePage(' + (libraryPage - 1) + ')" ' + (libraryPage === 1 ? 'disabled' : '') + ' class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">السابق</button>';
+            let html = `<button onclick="changePage(${libraryPage - 1})" ${libraryPage === 1 ? 'disabled' : ''} class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">السابق</button>`;
             for (let i = 1; i <= totalPages; i++) {
-                const activeClass = (libraryPage === i) ? 'bg-accent text-white' : 'bg-panel border border-panelBorder text-textMuted';
-                html += '<button onclick="changePage(' + i + ')" class="btn px-3 py-1.5 ' + activeClass + ' text-xs font-mono">' + i + '</button>';
+                const cls = (libraryPage === i) ? 'bg-accent text-white' : 'bg-panel border border-panelBorder text-textMuted';
+                html += `<button onclick="changePage(${i})" class="btn px-3 py-1.5 ${cls} text-xs font-mono">${i}</button>`;
             }
-            html += '<button onclick="changePage(' + (libraryPage + 1) + ')" ' + (libraryPage === totalPages ? 'disabled' : '') + ' class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">التالي</button>';
+            html += `<button onclick="changePage(${libraryPage + 1})" ${libraryPage === totalPages ? 'disabled' : ''} class="btn px-3 py-1.5 bg-panel border border-panelBorder text-xs text-textMuted hover:text-white disabled:opacity-40">التالي</button>`;
             pagBox.innerHTML = html;
         }
 
         function changePage(page) { libraryPage = page; applyFilters(); }
-        
+
         function toggleFavorite(id) {
             const index = myLibrary.findIndex(i => i.id === id);
             if (index !== -1) {
                 myLibrary[index].favorite = !myLibrary[index].favorite;
                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary)); applyFilters();
-                showToast(myLibrary[index].favorite ? "تمت الإضافة للمفضلة ❤️" : "تمت الإزالة من المفضلة", "success");
+                showToast(myLibrary[index].favorite ? "تمت الإضافة للمفضلة ❤️" : "تمت الإزالة من المفضلة");
             }
         }
 
         function deleteFromLibrary(id) {
-            if (isMiniApp && tg.showConfirm) {
-                tg.showConfirm("هل تريد بالتأكيد حذف هذا الملف؟", function(confirmed) {
-                    if (confirmed) executeDelete(id);
-                });
-            } else {
-                if (confirm("هل تريد حذف هذا الملف؟")) executeDelete(id);
-            }
+            if (isMiniApp && tg.showConfirm) tg.showConfirm("هل تريد حذف هذا الملف؟", (c) => { if(c) executeDelete(id); });
+            else if (confirm("هل تريد حذف هذا الملف؟")) executeDelete(id);
         }
 
         function executeDelete(id) {
             myLibrary = myLibrary.filter(i => i.id !== id); localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
-            applyFilters(); updateLibraryCount(); showToast("تم الحذف بنجاح", "success");
+            applyFilters(); updateLibraryCount(); showToast("تم الحذف بنجاح");
         }
 
         function updateLibraryCount() { document.getElementById('libCountStatus').innerText = "سجل الملفات (" + myLibrary.length + ")"; }
 
         function clearAllLibrary() {
-            if (isMiniApp && tg.showConfirm) {
-                tg.showConfirm("هل تود مسح السجل بالكامل؟", function(confirmed) {
-                    if (confirmed) executeClearAll();
-                });
-            } else {
-                if (confirm("هل تود مسح السجل بالكامل؟")) executeClearAll();
-            }
-        }
-        
-        function executeClearAll() {
-            myLibrary = []; localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
-            applyFilters(); updateLibraryCount(); showToast("تم مسح السجل", "success");
+            if (isMiniApp && tg.showConfirm) tg.showConfirm("هل تود مسح السجل بالكامل؟", (c) => { if(c) executeClearAll(); });
+            else if (confirm("هل تود مسح السجل بالكامل؟")) executeClearAll();
         }
 
+        function executeClearAll() {
+            myLibrary = []; localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+            applyFilters(); updateLibraryCount(); showToast("تم مسح السجل");
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Settings
+        // ═══════════════════════════════════════════════════════════════
         function updateTgId() {
             const tgId = document.getElementById('settingTgId').value.trim();
-            if (!tgId) { localStorage.removeItem('pz_tg_id'); showToast("تمت إزالة المعرف", "success"); }
-            else { localStorage.setItem('pz_tg_id', tgId); showToast("تم الحفظ بنجاح", "success"); }
+            if (!tgId) { localStorage.removeItem('pz_tg_id'); showToast("تمت إزالة المعرف"); }
+            else { localStorage.setItem('pz_tg_id', tgId); showToast("تم الحفظ بنجاح"); }
         }
 
         function toggleAutoForward() {
             const val = document.getElementById('autoForwardToggle').checked;
             localStorage.setItem('pz_auto_tg', val ? 'true' : 'false');
-            showToast(val ? "تم تفعيل الإرسال التلقائي" : "تم تعطيل الإرسال التلقائي", "success");
+            showToast(val ? "تم تفعيل الإرسال التلقائي" : "تم تعطيل الإرسال التلقائي");
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // Telegram Integration
+        // ═══════════════════════════════════════════════════════════════
         let pendingTgItem = null;
-        
+
         function triggerSendToTelegram(id) {
             const item = myLibrary.find(i => i.id === id); if (!item) return;
             const tgId = localStorage.getItem('pz_tg_id');
-            if (!tgId) {
-                pendingTgItem = item; document.getElementById('tgIdInput').value = "";
-                document.getElementById('tgModal').classList.replace('hidden', 'flex');
-            } else {
-                sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
-            }
+            if (!tgId) { pendingTgItem = item; document.getElementById('tgIdInput').value = ""; document.getElementById('tgModal').classList.replace('hidden', 'flex'); }
+            else sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
         }
 
         async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {
-            const chatId = localStorage.getItem('pz_tg_id'); 
-            if (!chatId) return;
-
-            showToast(auto ? "جاري الإرسال لبوت تيليجرام تلقائياً..." : "جاري إرسال الملف إلى تيليجرام...", "success");
-            
+            const chatId = localStorage.getItem('pz_tg_id'); if (!chatId) return;
+            showToast(auto ? "جاري الإرسال لبوت تيليجرام تلقائياً..." : "جاري إرسال الملف إلى تيليجرام...");
             try {
                 const res = await fetch(`${BACKEND_URL}/api/send_telegram`, {
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        file_url: fileUrl, 
-                        chat_id: chatId.toString(), 
-                        is_audio: isAudio, 
-                        title: title, 
-                        performer: performer, 
-                        duration: Math.floor(Number(duration)) || 0, // فرمتة عدد الثواني بشكل صحيح لمنع خطأ 422
-                        thumb: thumb || "" 
-                    })
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_url: fileUrl, chat_id: chatId.toString(), is_audio: isAudio, title, performer, duration: Math.floor(Number(duration)) || 0, thumb: thumb || "" })
                 });
                 const data = await res.json();
-                if (data.success) showToast("تم إرسال الملف إلى حسابك بنجاح! 🎉", "success");
-                else showToast("فشل الإرسال للبوت: " + data.error, "error");
-            } catch(e) { showToast("فشل الاتصال بالخادم لإرسال تيليجرام", "error"); }
+                if (data.success) showToast("تم إرسال الملف إلى حسابك بنجاح! 🎉");
+                else showToast("فشل الإرسال: " + data.error, "error");
+            } catch(e) { showToast("فشل الاتصال بالخادم", "error"); }
         }
 
         function closeTgModal() { document.getElementById('tgModal').classList.replace('flex', 'hidden'); pendingTgItem = null; }
-        
+
         function saveTgIdFromModal() {
-            const val = document.getElementById('tgIdInput').value.trim(); 
+            const val = document.getElementById('tgIdInput').value.trim();
             if (!val) return showToast("أدخل معرف صالح", "error");
-            
-            localStorage.setItem('pz_tg_id', val); 
-            document.getElementById('settingTgId').value = val;
-            closeTgModal(); 
-            showToast("تم الحفظ بنجاح وجاري الإرسال للبوت... 🎉", "success");
-            
-            if (pendingTgItem) {
-                const url = pendingTgItem.url;
-                const isAudio = pendingTgItem.is_audio;
-                const title = pendingTgItem.title;
-                const uploader = pendingTgItem.uploader || pendingTgItem.performer || "PlayZone";
-                const duration = pendingTgItem.duration;
-                const thumb = pendingTgItem.thumb;
-                
-                sendToTelegram(url, isAudio, false, title, uploader, duration, thumb);
-            }
+            localStorage.setItem('pz_tg_id', val); document.getElementById('settingTgId').value = val;
+            closeTgModal(); showToast("تم الحفظ بنجاح 🎉");
+            if (pendingTgItem) sendToTelegram(pendingTgItem.url, pendingTgItem.is_audio, false, pendingTgItem.title, pendingTgItem.uploader || "PlayZone", pendingTgItem.duration, pendingTgItem.thumb);
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // Search & Download
+        // ═══════════════════════════════════════════════════════════════
         async function processInput() {
             const input = document.getElementById('url').value.trim(); if(!input) return;
             const btn = document.getElementById('mainBtn'); btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري...'; btn.disabled = true;
             document.getElementById('previewBox').classList.add('hidden');
-            if (input.startsWith('http')) { await renderPreview(input); } 
+            if (input.startsWith('http')) { await renderPreview(input); }
             else {
                 try {
                     const res = await fetch(`${BACKEND_URL}/api/search`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:input})});
@@ -651,9 +667,9 @@
                         let box = document.getElementById('searchResultsList'); box.innerHTML = '';
                         data.entries.forEach((v) => {
                             box.innerHTML += `
-                            <div onclick="renderPreview('https://youtube.com/watch?v=${v.id}')" class="w-full flex items-center p-3 bg-panel border border-panelBorder rounded-2xl cursor-pointer hover:border-accent/50 transition-all active:scale-[0.98] shadow-md mb-1">
+                            <div onclick="renderPreview('https://youtube.com/watch?v=${v.id}')" class="result-card w-full flex items-center p-3 bg-panel border border-panelBorder rounded-2xl cursor-pointer shadow-md">
                                 <div class="flex-shrink-0 w-24 h-14 rounded-xl overflow-hidden border border-panelBorder relative ml-3">
-                                    <img src="${v.thumbnail}" class="w-full h-full object-cover">
+                                    <img src="${v.thumbnail}" class="w-full h-full object-cover" loading="lazy">
                                     <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-mono">${formatTime(v.duration || 0)}</div>
                                 </div>
                                 <div class="flex-1 min-w-0 flex flex-col justify-center text-right">
@@ -673,55 +689,39 @@
         async function renderPreview(url) {
             currentUrl = url; document.getElementById('searchResults').classList.add('hidden');
             document.getElementById('previewBox').classList.add('hidden'); document.getElementById('progressBox').classList.add('hidden');
-            document.getElementById('dlOptions').classList.add('hidden'); 
-            if(adCheckInterval) clearInterval(adCheckInterval);
+            document.getElementById('dlOptions').classList.add('hidden');
             if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
-            
             try {
                 const res = await fetch(`${BACKEND_URL}/api/preview`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:url})});
                 const data = await res.json();
                 if(data.success) {
                     document.getElementById('previewBox').classList.remove('hidden');
                     document.getElementById('thumb').src = data.thumb; document.getElementById('title').innerText = data.title;
-                    
                     const sessionRes = await fetch(`${BACKEND_URL}/api/generate_ad_session`);
                     const sessionData = await sessionRes.json();
                     currentClickId = sessionData.click_id;
-                    
                     document.getElementById('realAdLink').href = sessionData.ad_link;
                     document.getElementById('adGate').classList.remove('hidden');
-                    
                     let vBtn = document.getElementById('verifyBtn');
-                    vBtn.className = "btn bg-panel text-textMuted flex-1 border border-panelBorder text-xs cursor-wait";
-                    vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> بانتظار فحص الإعلان...';
+                    vBtn.className = "btn bg-panel text-textMuted flex-1 border border-panelBorder text-xs md:text-sm cursor-wait";
+                    vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> بانتظار فتح الإعلان...';
                 } else showToast("الرابط غير صالح للتحميل", "error");
             } catch(e) { showToast("فشل تحميل المعاينة", "error"); }
         }
 
         function toggleRes() { document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; }
-        
+
         function startAdVerificationCheck() {
-            showToast("جاري فحص الاتصال وتأكيد الجلسة... ⏳", "success");
-            
-            if(adCheckInterval) clearInterval(adCheckInterval);
+            showToast("جاري فحص الاتصال وتأكيد الجلسة... ⏳");
             if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
-            
             let vBtn = document.getElementById('verifyBtn');
             vBtn.className = "btn bg-panel text-accent flex-1 border border-accent/30 text-xs md:text-sm cursor-wait";
-            
-            // تثبيت الكلمات بدون تدوير نهائياً بناءً على طلبك
             vBtn.innerHTML = '<i class="fas fa-sync fa-spin mr-1"></i> جاري التحقق من الإعلان، يرجى الانتظار...';
-            
-            // فتح القفل بعد 10 ثوانٍ كاملة ومستقرة
             adFallbackTimeout = setTimeout(() => {
                 document.getElementById('adGate').classList.add('hidden');
                 document.getElementById('dlOptions').classList.remove('hidden');
-                showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
-            }, 10000); 
-        }
-
-        async function manualCheckAdStatus() {
-            return; 
+                showToast("تم التحقق بنجاح وتفعيل الرابط 🔓");
+            }, 10000);
         }
 
         function animatePercentCounter(targetPercent) {
@@ -733,9 +733,8 @@
                 let progress = timestamp - startTime;
                 let current = start + (end - start) * Math.min(progress / duration, 1);
                 percentEl.innerText = Math.floor(current) + '%';
-                percentEl.style.transform = 'scale(1.08)';
                 if (progress < duration) window.requestAnimationFrame(step);
-                else { percentEl.innerText = end + '%'; percentEl.style.transform = 'scale(1.0)'; lastLoggedPercent = end; }
+                else { percentEl.innerText = end + '%'; lastLoggedPercent = end; }
             }
             window.requestAnimationFrame(step);
         }
@@ -745,16 +744,14 @@
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
             document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
             document.getElementById('directDownloadArea').classList.add('hidden');
-            
             lastLoggedPercent = 0;
             document.getElementById('progPercent').innerText = '0%'; document.getElementById('progBar').style.width = '0%';
             document.getElementById('progSize').innerText = '-- / --'; document.getElementById('progSpeed').innerText = '--';
             document.getElementById('progStatus').innerHTML = '<i class="fas fa-cloud-download-alt"></i> جاري بدء الاتصال...';
-
             const mode = document.getElementById('mode').value, resVal = document.getElementById('resolution').value;
             try {
                 const res = await fetch(`${BACKEND_URL}/api/download`, {
-                    method:'POST', headers:{'Content-Type':'application/json'}, 
+                    method:'POST', headers:{'Content-Type':'application/json'},
                     body:JSON.stringify({url:currentUrl, mode:mode, resolution:resVal, click_id: currentClickId})
                 });
                 const data = await res.json();
@@ -768,100 +765,75 @@
                                 document.getElementById('progSize').innerText = prog.dl_mb + ' / ' + prog.total_mb;
                                 document.getElementById('progSpeed').innerText = prog.spd_mb;
                                 animatePercentCounter(prog.percent);
-                            } 
-                            else if(prog.status === 'converting') { 
-                                document.getElementById('progStatus').innerHTML = '<i class="fas fa-cog fa-spin"></i> جاري معالجة الملف...'; 
+                            }
+                            else if(prog.status === 'converting') {
+                                document.getElementById('progStatus').innerHTML = '<i class="fas fa-cog fa-spin"></i> جاري معالجة الملف...';
                                 document.getElementById('progBar').style.width = '100%'; document.getElementById('progPercent').innerText = '99%';
-                            } 
+                            }
                             else if(prog.status === 'completed') {
-                                clearInterval(interval); 
+                                clearInterval(interval);
                                 document.getElementById('progStatus').innerHTML = '<span class="text-green-400"><i class="fas fa-check-circle"></i> اكتمل التحميل</span>';
                                 document.getElementById('progPercent').innerText = '100%'; document.getElementById('progBar').style.width = '100%';
-                                
                                 const dlArea = document.getElementById('directDownloadArea'); const dlBtn = document.getElementById('directDownloadBtn');
                                 dlBtn.href = BACKEND_URL + prog.url; dlBtn.setAttribute('download', prog.title + (prog.is_audio ? '.mp3' : '.mp4'));
                                 dlArea.classList.remove('hidden');
-                                
                                 myLibrary.unshift({ id: Date.now().toString(), title: prog.title, url: BACKEND_URL + prog.url, thumb: prog.thumb, uploader: prog.uploader, duration: prog.duration, is_audio: prog.is_audio, timestamp: Date.now(), favorite: false });
                                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
-                                
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
-                                showToast("تم حفظ الملف بنجاح", "success");
-
+                                updateLibraryCount(); showToast("تم حفظ الملف بنجاح");
                                 if(localStorage.getItem('pz_auto_tg') !== 'false') {
                                     const tgId = localStorage.getItem('pz_tg_id');
-                                    if (!tgId) {
-                                        pendingTgItem = { url: BACKEND_URL + prog.url, is_audio: prog.is_audio, title: prog.title, uploader: prog.uploader, duration: prog.duration, thumb: prog.thumb };
-                                        document.getElementById('tgIdInput').value = "";
-                                        document.getElementById('tgModal').classList.replace('hidden', 'flex');
-                                        showToast("يرجى ربط حسابك ليتم إرسال هذا الملف إلى البوت ⚠️", "error");
-                                    } else {
-                                        sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
-                                    }
+                                    if (!tgId) { pendingTgItem = { url: BACKEND_URL + prog.url, is_audio: prog.is_audio, title: prog.title, uploader: prog.uploader, duration: prog.duration, thumb: prog.thumb }; document.getElementById('tgIdInput').value = ""; document.getElementById('tgModal').classList.replace('hidden', 'flex'); showToast("يرجى ربط حسابك ⚠️", "error"); }
+                                    else sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
                                 }
-                            } 
-                            else if(prog.status === 'error') { 
-                                clearInterval(interval); 
-                                document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; 
-                                showToast("حدث خطأ أثناء معالجة اليوتيوب للملف", "error");
                             }
+                            else if(prog.status === 'error') { clearInterval(interval); document.getElementById('progStatus').innerHTML = '<span class="text-red-500">فشل التحميل</span>'; showToast("حدث خطأ أثناء المعالجة", "error"); }
                         } catch(err) {}
                     }, 1000);
-                } else {
-                    showToast(data.error, "error");
-                    document.getElementById('progStatus').innerHTML = `<span class="text-red-500">${data.error}</span>`;
-                }
+                } else { showToast(data.error, "error"); document.getElementById('progStatus').innerHTML = `<span class="text-red-500">${data.error}</span>`; }
             } catch(e) { showToast("فشل الاتصال بالخادم", "error"); }
             btn.innerHTML = original; btn.disabled = false;
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // Media Player
+        // ═══════════════════════════════════════════════════════════════
         function playMediaTrack(index) {
             currentPlayingIndex = index; const track = myLibrary[index]; if (!track) return;
             mediaContainer.classList.add('active-player');
             if (track.is_audio) {
                 currentPlayingMode = 'audio'; document.getElementById('trackSource').innerText = '🎵 صوت';
                 document.getElementById('videoContainer').classList.add('hidden'); document.getElementById('audioVisualizer').classList.remove('hidden');
-                document.getElementById('pipBtn').classList.add('hidden'); document.getElementById('playerCoverImg').src = track.thumb || 'https://via.placeholder.com/150';
+                document.getElementById('pipBtn').classList.add('hidden'); document.getElementById('playerCoverImg').src = track.thumb || 'https://via.placeholder.com/150/1a1a2e/a855f7?text=♪';
             } else {
                 currentPlayingMode = 'video'; document.getElementById('trackSource').innerText = '🎬 فيديو';
                 document.getElementById('videoContainer').classList.remove('hidden'); document.getElementById('audioVisualizer').classList.add('hidden');
                 document.getElementById('pipBtn').classList.remove('hidden');
             }
             videoElement.src = track.url; videoElement.load();
-            videoElement.play().catch(error => {
-                showToast("اضغط زر التشغيل للمتابعة", "success");
-            });
+            videoElement.play().catch(() => showToast("اضغط زر التشغيل للمتابعة"));
             document.getElementById('playerTitle').innerText = track.title;
             if (mediaContainer.classList.contains('compact-mode')) removeCompactLayout();
-
             if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: track.title,
-                    artist: track.uploader || 'PlayZone',
-                    album: 'PlayZone Music',
-                    artwork: [{ src: track.thumb || 'https://via.placeholder.com/150', sizes: '512x512', type: 'image/png' }]
-                });
+                navigator.mediaSession.metadata = new MediaMetadata({ title: track.title, artist: track.uploader || 'PlayZone', album: 'PlayZone Music', artwork: [{ src: track.thumb || '', sizes: '512x512', type: 'image/png' }] });
                 setupMediaSessionActions();
             }
         }
 
-        function togglePlay() {
-            if (videoElement.paused) videoElement.play().catch(()=>{});
-            else videoElement.pause();
-        }
+        function togglePlay() { if (videoElement.paused) videoElement.play().catch(()=>{}); else videoElement.pause(); }
 
         function setupMediaSessionActions() {
             if ('mediaSession' in navigator) {
-                navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
-                navigator.mediaSession.setActionHandler('pause', () => { togglePlay(); });
-                navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
-                navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
+                navigator.mediaSession.setActionHandler('play', togglePlay);
+                navigator.mediaSession.setActionHandler('pause', togglePlay);
+                navigator.mediaSession.setActionHandler('previoustrack', playPrev);
+                navigator.mediaSession.setActionHandler('nexttrack', playNext);
             }
         }
 
         function playNext() {
             if (myLibrary.length === 0) return;
-            if (isShuffle) { playMediaTrack(Math.floor(Math.random() * myLibrary.length)); } 
+            if (isShuffle) playMediaTrack(Math.floor(Math.random() * myLibrary.length));
             else { let idx = currentPlayingIndex + 1; if (idx >= myLibrary.length) idx = 0; playMediaTrack(idx); }
         }
 
@@ -871,13 +843,13 @@
         }
 
         function toggleShuffle() {
-            isShuffle = !isShuffle; const btn = document.getElementById('shuffleBtn');
-            btn.className = isShuffle ? "text-accent hover:text-white transition-colors text-xs" : "text-textMuted hover:text-white transition-colors text-xs";
+            isShuffle = !isShuffle;
+            document.getElementById('shuffleBtn').className = isShuffle ? "text-accent hover:text-white transition-colors text-xs" : "text-textMuted hover:text-white transition-colors text-xs";
         }
 
         function toggleRepeat() {
-            isRepeat = !isRepeat; const btn = document.getElementById('repeatBtn');
-            btn.className = isRepeat ? "text-accent hover:text-white transition-colors text-xs" : "text-textMuted hover:text-white transition-colors text-xs";
+            isRepeat = !isRepeat;
+            document.getElementById('repeatBtn').className = isRepeat ? "text-accent hover:text-white transition-colors text-xs" : "text-textMuted hover:text-white transition-colors text-xs";
         }
 
         function updatePlayerProgress() {
@@ -896,12 +868,12 @@
                 if (!isScrubbing) return; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
                 const pct = Math.max(0, Math.min(1, clickX / rect.width)); document.getElementById('mediaProgressBar').style.width = (pct * 100) + '%';
                 document.getElementById('mediaProgressSlider').style.left = (pct * 100) + '%';
-                if (!isNaN(videoElement.duration)) { document.getElementById('playerTime').innerText = formatTime(pct * videoElement.duration) + ' / ' + formatTime(videoElement.duration); }
+                if (!isNaN(videoElement.duration)) document.getElementById('playerTime').innerText = formatTime(pct * videoElement.duration) + ' / ' + formatTime(videoElement.duration);
             }
             function endScrub(e) {
                 if (!isScrubbing) return; isScrubbing = false; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
                 const pct = Math.max(0, Math.min(1, clickX / rect.width));
-                if (!isNaN(videoElement.duration)) { videoElement.currentTime = pct * videoElement.duration; }
+                if (!isNaN(videoElement.duration)) videoElement.currentTime = pct * videoElement.duration;
                 try { container.releasePointerCapture(e.pointerId); } catch(err) {}
                 container.removeEventListener('pointermove', performScrub); container.removeEventListener('pointerup', endScrub); container.removeEventListener('pointercancel', endScrub);
             }
@@ -915,12 +887,8 @@
 
         function toggleMute() {
             const i = document.getElementById('muteBtn').querySelector('i');
-            if (isMuted) {
-                videoElement.volume = lastVolume || 1; document.getElementById('volumeSlider').value = lastVolume || 1;
-                i.className = "fas fa-volume-up text-xs"; isMuted = false;
-            } else {
-                videoElement.volume = 0; document.getElementById('volumeSlider').value = 0; i.className = "fas fa-volume-mute text-xs"; isMuted = true;
-            }
+            if (isMuted) { videoElement.volume = lastVolume || 1; document.getElementById('volumeSlider').value = lastVolume || 1; i.className = "fas fa-volume-up text-xs"; isMuted = false; }
+            else { videoElement.volume = 0; document.getElementById('volumeSlider').value = 0; i.className = "fas fa-volume-mute text-xs"; isMuted = true; }
         }
 
         let currentSpeed = 1;
@@ -929,14 +897,17 @@
             currentSpeed = spds[idx]; videoElement.playbackRate = currentSpeed; document.getElementById('speedBtn').innerText = currentSpeed + 'x';
         }
 
-        function handleMediaEnd() { if (isRepeat) { videoElement.currentTime = 0; videoElement.play().catch(()=>{}); } else { playNext(); } }
+        function handleMediaEnd() { if (isRepeat) { videoElement.currentTime = 0; videoElement.play().catch(()=>{}); } else playNext(); }
         function closePlayer() { videoElement.pause(); mediaContainer.classList.remove('active-player'); animateVisualizerBars(false); }
         function triggerPiP() { if (document.pictureInPictureEnabled && videoElement && currentPlayingMode === 'video') { if (document.pictureInPictureElement) document.exitPictureInPicture(); else videoElement.requestPictureInPicture().catch(()=>{}); } }
         function toggleCompactMode(e) { e.stopPropagation(); const icon = e.currentTarget.querySelector('i'); if (mediaContainer.classList.contains('compact-mode')) { removeCompactLayout(); icon.className = "fas fa-compress-alt text-xs"; } else { mediaContainer.classList.add('compact-mode'); document.getElementById('playerBody').style.display = 'none'; icon.className = "fas fa-expand-alt text-xs"; } }
         function removeCompactLayout() { mediaContainer.classList.remove('compact-mode'); document.getElementById('playerBody').style.display = 'block'; }
         function resetPlayerPosition() { mediaContainer.style.top = 'auto'; mediaContainer.style.left = '25px'; mediaContainer.style.bottom = '25px'; mediaContainer.style.right = 'auto'; mediaContainer.style.transform = 'none'; }
-        function animateVisualizerBars(run) { const visualizer = document.getElementById('visualizerBars'); if (run) visualizer.classList.add('playing-visualizer'); else visualizer.classList.remove('playing-visualizer'); }
+        function animateVisualizerBars(run) { const v = document.getElementById('visualizerBars'); if (run) v.classList.add('playing-visualizer'); else v.classList.remove('playing-visualizer'); }
 
+        // ═══════════════════════════════════════════════════════════════
+        // Draggable Player
+        // ═══════════════════════════════════════════════════════════════
         function setupAdvancedDraggable(el, handle) {
             let isDragging = false; let startX, startY, initialLeft, initialTop;
             handle.addEventListener('pointerdown', dragStart);
@@ -956,7 +927,7 @@
             }
             function dragEnd(e) {
                 if (!isDragging) return; isDragging = false; handle.style.cursor = 'grab'; el.classList.remove('dragging-player');
-                el.style.transition = 'opacity 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                el.style.transition = 'opacity 0.3s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
                 try { handle.releasePointerCapture(e.pointerId); } catch(err) {}
                 handle.removeEventListener('pointermove', dragMove); handle.removeEventListener('pointerup', dragEnd); handle.removeEventListener('pointercancel', dragEnd);
             }
