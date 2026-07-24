@@ -387,7 +387,7 @@
                                     <i class="fas fa-external-link-alt"></i> فتح الإعلان
                                 </a>
                                 <button id="verifyBtn" class="btn bg-panel/80 text-textMuted flex-1 border border-panelBorder text-xs sm:text-sm cursor-wait">
-                                    <i class="fas fa-sync fa-spin"></i> بانتظار فتح الإعلان...
+                                    <i class="fas fa-sync fa-spin"></i> بانتظار فحص الإعلان...
                                 </button>
                             </div>
                         </div>
@@ -600,16 +600,22 @@
             <div id="videoContainer" class="hidden w-full aspect-video rounded-2xl overflow-hidden bg-black mb-3 border border-panelBorder/50 shadow-xl">
                 <video id="globalVideoElement" class="w-full h-full object-contain" ontimeupdate="updatePlayerProgress()" onended="handleMediaEnd()"></video>
             </div>
-            <div id="audioVisualizer" class="flex flex-col items-center justify-center py-1 mb-1">
-                <div class="relative w-14 h-14 sm:w-18 sm:h-18 rounded-full border-2 border-accent/20 shadow-2xl overflow-hidden mb-1.5 bg-bgDeep">
+            <div id="audioVisualizer" class="flex flex-col items-center justify-center py-2 mb-2">
+                <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-accent/30 shadow-2xl overflow-hidden mb-2.5 bg-bgDeep">
                     <img id="playerCoverImg" src="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png" class="w-full h-full object-cover album-spin" alt="album art">
                     <div class="absolute inset-0 bg-gradient-to-tr from-black/50 to-transparent"></div>
-                    <div class="absolute w-4 h-4 bg-bgDeep rounded-full top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 border-2 border-panelBorder flex items-center justify-center shadow-inner">
-                        <div class="w-1 h-1 bg-accent rounded-full"></div>
+                    <div class="absolute w-7 h-7 bg-bgDeep rounded-full top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 border-2 border-panelBorder flex items-center justify-center shadow-inner">
+                        <div class="w-2.5 h-2.5 bg-accent rounded-full"></div>
                     </div>
                 </div>
-                <div id="visualizerBars" class="flex gap-1.5 items-end h-3.5 justify-center mt-0.5">
-                    <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                <div id="visualizerBars" class="flex gap-2 items-end h-6 justify-center mt-1">
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
                 </div>
             </div>
             <!-- Progress -->
@@ -622,12 +628,12 @@
                 <span id="trackSource" class="bg-accent/10 text-accentLight px-2 py-0.5 rounded-lg text-[9px] font-bold border border-accent/20">صوت</span>
             </div>
             <!-- Controls -->
-            <div class="flex items-center justify-between gap-1 px-0.5">
+            <div class="flex items-center justify-between gap-2 px-1">
                 <button onclick="toggleShuffle(event)" id="shuffleBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="عشوائي">
                     <i class="fas fa-random"></i>
                 </button>
-                <button onclick="seekMedia(10)" class="px-1.5 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-0.5 border border-panelBorder/30 transition-all flex-shrink-0" title="تقديم 10 ثوانٍ للأمام">
-                    <i class="fas fa-rotate-right text-[9px]"></i>10
+                <button onclick="seekMedia(-10)" class="px-2 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-1 border border-panelBorder/30 transition-all flex-shrink-0" title="رجوع 10 ثوانٍ">
+                    10<i class="fas fa-rotate-left text-[9px]"></i>
                 </button>
                 <button onclick="playPrev()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="السابق">
                     <i class="fas fa-step-backward"></i>
@@ -640,8 +646,8 @@
                 <button onclick="playNext()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="التالي">
                     <i class="fas fa-step-forward"></i>
                 </button>
-                <button onclick="seekMedia(-10)" class="px-1.5 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-0.5 border border-panelBorder/30 transition-all flex-shrink-0" title="رجوع 10 ثوانٍ للوراء">
-                    10<i class="fas fa-rotate-left text-[9px]"></i>
+                <button onclick="seekMedia(10)" class="px-2 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-1 border border-panelBorder/30 transition-all flex-shrink-0" title="تقديم 10 ثوانٍ">
+                    <i class="fas fa-rotate-right text-[9px]"></i>10
                 </button>
                 <button onclick="toggleRepeat(event)" id="repeatBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="تكرار المقطع تلقائياً">
                     <i class="fas fa-repeat"></i>
@@ -886,10 +892,12 @@
             const iconEl = document.getElementById('sidebarIconEl');
             if (!logoContainer || !iconEl) return;
             if (isPlaying) {
-                logoContainer.classList.add('border-accent', 'shadow-lg', 'shadow-accent/40', 'scale-105');
+                logoContainer.classList.add('border-accent', 'shadow-lg', 'shadow-accent/40', 'scale-105', 'rounded-xl');
+                logoContainer.classList.remove('rounded-2xl');
                 iconEl.className = "fas fa-compact-disc z-10 text-sm text-white album-spin";
             } else {
-                logoContainer.classList.remove('border-accent', 'shadow-lg', 'shadow-accent/40', 'scale-105');
+                logoContainer.classList.remove('border-accent', 'shadow-lg', 'shadow-accent/40', 'scale-105', 'rounded-xl');
+                logoContainer.classList.add('rounded-2xl');
                 iconEl.className = "fas fa-headphones z-10 text-sm text-accentLight";
             }
         }
@@ -1553,7 +1561,20 @@
             recentlyPlayed.unshift({ ...track, playedAt: Date.now() });
             if (recentlyPlayed.length > 20) recentlyPlayed = recentlyPlayed.slice(0, 20);
             localStorage.setItem('pz_recently_played', JSON.stringify(recentlyPlayed));
+            if (document.getElementById('recentView').classList.contains('active')) {
+                renderRecentlyPlayed();
+            }
         }
+
+        // Continuous sync across tabs and live update
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'pz_recently_played') {
+                recentlyPlayed = JSON.parse(e.newValue) || [];
+                if (document.getElementById('recentView').classList.contains('active')) {
+                    renderRecentlyPlayed();
+                }
+            }
+        });
 
         function renderRecentlyPlayed() {
             const container = document.getElementById('recentContainer');
