@@ -200,18 +200,6 @@
             animation-play-state: paused;
         }
 
-        @keyframes textShake {
-            0%, 100% { transform: translate(0, 0) rotate(0deg); }
-            20% { transform: translate(-1.5px, 1px) rotate(-0.5deg); }
-            40% { transform: translate(1.5px, -1px) rotate(0.5deg); }
-            60% { transform: translate(-1px, 0.5px) rotate(-0.3deg); }
-            80% { transform: translate(1px, -0.5px) rotate(0.3deg); }
-        }
-        .title-shake {
-            display: inline-block;
-            animation: textShake 0.6s ease-in-out infinite alternate;
-        }
-
         #toast {
             position: fixed;
             top: 20px;
@@ -358,13 +346,13 @@
                 <div class="absolute bottom-0 left-0 w-24 h-24 bg-purple-600/5 rounded-full blur-2xl"></div>
                 <div class="relative">
                     <div class="flex items-center gap-2 mb-2 min-h-[40px]">
-                        <h2 id="typingTitle" class="text-xl sm:text-2xl md:text-3xl font-black text-white typing-cursor title-shake"></h2>
+                        <h2 id="typingTitle" class="text-xl sm:text-2xl md:text-3xl font-black text-white typing-cursor"></h2>
                     </div>
                     <p class="text-textMuted mb-5 text-xs sm:text-sm leading-relaxed">ابحث عن مقاطع الفيديو أو الأغاني لتحميلها وتشغيلها مباشرة.</p>
                     <div class="flex flex-col sm:flex-row gap-3">
                         <div class="relative flex-1">
                             <i class="fas fa-music absolute right-4 top-1/2 -translate-y-1/2 text-textDim text-sm"></i>
-                            <input type="text" id="url" autocomplete="off" autocorrect="off" capitalize="off" spellcheck="false" placeholder="أدخل كلمة البحث أو رابط المقطع..." class="modern-input pr-11 flex-1 text-xs sm:text-sm">
+                            <input type="text" id="url" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="أدخل كلمة البحث أو رابط المقطع..." class="modern-input pr-11 flex-1 text-xs sm:text-sm">
                         </div>
                         <button onclick="processInput()" id="mainBtn" class="btn bg-gradient-to-r from-accent to-purple-600 hover:from-accentHover hover:to-purple-700 text-white sm:w-36 md:w-40 shadow-lg glow-accent">
                             <i class="fas fa-search"></i> بحث
@@ -373,7 +361,7 @@
                 </div>
 
                 <div id="searchResults" class="hidden mt-6 sm:mt-8 w-full">
-                    <div class="bg-bgDeep/60 border border-panelBorder/50 rounded-2xl p-3 sm:p-4 backdrop-blur-sm max-h-[60dvh] sm:max-h-[65dvh] flex flex-col">
+                    <div class="bg-bgDeep/60 border border-panelBorder/50 rounded-2xl p-3 sm:p-4 backdrop-blur-sm max-h-[55dvh] sm:max-h-[60dvh] flex flex-col">
                         <div class="mb-3 pb-3 border-b border-panelBorder/40 flex justify-between items-center flex-shrink-0">
                             <h3 class="text-white font-bold text-xs sm:text-sm flex items-center gap-2">
                                 <span class="w-2 h-2 bg-accent rounded-full pulse-dot"></span>
@@ -383,7 +371,7 @@
                                 <i class="fas fa-times text-xs"></i>
                             </button>
                         </div>
-                        <div id="searchResultsList" class="flex flex-col gap-2.5 w-full overflow-y-auto max-h-[50dvh] sm:max-h-[55dvh] pr-1"></div>
+                        <div id="searchResultsList" class="flex flex-col gap-2.5 w-full overflow-y-auto max-h-[45dvh] sm:max-h-[50dvh] pr-1"></div>
                     </div>
                 </div>
             </div>
@@ -772,6 +760,25 @@
             } catch(e) {}
         }
 
+        function triggerHaptic(style = 'light') {
+            if (isMiniApp && tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred(style);
+            } else if (navigator.vibrate) {
+                if (style === 'light') navigator.vibrate(12);
+                else if (style === 'medium') navigator.vibrate(25);
+                else if (style === 'heavy') navigator.vibrate(45);
+            }
+        }
+
+        function triggerNotification(type = 'success') {
+            if (isMiniApp && tg.HapticFeedback) {
+                tg.HapticFeedback.notificationOccurred(type);
+            } else if (navigator.vibrate) {
+                if (type === 'success') navigator.vibrate([20, 50, 20]);
+                else navigator.vibrate([50, 50, 50]);
+            }
+        }
+
         function initTypewriter() {
             const el = document.getElementById('typingTitle');
             if (!el) return;
@@ -812,6 +819,10 @@
                     charIdx++;
                 }
 
+                if (charIdx > 0) {
+                    triggerHaptic('light');
+                }
+
                 let speed = isDeleting ? 30 : 70;
 
                 if (!isDeleting && charIdx === currentPhrase.length) {
@@ -836,6 +847,7 @@
         let adFallbackTimeout = null;
         let currentPlayingIndex = -1;
         let isShuffle = false;
+        let shuffleQueue = [];
         let isRepeat = false;
         let libraryPage = 1;
         const itemsPerPage = 6;
@@ -879,7 +891,14 @@
             setupScrubbing();
             setupVideoEvents();
 
+            const inputsList = document.querySelectorAll('input, select, textarea');
+            inputsList.forEach(inputEl => {
+                inputEl.addEventListener('keydown', (e) => { e.stopPropagation(); });
+                inputEl.addEventListener('keyup', (e) => { e.stopPropagation(); });
+            });
+
             document.getElementById('url').addEventListener('keydown', function(e) {
+                e.stopPropagation();
                 if(e.key === 'Enter') {
                     e.preventDefault();
                     this.blur();
@@ -887,9 +906,11 @@
                 }
             });
 
-            document.addEventListener('click', (e) => {
-                const target = e.target.closest('button, a, input[type="button"]');
-                if (target) target.blur();
+            document.addEventListener('pointerup', (e) => {
+                const activeBtn = document.activeElement;
+                if (activeBtn && (activeBtn.tagName === 'BUTTON' || activeBtn.tagName === 'A')) {
+                    activeBtn.blur();
+                }
             });
 
             const savedSleepEnd = localStorage.getItem('pz_sleep_end');
@@ -937,25 +958,6 @@
             if(isNaN(secs) || secs === null) return "0:00";
             const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
             return m + ":" + (s < 10 ? '0' + s : s);
-        }
-
-        function triggerHaptic(style = 'light') {
-            if (isMiniApp && tg.HapticFeedback) {
-                tg.HapticFeedback.impactOccurred(style);
-            } else if (navigator.vibrate) {
-                if (style === 'light') navigator.vibrate(10);
-                else if (style === 'medium') navigator.vibrate(20);
-                else if (style === 'heavy') navigator.vibrate(40);
-            }
-        }
-
-        function triggerNotification(type = 'success') {
-            if (isMiniApp && tg.HapticFeedback) {
-                tg.HapticFeedback.notificationOccurred(type);
-            } else if (navigator.vibrate) {
-                if (type === 'success') navigator.vibrate([20, 50, 20]);
-                else navigator.vibrate([50, 50, 50]);
-            }
         }
 
         function showToast(message, type = "success") {
@@ -1356,6 +1358,15 @@
             }
         };
 
+        function rebuildShuffleQueue() {
+            shuffleQueue = Array.from({length: myLibrary.length}, (_, i) => i)
+                .filter(i => i !== currentPlayingIndex);
+            for (let i = shuffleQueue.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffleQueue[i], shuffleQueue[j]] = [shuffleQueue[j], shuffleQueue[i]];
+            }
+        }
+
         window.playMediaTrack = async function(index) {
             currentPlayingIndex = index; const track = myLibrary[index]; if (!track) return;
             mediaContainer.classList.add('active-player');
@@ -1419,8 +1430,17 @@
 
         window.playNext = function() {
             if (myLibrary.length === 0) return;
-            if (isShuffle) { playMediaTrack(Math.floor(Math.random() * myLibrary.length)); }
-            else { let idx = currentPlayingIndex + 1; if (idx >= myLibrary.length) idx = 0; playMediaTrack(idx); }
+            if (isShuffle) {
+                if (shuffleQueue.length === 0) rebuildShuffleQueue();
+                if (shuffleQueue.length > 0) {
+                    const nextIdx = shuffleQueue.shift();
+                    playMediaTrack(nextIdx);
+                    return;
+                }
+            }
+            let idx = currentPlayingIndex + 1;
+            if (idx >= myLibrary.length) idx = 0;
+            playMediaTrack(idx);
         };
 
         window.playPrev = function() {
@@ -1454,10 +1474,12 @@
             isShuffle = !isShuffle;
             const btn = document.getElementById('shuffleBtn');
             if (isShuffle) {
+                rebuildShuffleQueue();
                 btn.classList.add('text-accent', 'bg-accent/10');
                 btn.classList.remove('text-textMuted');
                 showToast("تم تفعيل التشغيل العشوائي 🔀", "success");
             } else {
+                shuffleQueue = [];
                 btn.classList.remove('text-accent', 'bg-accent/10');
                 btn.classList.add('text-textMuted');
                 showToast("تم تعطيل التشغيل العشوائي", "success");
@@ -1563,22 +1585,19 @@
             recentlyPlayed.unshift({ ...track, playedAt: Date.now() });
             if (recentlyPlayed.length > 20) recentlyPlayed = recentlyPlayed.slice(0, 20);
             localStorage.setItem('pz_recently_played', JSON.stringify(recentlyPlayed));
-            if (document.getElementById('recentView').classList.contains('active')) {
-                renderRecentlyPlayed();
-            }
+            renderRecentlyPlayed();
         }
 
         window.addEventListener('storage', (e) => {
             if (e.key === 'pz_recently_played') {
                 recentlyPlayed = JSON.parse(e.newValue) || [];
-                if (document.getElementById('recentView').classList.contains('active')) {
-                    renderRecentlyPlayed();
-                }
+                renderRecentlyPlayed();
             }
         });
 
         function renderRecentlyPlayed() {
             const container = document.getElementById('recentContainer');
+            if (!container) return;
             container.innerHTML = '';
             if (recentlyPlayed.length === 0) {
                 container.innerHTML = `<div class="py-16 text-center text-textMuted">
@@ -1616,12 +1635,14 @@
         window.playRecentTrack = function(recentIndex) {
             const track = recentlyPlayed[recentIndex];
             if (!track) return;
-            const libIndex = myLibrary.findIndex(i => i.id === track.id);
-            if (libIndex !== -1) {
-                playMediaTrack(libIndex);
-            } else {
-                showToast("المقطع لم يعد موجوداً في المكتبة", "error");
+            let libIndex = myLibrary.findIndex(i => i.id === track.id);
+            if (libIndex === -1) {
+                myLibrary.unshift(track);
+                localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+                libIndex = 0;
+                applyFilters();
             }
+            playMediaTrack(libIndex);
         };
 
         window.clearRecentHistory = function() {
