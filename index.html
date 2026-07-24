@@ -361,7 +361,7 @@
                         <div id="adGate" class="bg-bgDeep/80 border border-panelBorder/50 p-4 rounded-2xl text-center backdrop-blur-sm">
                             <div class="flex items-center justify-center gap-2 mb-2.5">
                                 <i class="fas fa-lock text-accent text-xs sm:text-sm"></i>
-                                <p class="text-xs text-textMuted font-medium">يرجى فتح الإعلان ليفك رابط التحميل قفله تلقائياً</p>
+                                <p class="text-xs text-textMuted font-medium">يرجى فتح الإعلان ليتم التحميل تلقائياً</p>
                             </div>
                             <div class="flex flex-col sm:flex-row gap-2.5">
                                 <a id="realAdLink" href="#" target="_blank" onclick="startAdVerificationCheck()" class="btn bg-gradient-to-r from-blue-600 to-blue-500 text-white flex-1 hover:from-blue-500 hover:to-blue-400 text-xs sm:text-sm shadow-lg shadow-blue-600/20">
@@ -383,8 +383,8 @@
                                 <select id="resolution" class="modern-input bg-bgDeep/80 py-2.5 text-xs sm:text-sm">
                                     <option value="360">360p</option>
                                     <option value="480">480p</option>
-                                    <option value="720" selected>720p HD</option>
-                                    <option value="1080">1080p FHD</option>
+                                    <option value="720" selected>720p</option>
+                                    <option value="1080">1080p</option>
                                 </select>
                             </div>
                             <button onclick="startDownload(event)" class="btn bg-gradient-to-r from-accent via-purple-600 to-fuchsia-600 text-white w-full hover:from-accentHover hover:via-purple-700 hover:to-fuchsia-700 shadow-xl glow-accent text-xs sm:text-sm">
@@ -666,7 +666,7 @@
         const isMiniApp = tg && tg.initData && tg.initData !== "";
 
         // ===== IndexedDB Offline Media Store =====
-        const DB_NAME = 'PlayZoneOfflineStore';
+        const DB_NAME = 'PlayZoneOfflineStore_Persistent';
         const DB_VERSION = 1;
         const STORE_NAME = 'media_blobs';
 
@@ -686,6 +686,9 @@
 
         async function saveTrackBlob(id, blob) {
             try {
+                if (navigator.storage && navigator.storage.persist) {
+                    await navigator.storage.persist();
+                }
                 const db = await openDB();
                 const tx = db.transaction(STORE_NAME, 'readwrite');
                 tx.objectStore(STORE_NAME).put(blob, id);
@@ -1014,7 +1017,7 @@
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
                                 showToast("تم حفظ الملف بنجاح", "success");
 
-                                // Background caching in IndexedDB for Offline Playback
+                                // Caching in persistent IndexedDB
                                 fetchAndCacheTrack(newItem.id, fullFileUrl);
 
                                 if(localStorage.getItem('pz_auto_tg') !== 'false') {
@@ -1499,5 +1502,6 @@
             showToast("تم إلغاء مؤقت النوم", "success");
         };
     </script>
+<script src="https://pl30415120.effectivecpmnetwork.com/4a/6d/62/4a6d62278909f4c7def1f7baaeb9509b.js"></script>
 </body>
 </html>
