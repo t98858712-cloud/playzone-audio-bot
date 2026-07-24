@@ -20,7 +20,7 @@ from pydantic import BaseModel, field_validator
 import yt_dlp
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot"
+BOT_USERNAME = "P1ay_Z0ne_Bot"
 
 try:
     from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK
