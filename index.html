@@ -193,8 +193,8 @@
             overflow: hidden;
             white-space: nowrap;
             position: relative;
-            mask-image: linear-gradient(to right, transparent 0%, black 3%, black 97%, transparent 100%);
-            -webkit-mask-image: linear-gradient(to right, transparent 0%, black 3%, black 97%, transparent 100%);
+            mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
         }
 
         @keyframes smoothMarquee {
@@ -211,23 +211,6 @@
         }
 
         .animate-marquee:hover {
-            animation-play-state: paused;
-        }
-
-        /* حركة الشريط العلوي المعكوسة بدقة عالية ومظهر كامل بدون تقطيع */
-        @keyframes smoothMarqueeReverse {
-            0% { transform: translate3d(-100%, 0, 0); }
-            100% { transform: translate3d(100%, 0, 0); }
-        }
-
-        .animate-marquee-reverse {
-            display: inline-flex;
-            white-space: nowrap;
-            will-change: transform;
-            animation: smoothMarqueeReverse 18s linear infinite;
-        }
-
-        .animate-marquee-reverse:hover {
             animation-play-state: paused;
         }
 
@@ -377,12 +360,12 @@
     <main class="flex-1 h-[100dvh] overflow-y-auto pb-28 relative scroll-smooth bg-bgDark w-full">
         <div class="fixed top-0 left-0 w-full h-72 bg-gradient-to-b from-accent/[0.03] to-transparent pointer-events-none z-0"></div>
 
-        <!-- الشريط الأصلي بالضبط مع إزالة البرق، وتحسين ظهور النص كاملاً بالحركة المعكوسة للانتقال للإعدادات -->
+        <!-- شريط متحرك للانتقال المباشر للإعدادات عند الضغط عليه -->
         <div onclick="switchView('settingsView')" class="bg-gradient-to-r from-accent/20 via-purple-900/30 to-accent/20 border-b border-accent/20 py-2 px-3 text-xs text-white relative z-20 cursor-pointer hover:bg-accent/30 transition-colors flex items-center overflow-hidden" title="اضغط للانتقال للإعدادات">
             <div class="marquee-wrapper">
-                <div class="animate-marquee-reverse flex items-center gap-12">
-                    <span class="font-bold whitespace-nowrap">✨ احصل على تجربة تطبيق كاملة بإنشاء اختصار على شاشتك! اضغط هنا للانتقال إلى الإعدادات وإنشاء الاختصار فوراً 📲</span>
-                    <span class="font-bold whitespace-nowrap">✨ احصل على تجربة تطبيق كاملة بإنشاء اختصار على شاشتك! اضغط هنا للانتقال إلى الإعدادات وإنشاء الاختصار فوراً 📲</span>
+                <div class="animate-marquee flex items-center gap-2">
+                    <i class="fas fa-bolt text-amber-400"></i>
+                    <span class="font-bold">✨ احصل على تجربة تطبيق كاملة بإنشاء اختصار على شاشتك! اضغط هنا للانتقال إلى الإعدادات وإنشاء الاختصار فوراً 📲</span>
                 </div>
             </div>
         </div>
