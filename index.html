@@ -54,6 +54,11 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        input, textarea, select {
+            user-select: text !important;
+            -webkit-user-select: text !important;
+        }
+
         button, a, input, select {
             -webkit-tap-highlight-color: transparent;
             outline: none !important;
@@ -193,6 +198,18 @@
         }
         .animate-marquee:hover {
             animation-play-state: paused;
+        }
+
+        @keyframes textShake {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            20% { transform: translate(-1.5px, 1px) rotate(-0.5deg); }
+            40% { transform: translate(1.5px, -1px) rotate(0.5deg); }
+            60% { transform: translate(-1px, 0.5px) rotate(-0.3deg); }
+            80% { transform: translate(1px, -0.5px) rotate(0.3deg); }
+        }
+        .title-shake {
+            display: inline-block;
+            animation: textShake 0.6s ease-in-out infinite alternate;
         }
 
         #toast {
@@ -341,13 +358,13 @@
                 <div class="absolute bottom-0 left-0 w-24 h-24 bg-purple-600/5 rounded-full blur-2xl"></div>
                 <div class="relative">
                     <div class="flex items-center gap-2 mb-2 min-h-[40px]">
-                        <h2 id="typingTitle" class="text-xl sm:text-2xl md:text-3xl font-black text-white typing-cursor"></h2>
+                        <h2 id="typingTitle" class="text-xl sm:text-2xl md:text-3xl font-black text-white typing-cursor title-shake"></h2>
                     </div>
                     <p class="text-textMuted mb-5 text-xs sm:text-sm leading-relaxed">ابحث عن مقاطع الفيديو أو الأغاني لتحميلها وتشغيلها مباشرة.</p>
                     <div class="flex flex-col sm:flex-row gap-3">
                         <div class="relative flex-1">
                             <i class="fas fa-music absolute right-4 top-1/2 -translate-y-1/2 text-textDim text-sm"></i>
-                            <input type="text" id="url" placeholder="أدخل كلمة البحث أو رابط المقطع..." class="modern-input pr-11 flex-1 text-xs sm:text-sm">
+                            <input type="text" id="url" autocomplete="off" autocorrect="off" capitalize="off" spellcheck="false" placeholder="أدخل كلمة البحث أو رابط المقطع..." class="modern-input pr-11 flex-1 text-xs sm:text-sm">
                         </div>
                         <button onclick="processInput()" id="mainBtn" class="btn bg-gradient-to-r from-accent to-purple-600 hover:from-accentHover hover:to-purple-700 text-white sm:w-36 md:w-40 shadow-lg glow-accent">
                             <i class="fas fa-search"></i> بحث
@@ -355,9 +372,9 @@
                     </div>
                 </div>
 
-                <div id="searchResults" class="hidden mt-6 sm:mt-8">
-                    <div class="bg-bgDeep/60 border border-panelBorder/50 rounded-2xl p-3 sm:p-4 backdrop-blur-sm">
-                        <div class="mb-3 pb-3 border-b border-panelBorder/40 flex justify-between items-center">
+                <div id="searchResults" class="hidden mt-6 sm:mt-8 w-full">
+                    <div class="bg-bgDeep/60 border border-panelBorder/50 rounded-2xl p-3 sm:p-4 backdrop-blur-sm max-h-[60dvh] sm:max-h-[65dvh] flex flex-col">
+                        <div class="mb-3 pb-3 border-b border-panelBorder/40 flex justify-between items-center flex-shrink-0">
                             <h3 class="text-white font-bold text-xs sm:text-sm flex items-center gap-2">
                                 <span class="w-2 h-2 bg-accent rounded-full pulse-dot"></span>
                                 نتائج البحث
@@ -366,7 +383,7 @@
                                 <i class="fas fa-times text-xs"></i>
                             </button>
                         </div>
-                        <div id="searchResultsList" class="flex flex-col gap-2.5 w-full"></div>
+                        <div id="searchResultsList" class="flex flex-col gap-2.5 w-full overflow-y-auto max-h-[50dvh] sm:max-h-[55dvh] pr-1"></div>
                     </div>
                 </div>
             </div>
@@ -863,7 +880,11 @@
             setupVideoEvents();
 
             document.getElementById('url').addEventListener('keydown', function(e) {
-                if(e.key === 'Enter') { e.preventDefault(); this.blur(); processInput(); }
+                if(e.key === 'Enter') {
+                    e.preventDefault();
+                    this.blur();
+                    processInput();
+                }
             });
 
             document.addEventListener('click', (e) => {
