@@ -351,9 +351,6 @@
             </nav>
         </div>
         <div class="p-2 pb-4 flex flex-col items-center gap-2">
-            <button onclick="triggerDirectInstall()" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-accent/20 text-accentLight hover:bg-accent/30 flex items-center justify-center transition-all border border-accent/30 shadow-lg glow-accent" title="إنشاء اختصار مباشر">
-                <i class="fas fa-plus-circle text-base md:text-lg"></i>
-            </button>
             <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20 hover:scale-105 flex items-center justify-center transition-all duration-300 border border-tgBlue/20">
                 <i class="fab fa-telegram-plane text-base md:text-lg"></i>
             </a>
@@ -369,7 +366,7 @@
                 <i class="fas fa-bolt text-amber-400"></i>
                 <span>احصل على تجربة تطبيق كاملة بإنشاء اختصار على شاشتك</span>
             </div>
-            <button onclick="triggerDirectInstall()" class="bg-accent hover:bg-accentHover text-white px-3 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-md cursor-pointer transition-transform active:scale-95">
+            <button onclick="switchView('settingsView')" class="bg-accent hover:bg-accentHover text-white px-3 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-md cursor-pointer transition-transform active:scale-95">
                 <i class="fas fa-plus-circle"></i> إنشاء اختصار
             </button>
         </div>
@@ -519,7 +516,7 @@
                         </span>
                         الاستماع مؤخراً
                     </h2>
-                    <p class="text-textMuted text-xs mt-1 mr-9">آخر المقاطع التي استمعت إليها</p>
+                    <p class="text-textMuted text-xs mt-1 mr-9">آخر المقاطع التي استمعت إليها (مُحدّث باستمرار)</p>
                 </div>
                 <button onclick="clearRecentHistory()" class="btn bg-panel/60 text-textMuted hover:text-red-400 text-xs border border-panelBorder/40 py-2 px-3">
                     <i class="fas fa-trash-alt"></i> مسح السجل
@@ -1006,6 +1003,7 @@
         let sleepTimerInterval = null;
         let sleepTimerEndTime = null;
         let pendingTgItem = null;
+        let recentLiveTickerInterval = null;
 
         const mediaContainer = document.getElementById('floatingPlayer');
         const videoElement = document.getElementById('globalVideoElement');
@@ -1041,6 +1039,7 @@
             setupAdvancedDraggable(mediaContainer, document.getElementById('playerHeader'));
             setupScrubbing();
             setupVideoEvents();
+            setupContinuousRecentUpdates();
 
             const inputsList = document.querySelectorAll('input, select, textarea');
             inputsList.forEach(inputEl => {
@@ -1071,6 +1070,15 @@
             }
         });
 
+        function setupContinuousRecentUpdates() {
+            if (recentLiveTickerInterval) clearInterval(recentLiveTickerInterval);
+            recentLiveTickerInterval = setInterval(() => {
+                if (document.getElementById('recentView') && document.getElementById('recentView').classList.contains('active')) {
+                    renderRecentlyPlayed();
+                }
+            }, 15000);
+        }
+
         function updateSidebarPlayingState(isPlaying) {
             const logoContainer = document.getElementById('sidebarLogoIcon');
             const iconEl = document.getElementById('sidebarIconEl');
@@ -1095,6 +1103,7 @@
                 }
                 updateSidebarPlayingState(true);
                 if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
+                updateActivePlayingHighlight();
             };
             videoElement.onpause = () => {
                 document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
