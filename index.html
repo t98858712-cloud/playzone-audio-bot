@@ -522,16 +522,16 @@
                             <i class="fas fa-mobile-alt text-accent text-xs sm:text-sm"></i>
                         </div>
                         <div>
-                            <h3 class="text-xs sm:text-sm font-bold text-white">تطبيق الهاتف</h3>
-                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">تثبيت التطبيق على جهازك أو إضافته للشاشة الرئيسية</p>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">اختصار الشاشة الرئيسية</h3>
+                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">إضافة اختصار مباشر للتطبيق على شاشة هاتفك للوصول السريع</p>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <button onclick="installAndroidApp()" id="androidInstallBtn" class="btn bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-500/30 text-xs py-2.5">
-                            <i class="fab fa-android text-sm"></i> تثبيت للأندرويد (APK / PWA)
+                            <i class="fab fa-android text-sm"></i> إضافة اختصار (أندرويد)
                         </button>
                         <button onclick="showIosInstructions()" class="btn bg-gray-800/80 text-white hover:bg-gray-700/80 border border-panelBorder/50 text-xs py-2.5">
-                            <i class="fab fa-apple text-sm"></i> إضافة للشاشة (للآيفون iOS)
+                            <i class="fab fa-apple text-sm"></i> إضافة اختصار (آيفون)
                         </button>
                     </div>
                 </div>
@@ -730,11 +730,11 @@
             <div class="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-emerald-500/20">
                 <i class="fab fa-android"></i>
             </div>
-            <h3 class="text-base sm:text-lg font-black mb-2 text-white">تثبيت التطبيق للأندرويد</h3>
+            <h3 class="text-base sm:text-lg font-black mb-2 text-white">إضافة اختصار للأندرويد</h3>
             <div class="text-textMuted text-xs mb-5 text-right space-y-2.5 leading-relaxed bg-bgDeep/60 p-3.5 rounded-xl border border-panelBorder/40">
-                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">1</span> اضغط زر القائمة <i class="fas fa-ellipsis-v text-emerald-400"></i> (الثلاث نقاط) في متصفحك.</p>
-                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">2</span> اختر <b>"تثبيت التطبيق"</b> أو <b>"إضافة إلى الشاشة الرئيسية"</b>.</p>
-                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">3</span> اضغط <b>"تثبيت"</b> وسيعمل كـ تطبيق كامل بدون شريط متصفح!</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">1</span> اضغط زر القائمة <i class="fas fa-ellipsis-v text-emerald-400"></i> (الثلاث نقاط) في المتصفح.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">2</span> اختر <b>"إضافة إلى الشاشة الرئيسية"</b> أو <b>"تثبيت التطبيق"</b>.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">3</span> اضغط <b>"إضافة"</b> لتأكيد إنشاء الاختصار وسيعمل كـ تطبيق كامل!</p>
             </div>
             <button onclick="closeAndroidModal()" class="btn bg-gradient-to-r from-emerald-600 to-teal-600 text-white w-full text-xs sm:text-sm shadow-lg py-2.5">حسناً، فهمت</button>
         </div>
@@ -745,11 +745,11 @@
             <div class="w-14 h-14 bg-white/10 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-white/20">
                 <i class="fab fa-apple"></i>
             </div>
-            <h3 class="text-base sm:text-lg font-black mb-2 text-white">إضافة التطبيق للآيفون (iOS)</h3>
+            <h3 class="text-base sm:text-lg font-black mb-2 text-white">إضافة اختصار للآيفون (iOS)</h3>
             <div class="text-textMuted text-xs mb-5 text-right space-y-2.5 leading-relaxed bg-bgDeep/60 p-3.5 rounded-xl border border-panelBorder/40">
                 <p class="flex items-center gap-2"><span class="w-5 h-5 bg-accent/20 text-accent font-bold rounded-full inline-flex items-center justify-center text-[10px]">1</span> اضغط على زر المشاركة <i class="fas fa-share-square text-accent"></i> في أسفل متصفح Safari.</p>
                 <p class="flex items-center gap-2"><span class="w-5 h-5 bg-accent/20 text-accent font-bold rounded-full inline-flex items-center justify-center text-[10px]">2</span> اختر <b>"إضافة إلى الشاشة الرئيسية"</b> <i class="far fa-plus-square text-accent"></i>.</p>
-                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-accent/20 text-accent font-bold rounded-full inline-flex items-center justify-center text-[10px]">3</span> اضغط على <b>"إضافة"</b> في الأعلى ليعمل كتطبيق كامل على جهازك.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-accent/20 text-accent font-bold rounded-full inline-flex items-center justify-center text-[10px]">3</span> اضغط على <b>"إضافة"</b> في الأعلى لإنشاء الاختصار مباشرة على شاشتك.</p>
             </div>
             <button onclick="closeIosModal()" class="btn bg-gradient-to-r from-accent to-purple-600 text-white w-full text-xs sm:text-sm shadow-lg glow-accent py-2.5">حسناً، فهمت</button>
         </div>
@@ -775,11 +775,11 @@
 
         window.installAndroidApp = async function() {
             if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
-                showToast("التطبيق مثبت بالفعل على جهازك 🎉", "success");
+                showToast("الاختصار موجود بالفعل على شاشتك الرئيسية 🎉", "success");
                 return;
             }
             if (isMiniApp && tg && tg.openLink) {
-                showToast("جاري فتح الموقع في المتصفح الخارجي للتثبيت... 📲", "success");
+                showToast("جاري فتح الموقع في المتصفح لإضافة الاختصار... 📲", "success");
                 try {
                     tg.openLink(window.location.href, { try_instant_view: false });
                 } catch(e) {
@@ -791,7 +791,7 @@
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') {
-                    showToast("جاري تثبيت التطبيق على جهازك... 🎉", "success");
+                    showToast("تمت إضافة الاختصار إلى الشاشة الرئيسية بنجاح! 🎉", "success");
                 }
                 deferredPrompt = null;
             } else {
