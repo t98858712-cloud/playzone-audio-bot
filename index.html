@@ -832,7 +832,8 @@
                     charIdx++;
                 }
 
-                if (charIdx > 0) {
+                const searchView = document.getElementById('searchView');
+                if (charIdx > 0 && searchView && searchView.classList.contains('active')) {
                     triggerHaptic('light');
                 }
 
@@ -1378,7 +1379,35 @@
                 document.getElementById('tgModal').classList.replace('hidden', 'flex');
                 return;
             }
-            sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
+            
+            showToast("جاري تحضير الملف وإرساله إلى تيليجرام...", "success");
+            
+            const blob = await getTrackBlob(id);
+            if (blob) {
+                const formData = new FormData();
+                formData.append('chat_id', tgId.toString());
+                formData.append('is_audio', item.is_audio ? 'true' : 'false');
+                formData.append('title', item.title || 'مقطع');
+                formData.append('performer', item.uploader || 'PlayZone');
+                formData.append('duration', Math.floor(Number(item.duration)) || 0);
+                formData.append('thumb', item.thumb || '');
+                formData.append('file_url', item.url || '');
+                formData.append('file', blob, item.title + (item.is_audio ? '.mp3' : '.mp4'));
+
+                try {
+                    const res = await fetch(`${BACKEND_URL}/api/send_telegram`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (data.success) showToast("تم إرسال الملف إلى حسابك بنجاح! 🎉", "success");
+                    else showToast("فشل الإرسال للبوت: " + data.error, "error");
+                } catch(e) {
+                    sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
+                }
+            } else {
+                sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
+            }
         };
 
         async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {
