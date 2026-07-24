@@ -725,6 +725,21 @@
         </div>
     </div>
 
+    <div id="androidModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] hidden flex-col items-center justify-center p-4">
+        <div class="glass-card p-5 sm:p-7 max-w-sm w-full text-center">
+            <div class="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-emerald-500/20">
+                <i class="fab fa-android"></i>
+            </div>
+            <h3 class="text-base sm:text-lg font-black mb-2 text-white">تثبيت التطبيق للأندرويد</h3>
+            <div class="text-textMuted text-xs mb-5 text-right space-y-2.5 leading-relaxed bg-bgDeep/60 p-3.5 rounded-xl border border-panelBorder/40">
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">1</span> اضغط زر القائمة <i class="fas fa-ellipsis-v text-emerald-400"></i> (الثلاث نقاط) في متصفحك.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">2</span> اختر <b>"تثبيت التطبيق"</b> أو <b>"إضافة إلى الشاشة الرئيسية"</b>.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">3</span> اضغط <b>"تثبيت"</b> وسيعمل كـ تطبيق كامل بدون شريط متصفح!</p>
+            </div>
+            <button onclick="closeAndroidModal()" class="btn bg-gradient-to-r from-emerald-600 to-teal-600 text-white w-full text-xs sm:text-sm shadow-lg py-2.5">حسناً، فهمت</button>
+        </div>
+    </div>
+
     <div id="iosModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] hidden flex-col items-center justify-center p-4">
         <div class="glass-card p-5 sm:p-7 max-w-sm w-full text-center">
             <div class="w-14 h-14 bg-white/10 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-white/20">
@@ -759,8 +774,12 @@
         });
 
         window.installAndroidApp = async function() {
+            if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+                showToast("التطبيق مثبت بالفعل على جهازك 🎉", "success");
+                return;
+            }
             if (isMiniApp && tg && tg.openLink) {
-                showToast("جاري فتح الموقع في المتصفح الخارجي للتمكن من التثبيت... 📲", "success");
+                showToast("جاري فتح الموقع في المتصفح الخارجي للتثبيت... 📲", "success");
                 try {
                     tg.openLink(window.location.href, { try_instant_view: false });
                 } catch(e) {
@@ -776,8 +795,12 @@
                 }
                 deferredPrompt = null;
             } else {
-                showToast("لتثبيت التطبيق: اضغط 3 نقاط (⋮) بالمتصفح واختر 'تثبيت التطبيق' أو 'إضافة للشاشة الرئيسية' 📲", "success");
+                document.getElementById('androidModal').classList.replace('hidden', 'flex');
             }
+        };
+
+        window.closeAndroidModal = function() {
+            document.getElementById('androidModal').classList.replace('flex', 'hidden');
         };
 
         window.showIosInstructions = function() {
