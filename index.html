@@ -247,6 +247,15 @@
             pointer-events: none;
         }
 
+        /* تنسيق مؤشر الكيبورد لـ Typewriter Effect */
+        .typing-cursor::after {
+            content: '|';
+            animation: blink 0.7s infinite;
+            color: #8b5cf6;
+            margin-right: 3px;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
         @media (max-width: 640px) {
             .sidebar-glow {
                 width: 64px !important;
@@ -312,9 +321,9 @@
                 <div class="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl"></div>
                 <div class="absolute bottom-0 left-0 w-24 h-24 bg-purple-600/5 rounded-full blur-2xl"></div>
                 <div class="relative">
-                    <div class="flex items-center gap-3 mb-2">
-                        <h2 class="text-xl sm:text-2xl md:text-3xl font-black text-white">ما الذي ترغب بتحميله؟</h2>
-                        <span class="text-xl sm:text-2xl md:text-3xl">✨</span>
+                    <!-- Dynamic Typewriter Title Header -->
+                    <div class="flex items-center gap-2 mb-2 min-h-[40px]">
+                        <h2 id="typingTitle" class="text-xl sm:text-2xl md:text-3xl font-black text-white typing-cursor"></h2>
                     </div>
                     <p class="text-textMuted mb-5 text-xs sm:text-sm leading-relaxed">ابحث عن مقاطع الفيديو أو الأغاني لتحميلها وتشغيلها مباشرة.</p>
                     <div class="flex flex-col sm:flex-row gap-3">
@@ -735,6 +744,54 @@
             } catch(e) {}
         }
 
+        // ===== Typewriter Effect Engine =====
+        function initTypewriter() {
+            const el = document.getElementById('typingTitle');
+            if (!el) return;
+            const phrases = [
+                "الصق الرابط أو ابدأ بالبحث…",
+                "ابحث عن موسيقاك المفضلة…",
+                "اكتب ما تريد تحميله…",
+                "ابحث واستمتع…",
+                "اعثر على ما تريد…",
+                "ابدأ البحث…",
+                "اكتشف أغنيتك القادمة…",
+                "ماذا تريد الاستماع إليه؟",
+                "ما الأغنية التي تبحث عنها؟",
+                "ماذا ستشغّل اليوم؟",
+                "ماذا ستستمع اليوم؟",
+                "ما الذي ترغب بتحميله؟"
+            ];
+            let phraseIdx = 0;
+            let charIdx = 0;
+            let isDeleting = false;
+
+            function typeStep() {
+                const currentPhrase = phrases[phraseIdx];
+                if (isDeleting) {
+                    el.innerText = currentPhrase.substring(0, charIdx - 1);
+                    charIdx--;
+                } else {
+                    el.innerText = currentPhrase.substring(0, charIdx + 1);
+                    charIdx++;
+                }
+
+                let speed = isDeleting ? 30 : 70;
+
+                if (!isDeleting && charIdx === currentPhrase.length) {
+                    speed = 2000; // Pause when phrase is fully typed
+                    isDeleting = true;
+                } else if (isDeleting && charIdx === 0) {
+                    isDeleting = false;
+                    phraseIdx = (phraseIdx + 1) % phrases.length;
+                    speed = 350; // Short delay before typing next phrase
+                }
+
+                setTimeout(typeStep, speed);
+            }
+            typeStep();
+        }
+
         // ===== State =====
         let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
         let recentlyPlayed = JSON.parse(localStorage.getItem('pz_recently_played')) || [];
@@ -761,6 +818,8 @@
 
         // ===== Initialization =====
         window.addEventListener('DOMContentLoaded', () => {
+            initTypewriter();
+
             if (isMiniApp) {
                 tg.ready();
                 tg.expand();
