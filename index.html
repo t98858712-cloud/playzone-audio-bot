@@ -187,15 +187,28 @@
         #floatingPlayer.compact-mode { width: min(340px, calc(100vw - 92px)) !important; height: auto !important; }
         #floatingPlayer.compact-mode #playerBody { display: none; }
 
-        @keyframes marqueeTitle {
-            0% { transform: translateX(100%); }
-            100% { transform: translateX(-100%); }
+        .marquee-wrapper {
+            width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+            mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
         }
+
+        @keyframes smoothMarquee {
+            0% { transform: translate3d(100%, 0, 0); }
+            100% { transform: translate3d(-100%, 0, 0); }
+        }
+
         .animate-marquee {
             display: inline-block;
             white-space: nowrap;
-            animation: marqueeTitle 12s linear infinite;
+            padding-right: 15px;
+            will-change: transform;
+            animation: smoothMarquee 15s linear infinite;
         }
+
         .animate-marquee:hover {
             animation-play-state: paused;
         }
@@ -583,7 +596,7 @@
     <div id="floatingPlayer">
         <div id="playerHeader" class="drag-handle p-3 bg-gradient-to-r from-bgDeep/80 to-panel/80 border-b border-panelBorder/30 flex items-center justify-between">
             <div class="flex items-center gap-2 overflow-hidden flex-1 pl-1">
-                <div class="w-full overflow-hidden whitespace-nowrap">
+                <div class="marquee-wrapper">
                     <p id="playerTitle" class="font-bold text-xs text-white animate-marquee">جاهز للتشغيل</p>
                 </div>
             </div>
@@ -1133,7 +1146,10 @@
                                 document.getElementById('progPercent').innerText = '100%'; document.getElementById('progBar').style.width = '100%';
                                 const dlArea = document.getElementById('directDownloadArea'); const dlBtn = document.getElementById('directDownloadBtn');
                                 const fullFileUrl = BACKEND_URL + prog.url;
-                                dlBtn.href = fullFileUrl; dlBtn.setAttribute('download', prog.title + (prog.is_audio ? '.mp3' : '.mp4'));
+                                const filename = prog.url.split('/').pop();
+                                const downloadEndpoint = BACKEND_URL + '/api/download_file/' + filename;
+                                dlBtn.href = downloadEndpoint;
+                                dlBtn.setAttribute('download', prog.title + (prog.is_audio ? '.mp3' : '.mp4'));
                                 dlArea.classList.remove('hidden');
                                 
                                 const newItem = { id: Date.now().toString(), title: prog.title, url: fullFileUrl, thumb: prog.thumb, uploader: prog.uploader, duration: prog.duration, is_audio: prog.is_audio, timestamp: Date.now(), favorite: false };
@@ -1212,7 +1228,8 @@
                 const durationStr = formatTime(item.duration || 0);
                 const favClass = item.favorite ? 'fas fa-heart text-red-400' : 'far fa-heart';
                 const typeTag = item.is_audio ? '<span class="bg-accent/10 text-accentLight text-[9px] px-2 py-0.5 rounded-md font-bold">MP3</span>' : '<span class="bg-fuchsia-500/10 text-fuchsia-400 text-[9px] px-2 py-0.5 rounded-md font-bold">MP4</span>';
-                const fileExt = item.is_audio ? 'mp3' : 'mp4';
+                const filename = item.url.split('/').pop();
+                const downloadUrl = BACKEND_URL + '/api/download_file/' + filename;
                 container.innerHTML += `
                     <div class="lib-card bg-panel/60 backdrop-blur-sm rounded-2xl p-3.5 border border-panelBorder/40 flex gap-3 items-center relative group w-full">
                         <div class="relative w-20 h-12 rounded-xl overflow-hidden border border-panelBorder/40 flex-shrink-0 cursor-pointer shadow-lg" onclick="playMediaTrack(${actualIndex})">
@@ -1235,7 +1252,7 @@
                             <button onclick="deleteFromLibrary('${item.id}')" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 active:scale-90 transition-all flex items-center justify-center" title="حذف">
                                 <i class="fas fa-trash-alt text-[10px]"></i>
                             </button>
-                            <a href="${item.url}" download="${item.title}.${fileExt}" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 active:scale-90 transition-all flex items-center justify-center" title="تحميل">
+                            <a href="${downloadUrl}" download="${item.title}.${item.is_audio ? 'mp3' : 'mp4'}" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 active:scale-90 transition-all flex items-center justify-center" title="تحميل">
                                 <i class="fas fa-download text-[10px]"></i>
                             </a>
                             <button onclick="triggerSendToTelegram('${item.id}')" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-tgBlue hover:bg-tgBlue/10 hover:border-tgBlue/20 active:scale-90 transition-all flex items-center justify-center" title="إرسال لتيليجرام">
