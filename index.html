@@ -289,9 +289,9 @@
     <aside class="sidebar-glow w-[68px] md:w-[82px] bg-panel/80 backdrop-blur-xl border-l border-panelBorder/50 flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
         <div>
             <div class="h-16 md:h-20 flex items-center justify-center border-b border-panelBorder/30">
-                <div class="w-10 h-10 md:w-11 md:h-11 bg-gradient-to-br from-accent/20 to-purple-900/30 rounded-2xl flex items-center justify-center text-accent text-xl relative group cursor-pointer border border-accent/20">
+                <div id="sidebarLogoIcon" class="w-10 h-10 md:w-11 md:h-11 bg-gradient-to-br from-accent/20 to-purple-900/30 rounded-2xl flex items-center justify-center text-accent text-xl relative group cursor-pointer border border-accent/20 transition-all duration-300">
                     <div class="absolute inset-0 bg-accent/10 rounded-2xl blur-lg opacity-60 group-hover:opacity-100 transition-opacity"></div>
-                    <i class="fas fa-headphones z-10 text-sm text-accentLight"></i>
+                    <i id="sidebarIconEl" class="fas fa-headphones z-10 text-sm text-accentLight transition-transform duration-300"></i>
                 </div>
             </div>
             <nav class="mt-4 md:mt-6 px-1.5 md:px-2 space-y-3">
@@ -626,8 +626,8 @@
                 <button onclick="toggleShuffle(event)" id="shuffleBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="عشوائي">
                     <i class="fas fa-random"></i>
                 </button>
-                <button onclick="seekMedia(-10)" class="px-1.5 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-0.5 border border-panelBorder/30 transition-all flex-shrink-0" title="تأخير 10 ثوانٍ">
-                    <i class="fas fa-undo text-[8px]"></i>10
+                <button onclick="seekMedia(10)" class="px-1.5 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-0.5 border border-panelBorder/30 transition-all flex-shrink-0" title="تقديم 10 ثوانٍ للأمام">
+                    <i class="fas fa-rotate-right text-[9px]"></i>10
                 </button>
                 <button onclick="playPrev()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="السابق">
                     <i class="fas fa-step-backward"></i>
@@ -640,8 +640,8 @@
                 <button onclick="playNext()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="التالي">
                     <i class="fas fa-step-forward"></i>
                 </button>
-                <button onclick="seekMedia(10)" class="px-1.5 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-0.5 border border-panelBorder/30 transition-all flex-shrink-0" title="تقديم 10 ثوانٍ">
-                    10<i class="fas fa-redo text-[8px]"></i>
+                <button onclick="seekMedia(-10)" class="px-1.5 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-0.5 border border-panelBorder/30 transition-all flex-shrink-0" title="رجوع 10 ثوانٍ للوراء">
+                    10<i class="fas fa-rotate-left text-[9px]"></i>
                 </button>
                 <button onclick="toggleRepeat(event)" id="repeatBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="تكرار المقطع تلقائياً">
                     <i class="fas fa-repeat"></i>
@@ -881,6 +881,19 @@
             }
         });
 
+        function updateSidebarPlayingState(isPlaying) {
+            const logoContainer = document.getElementById('sidebarLogoIcon');
+            const iconEl = document.getElementById('sidebarIconEl');
+            if (!logoContainer || !iconEl) return;
+            if (isPlaying) {
+                logoContainer.classList.add('border-accent', 'shadow-lg', 'shadow-accent/40', 'scale-105');
+                iconEl.className = "fas fa-compact-disc z-10 text-sm text-white album-spin";
+            } else {
+                logoContainer.classList.remove('border-accent', 'shadow-lg', 'shadow-accent/40', 'scale-105');
+                iconEl.className = "fas fa-headphones z-10 text-sm text-accentLight";
+            }
+        }
+
         function setupVideoEvents() {
             videoElement.onplay = () => {
                 document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
@@ -888,12 +901,14 @@
                     document.getElementById('playerCoverImg').style.animationPlayState = 'running';
                     animateVisualizerBars(true);
                 }
+                updateSidebarPlayingState(true);
                 if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
             };
             videoElement.onpause = () => {
                 document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
                 document.getElementById('playerCoverImg').style.animationPlayState = 'paused';
                 animateVisualizerBars(false);
+                updateSidebarPlayingState(false);
                 if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
             };
         }
