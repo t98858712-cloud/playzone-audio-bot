@@ -633,24 +633,22 @@
         <i class="fas fa-random"></i>
     </button>
 
-    <!-- زر التقديم (أصبح على اليمين) -->
     <button onclick="seekMedia(10)" class="px-2 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-1 border border-panelBorder/30 transition-all flex-shrink-0" title="تقديم 10 ثوانٍ">
         <i class="fas fa-rotate-right text-[9px]"></i>10
-    </button>
-
-    <button onclick="playPrev()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="السابق">
-        <i class="fas fa-step-backward"></i>
-    </button>
-
-    <button onclick="togglePlay()" id="playPauseBtn" class="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-purple-700 hover:from-accentHover hover:to-purple-800 text-white flex items-center justify-center text-sm shadow-lg glow-accent active:scale-90 transition-all flex-shrink-0">
-        <i class="fas fa-play ml-0.5"></i>
     </button>
 
     <button onclick="playNext()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="التالي">
         <i class="fas fa-step-forward"></i>
     </button>
 
-    <!-- زر التأخير / الرجوع (أصبح على اليسار) -->
+    <button onclick="togglePlay()" id="playPauseBtn" class="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-purple-700 hover:from-accentHover hover:to-purple-800 text-white flex items-center justify-center text-sm shadow-lg glow-accent active:scale-90 transition-all flex-shrink-0">
+        <i class="fas fa-play ml-0.5"></i>
+    </button>
+
+    <button onclick="playPrev()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="السابق">
+        <i class="fas fa-step-backward"></i>
+    </button>
+
     <button onclick="seekMedia(-10)" class="px-2 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-1 border border-panelBorder/30 transition-all flex-shrink-0" title="رجوع 10 ثوانٍ">
         10<i class="fas fa-rotate-left text-[9px]"></i>
     </button>
