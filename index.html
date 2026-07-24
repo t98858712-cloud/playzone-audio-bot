@@ -51,6 +51,16 @@
             overflow: hidden;
             font-family: 'Tajawal', sans-serif;
             overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        button, a, input, select {
+            -webkit-tap-highlight-color: transparent;
+            outline: none !important;
+        }
+        button:focus, a:focus {
+            outline: none !important;
+            box-shadow: none !important;
         }
 
         ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -120,20 +130,20 @@
             position: fixed;
             bottom: 16px;
             left: 16px;
-            width: min(380px, calc(100vw - 92px));
-            max-height: calc(100dvh - 32px);
-            background: rgba(12, 12, 20, 0.95);
+            width: min(380px, calc(100vw - 84px));
+            max-height: calc(100dvh - 24px);
+            background: rgba(12, 12, 20, 0.96);
             backdrop-filter: blur(30px) saturate(1.5);
             -webkit-backdrop-filter: blur(30px) saturate(1.5);
-            border: 1px solid rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.25);
             border-radius: 24px;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.8), 0 0 30px rgba(139, 92, 246, 0.15);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.85), 0 0 30px rgba(139, 92, 246, 0.15);
             z-index: 100;
             overflow-y: auto;
             display: none;
             opacity: 0;
             transform: scale(0.92) translateY(20px);
-            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
         }
         #floatingPlayer.active-player { display: block !important; opacity: 1; transform: scale(1) translateY(0); }
         
@@ -247,7 +257,6 @@
             pointer-events: none;
         }
 
-        /* تنسيق مؤشر الكيبورد لـ Typewriter Effect */
         .typing-cursor::after {
             content: '|';
             animation: blink 0.7s infinite;
@@ -258,12 +267,12 @@
 
         @media (max-width: 640px) {
             .sidebar-glow {
-                width: 64px !important;
+                width: 60px !important;
             }
             #floatingPlayer {
                 left: 8px;
                 bottom: 8px;
-                width: calc(100vw - 80px);
+                width: calc(100vw - 76px);
                 border-radius: 20px;
             }
             .btn {
@@ -591,8 +600,8 @@
             <div id="videoContainer" class="hidden w-full aspect-video rounded-2xl overflow-hidden bg-black mb-3 border border-panelBorder/50 shadow-xl">
                 <video id="globalVideoElement" class="w-full h-full object-contain" ontimeupdate="updatePlayerProgress()" onended="handleMediaEnd()"></video>
             </div>
-            <div id="audioVisualizer" class="flex flex-col items-center justify-center py-1.5 mb-1.5">
-                <div class="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-accent/20 shadow-2xl overflow-hidden mb-2 bg-bgDeep">
+            <div id="audioVisualizer" class="flex flex-col items-center justify-center py-1 mb-1">
+                <div class="relative w-14 h-14 sm:w-18 sm:h-18 rounded-full border-2 border-accent/20 shadow-2xl overflow-hidden mb-1.5 bg-bgDeep">
                     <img id="playerCoverImg" src="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png" class="w-full h-full object-cover album-spin" alt="album art">
                     <div class="absolute inset-0 bg-gradient-to-tr from-black/50 to-transparent"></div>
                     <div class="absolute w-4 h-4 bg-bgDeep rounded-full top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 border-2 border-panelBorder flex items-center justify-center shadow-inner">
@@ -613,34 +622,34 @@
                 <span id="trackSource" class="bg-accent/10 text-accentLight px-2 py-0.5 rounded-lg text-[9px] font-bold border border-accent/20">صوت</span>
             </div>
             <!-- Controls -->
-            <div class="flex items-center justify-between gap-1">
-                <button onclick="toggleShuffle()" id="shuffleBtn" class="w-7 h-7 rounded-lg text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs" title="عشوائي">
+            <div class="flex items-center justify-between gap-1 px-0.5">
+                <button onclick="toggleShuffle(event)" id="shuffleBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="عشوائي">
                     <i class="fas fa-random"></i>
                 </button>
-                <button onclick="seekMedia(-10)" class="w-7 h-7 rounded-lg text-white/80 hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs" title="تأخير 10 ثوانٍ">
-                    <i class="fas fa-rotate-left"></i>
+                <button onclick="seekMedia(-10)" class="px-1.5 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-0.5 border border-panelBorder/30 transition-all flex-shrink-0" title="تأخير 10 ثوانٍ">
+                    <i class="fas fa-undo text-[8px]"></i>10
                 </button>
-                <button onclick="playPrev()" class="w-7 h-7 rounded-lg text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs" title="السابق">
+                <button onclick="playPrev()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="السابق">
                     <i class="fas fa-step-backward"></i>
                 </button>
 
-                <button onclick="togglePlay()" id="playPauseBtn" class="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-accent to-purple-700 hover:from-accentHover hover:to-purple-800 text-white flex items-center justify-center text-xs sm:text-sm shadow-lg glow-accent active:scale-90 transition-all">
+                <button onclick="togglePlay()" id="playPauseBtn" class="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-purple-700 hover:from-accentHover hover:to-purple-800 text-white flex items-center justify-center text-sm shadow-lg glow-accent active:scale-90 transition-all flex-shrink-0">
                     <i class="fas fa-play ml-0.5"></i>
                 </button>
 
-                <button onclick="playNext()" class="w-7 h-7 rounded-lg text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs" title="التالي">
+                <button onclick="playNext()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="التالي">
                     <i class="fas fa-step-forward"></i>
                 </button>
-                <button onclick="seekMedia(10)" class="w-7 h-7 rounded-lg text-white/80 hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs" title="تقديم 10 ثوانٍ">
-                    <i class="fas fa-rotate-right"></i>
+                <button onclick="seekMedia(10)" class="px-1.5 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-0.5 border border-panelBorder/30 transition-all flex-shrink-0" title="تقديم 10 ثوانٍ">
+                    10<i class="fas fa-redo text-[8px]"></i>
                 </button>
-                <button onclick="toggleRepeat()" id="repeatBtn" class="w-7 h-7 rounded-lg text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs" title="تكرار">
-                    <i class="fas fa-redo"></i>
+                <button onclick="toggleRepeat(event)" id="repeatBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="تكرار المقطع تلقائياً">
+                    <i class="fas fa-repeat"></i>
                 </button>
             </div>
             <!-- Bottom Controls -->
             <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-panelBorder/30">
-                <button onclick="changeSpeed()" id="speedBtn" class="text-[9px] font-bold font-mono px-2 py-0.5 border border-panelBorder/50 rounded-lg text-textMuted hover:text-white hover:border-accent/30 transition-all bg-panelLight/30">1.0x</button>
+                <button onclick="changeSpeed(event)" id="speedBtn" class="text-[9px] font-bold font-mono px-2 py-0.5 border border-panelBorder/50 rounded-lg text-textMuted hover:text-white hover:border-accent/30 transition-all bg-panelLight/30">1.0x</button>
                 <div class="flex items-center gap-2">
                     <button onclick="toggleMute()" id="muteBtn" class="text-textMuted hover:text-white transition-colors">
                         <i class="fas fa-volume-up text-xs"></i>
@@ -856,6 +865,12 @@
 
             document.getElementById('url').addEventListener('keydown', function(e) {
                 if(e.key === 'Enter') { e.preventDefault(); this.blur(); processInput(); }
+            });
+
+            // Remove focus/hover lock on buttons after click
+            document.addEventListener('click', (e) => {
+                const target = e.target.closest('button, a, input[type="button"]');
+                if (target) target.blur();
             });
 
             // Restore sleep timer if active
@@ -1382,20 +1397,45 @@
         };
 
         window.playPrev = function() {
+            if (videoElement && videoElement.currentTime > 3) {
+                videoElement.currentTime = 0;
+                videoElement.play().catch(()=>{});
+                return;
+            }
             if (myLibrary.length === 0) return;
             let idx = currentPlayingIndex - 1; if (idx < 0) idx = myLibrary.length - 1; playMediaTrack(idx);
         };
 
-        window.toggleShuffle = function() {
-            isShuffle = !isShuffle; const btn = document.getElementById('shuffleBtn');
-            if (isShuffle) { btn.classList.add('text-accent', 'bg-accent/10'); btn.classList.remove('text-textMuted'); }
-            else { btn.classList.remove('text-accent', 'bg-accent/10'); btn.classList.add('text-textMuted'); }
+        window.toggleRepeat = function(e) {
+            if (e && e.currentTarget) e.currentTarget.blur();
+            isRepeat = !isRepeat;
+            const btn = document.getElementById('repeatBtn');
+            if (isRepeat) {
+                btn.classList.add('text-accent', 'bg-accent/10');
+                btn.classList.remove('text-textMuted');
+                showToast("تم تفعيل التكرار التلقائي 🔁", "success");
+            } else {
+                btn.classList.remove('text-accent', 'bg-accent/10');
+                btn.classList.add('text-textMuted');
+                showToast("تم تعطيل التكرار التلقائي", "success");
+            }
+            triggerHaptic('light');
         };
 
-        window.toggleRepeat = function() {
-            isRepeat = !isRepeat; const btn = document.getElementById('repeatBtn');
-            if (isRepeat) { btn.classList.add('text-accent', 'bg-accent/10'); btn.classList.remove('text-textMuted'); }
-            else { btn.classList.remove('text-accent', 'bg-accent/10'); btn.classList.add('text-textMuted'); }
+        window.toggleShuffle = function(e) {
+            if (e && e.currentTarget) e.currentTarget.blur();
+            isShuffle = !isShuffle;
+            const btn = document.getElementById('shuffleBtn');
+            if (isShuffle) {
+                btn.classList.add('text-accent', 'bg-accent/10');
+                btn.classList.remove('text-textMuted');
+                showToast("تم تفعيل التشغيل العشوائي 🔀", "success");
+            } else {
+                btn.classList.remove('text-accent', 'bg-accent/10');
+                btn.classList.add('text-textMuted');
+                showToast("تم تعطيل التشغيل العشوائي", "success");
+            }
+            triggerHaptic('light');
         };
 
         window.updatePlayerProgress = function() {
@@ -1438,9 +1478,24 @@
         };
 
         let currentSpeed = 1;
-        window.changeSpeed = function() {
-            const spds = [1, 1.25, 1.5, 1.75, 2]; let idx = spds.indexOf(currentSpeed); idx = (idx + 1) % spds.length;
-            currentSpeed = spds[idx]; videoElement.playbackRate = currentSpeed; document.getElementById('speedBtn').innerText = currentSpeed + 'x';
+        window.changeSpeed = function(e) {
+            if (e && e.currentTarget) e.currentTarget.blur();
+            const spds = [1, 1.25, 1.5, 1.75, 2];
+            let idx = spds.indexOf(currentSpeed);
+            idx = (idx + 1) % spds.length;
+            currentSpeed = spds[idx];
+            if (videoElement) videoElement.playbackRate = currentSpeed;
+            const btn = document.getElementById('speedBtn');
+            btn.innerText = currentSpeed + 'x';
+            if (currentSpeed !== 1) {
+                btn.classList.add('text-accent', 'border-accent/40', 'bg-accent/10');
+                btn.classList.remove('text-textMuted');
+            } else {
+                btn.classList.remove('text-accent', 'border-accent/40', 'bg-accent/10');
+                btn.classList.add('text-textMuted');
+            }
+            showToast(`سرعة التشغيل: ${currentSpeed}x ⚡`, "success");
+            triggerHaptic('light');
         };
 
         window.handleMediaEnd = function() { if (isRepeat) { videoElement.currentTime = 0; videoElement.play().catch(()=>{}); } else { playNext(); } };
