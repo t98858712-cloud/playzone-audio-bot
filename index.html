@@ -759,15 +759,24 @@
         });
 
         window.installAndroidApp = async function() {
+            if (isMiniApp && tg && tg.openLink) {
+                showToast("جاري فتح الموقع في المتصفح الخارجي للتمكن من التثبيت... 📲", "success");
+                try {
+                    tg.openLink(window.location.href, { try_instant_view: false });
+                } catch(e) {
+                    window.open(window.location.href, '_blank');
+                }
+                return;
+            }
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') {
-                    showToast("جاري تثبيت التطبيق على جهازك...", "success");
+                    showToast("جاري تثبيت التطبيق على جهازك... 🎉", "success");
                 }
                 deferredPrompt = null;
             } else {
-                showToast("يمكنك تثبيت التطبيق مباشرة عبر خيارات المتصفح (تثبيت التطبيق)", "success");
+                showToast("لتثبيت التطبيق: اضغط 3 نقاط (⋮) بالمتصفح واختر 'تثبيت التطبيق' أو 'إضافة للشاشة الرئيسية' 📲", "success");
             }
         };
 
