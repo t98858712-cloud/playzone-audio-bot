@@ -38,327 +38,304 @@
         }
     </script>
     <style>
-* { box-sizing: border-box; }
+        * { box-sizing: border-box; }
 
-body {
-    background-color: #0a0a0f;
-    color: #f4f4f5;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
-    font-family: 'Tajawal', sans-serif;
-    overscroll-behavior: none;
-}
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a0f;
+            color: #f4f4f5;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            font-family: 'Tajawal', sans-serif;
+            overscroll-behavior: none;
+        }
 
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a5e; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a3a5e; }
 
-.modern-input {
-    background: rgba(18, 18, 26, 0.8);
-    border: 1.5px solid #2a2a3e;
-    color: white;
-    border-radius: 14px;
-    padding: 0.85rem 1.3rem;
-    outline: none;
-    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    width: 100%;
-    font-size: 14px;
-    backdrop-filter: blur(10px);
-}
-.modern-input:focus {
-    border-color: #8b5cf6;
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 0 20px rgba(139, 92, 246, 0.1);
-    background: rgba(18, 18, 26, 1);
-}
-.modern-input::placeholder { color: #6b7280; }
+        .modern-input {
+            background: rgba(18, 18, 26, 0.8);
+            border: 1.5px solid #2a2a3e;
+            color: white;
+            border-radius: 14px;
+            padding: 0.85rem 1.3rem;
+            outline: none;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 100%;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+        }
+        .modern-input:focus {
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 0 20px rgba(139, 92, 246, 0.1);
+            background: rgba(18, 18, 26, 1);
+        }
+        .modern-input::placeholder { color: #6b7280; }
 
-.btn {
-    padding: 0.85rem 1.6rem;
-    border-radius: 14px;
-    font-weight: 700;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    user-select: none;
-    position: relative;
-    overflow: hidden;
-    font-size: 14px;
-    letter-spacing: 0.01em;
-    border: none;
-    background: transparent;
-}
-.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
-.btn:active:not(:disabled) { transform: scale(0.96); }
-.btn:hover:not(:disabled) { transform: translateY(-1px); }
+        .btn {
+            padding: 0.85rem 1.6rem;
+            border-radius: 14px;
+            font-weight: 700;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            overflow: hidden;
+            font-size: 14px;
+            letter-spacing: 0.01em;
+            border: none;
+            background: transparent;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+        .btn:active:not(:disabled) { transform: scale(0.96); }
+        .btn:hover:not(:disabled) { transform: translateY(-1px); }
 
-@keyframes shimmer { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-.shimmer-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); animation: shimmer 1.5s infinite linear; }
+        @keyframes shimmer { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+        .shimmer-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); animation: shimmer 1.5s infinite linear; }
 
-.view-section { display: none !important; opacity: 0; }
-.view-section.active { display: block !important; opacity: 1; animation: fadeInView 0.4s ease forwards; }
-.view-section.active.flex-layout { display: flex !important; }
+        .view-section { display: none !important; opacity: 0; }
+        .view-section.active { display: block !important; opacity: 1; animation: fadeInView 0.4s ease forwards; }
+        .view-section.active.flex-layout { display: flex !important; }
 
-@keyframes fadeInView {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-}
+        @keyframes fadeInView {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
 
-#progBar {
-    transition: width 0.5s cubic-bezier(0.1, 0.8, 0.25, 1);
-    box-shadow: 0 0 15px rgba(139, 92, 246, 0.5);
-}
+        #progBar {
+            transition: width 0.5s cubic-bezier(0.1, 0.8, 0.25, 1);
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.5);
+        }
 
-#floatingPlayer {
-    position: fixed;
-    bottom: 24px;
-    left: 24px;
-    width: 380px;
-    max-width: calc(100vw - 32px);
-    background: rgba(12, 12, 20, 0.92);
-    backdrop-filter: blur(30px) saturate(1.5);
-    -webkit-backdrop-filter: blur(30px) saturate(1.5);
-    border: 1px solid rgba(139, 92, 246, 0.15);
-    border-radius: 28px;
-    box-shadow: 0 40px 80px rgba(0,0,0,0.8), 0 0 30px rgba(139, 92, 246, 0.1), inset 0 1px 0 rgba(255,255,255,0.05);
-    z-index: 100;
-    overflow: hidden;
-    display: none;
-    opacity: 0;
-    transform: scale(0.92) translateY(20px);
-    transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-#floatingPlayer.active-player { display: block !important; opacity: 1; transform: scale(1) translateY(0); }
-#floatingPlayer.dragging-player {
-    transform: scale(0.98) !important;
-    opacity: 0.95 !important;
-    border-color: rgba(139, 92, 246, 0.5) !important;
-    box-shadow: 0 50px 100px rgba(0,0,0,0.9), 0 0 40px rgba(139, 92, 246, 0.25) !important;
-}
+        #floatingPlayer {
+            position: fixed;
+            bottom: 16px;
+            left: 16px;
+            width: min(380px, calc(100vw - 32px));
+            max-height: calc(100dvh - 32px);
+            background: rgba(12, 12, 20, 0.95);
+            backdrop-filter: blur(30px) saturate(1.5);
+            -webkit-backdrop-filter: blur(30px) saturate(1.5);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 24px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8), 0 0 30px rgba(139, 92, 246, 0.15);
+            z-index: 100;
+            overflow-y: auto;
+            display: none;
+            opacity: 0;
+            transform: scale(0.92) translateY(20px);
+            transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #floatingPlayer.active-player { display: block !important; opacity: 1; transform: scale(1) translateY(0); }
+        #floatingPlayer.dragging-player {
+            transform: scale(0.98) !important;
+            opacity: 0.95 !important;
+            border-color: rgba(139, 92, 246, 0.5) !important;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.9), 0 0 40px rgba(139, 92, 246, 0.25) !important;
+        }
 
-.drag-handle { cursor: grab; user-select: none; touch-action: none; }
-.drag-handle:active { cursor: grabbing; }
+        .drag-handle { cursor: grab; user-select: none; touch-action: none; }
+        .drag-handle:active { cursor: grabbing; }
 
-@keyframes spinDisk { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-.album-spin { animation: spinDisk 20s linear infinite; }
+        @keyframes spinDisk { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .album-spin { animation: spinDisk 20s linear infinite; }
 
-@keyframes bounceGpu { 0% { transform: scaleY(0.15); } 100% { transform: scaleY(1.0); } }
-.wave-bar {
-    width: 3.5px;
-    height: 28px;
-    background: linear-gradient(to top, #8b5cf6, #a78bfa);
-    border-radius: 4px;
-    transform-origin: bottom;
-    transform: scaleY(0.15);
-    transition: transform 0.15s ease;
-}
-.playing-visualizer .wave-bar { animation: bounceGpu 0.7s ease-in-out infinite alternate; }
-.playing-visualizer .wave-bar:nth-child(1) { animation-delay: 0.1s; animation-duration: 0.5s; }
-.playing-visualizer .wave-bar:nth-child(2) { animation-delay: 0.25s; animation-duration: 0.65s; }
-.playing-visualizer .wave-bar:nth-child(3) { animation-delay: 0.05s; animation-duration: 0.55s; }
-.playing-visualizer .wave-bar:nth-child(4) { animation-delay: 0.35s; animation-duration: 0.75s; }
-.playing-visualizer .wave-bar:nth-child(5) { animation-delay: 0.15s; animation-duration: 0.45s; }
-.playing-visualizer .wave-bar:nth-child(6) { animation-delay: 0.45s; animation-duration: 0.7s; }
-.playing-visualizer .wave-bar:nth-child(7) { animation-delay: 0.2s; animation-duration: 0.6s; }
+        @keyframes bounceGpu { 0% { transform: scaleY(0.15); } 100% { transform: scaleY(1.0); } }
+        .wave-bar {
+            width: 3.5px;
+            height: 28px;
+            background: linear-gradient(to top, #8b5cf6, #a78bfa);
+            border-radius: 4px;
+            transform-origin: bottom;
+            transform: scaleY(0.15);
+            transition: transform 0.15s ease;
+        }
+        .playing-visualizer .wave-bar { animation: bounceGpu 0.7s ease-in-out infinite alternate; }
+        .playing-visualizer .wave-bar:nth-child(1) { animation-delay: 0.1s; animation-duration: 0.5s; }
+        .playing-visualizer .wave-bar:nth-child(2) { animation-delay: 0.25s; animation-duration: 0.65s; }
+        .playing-visualizer .wave-bar:nth-child(3) { animation-delay: 0.05s; animation-duration: 0.55s; }
+        .playing-visualizer .wave-bar:nth-child(4) { animation-delay: 0.35s; animation-duration: 0.75s; }
+        .playing-visualizer .wave-bar:nth-child(5) { animation-delay: 0.15s; animation-duration: 0.45s; }
+        .playing-visualizer .wave-bar:nth-child(6) { animation-delay: 0.45s; animation-duration: 0.7s; }
+        .playing-visualizer .wave-bar:nth-child(7) { animation-delay: 0.2s; animation-duration: 0.6s; }
 
-#floatingPlayer.compact-mode { width: 360px !important; height: auto !important; }
-#floatingPlayer.compact-mode #playerBody { display: none; }
+        #floatingPlayer.compact-mode { width: min(340px, calc(100vw - 32px)) !important; height: auto !important; }
+        #floatingPlayer.compact-mode #playerBody { display: none; }
 
-#toast {
-    position: fixed;
-    top: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(-120%);
-    opacity: 0;
-    z-index: 1000;
-    padding: 14px 28px;
-    border-radius: 16px;
-    font-weight: 700;
-    color: white;
-    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-    box-shadow: 0 15px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
-    pointer-events: none;
-    backdrop-filter: blur(20px);
-    font-size: 13px;
-}
-#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        #toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-120%);
+            opacity: 0;
+            z-index: 1000;
+            padding: 12px 24px;
+            border-radius: 16px;
+            font-weight: 700;
+            color: white;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.5);
+            pointer-events: none;
+            backdrop-filter: blur(20px);
+            font-size: 13px;
+            max-width: calc(100vw - 32px);
+            text-align: center;
+        }
+        #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
-.glass-card {
-    background: rgba(18, 18, 26, 0.6);
-    backdrop-filter: blur(20px) saturate(1.3);
-    -webkit-backdrop-filter: blur(20px) saturate(1.3);
-    border: 1px solid rgba(42, 42, 62, 0.6);
-    border-radius: 24px;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03);
-    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.glass-card:hover {
-    border-color: rgba(139, 92, 246, 0.3);
-    box-shadow: 0 25px 60px rgba(0,0,0,0.4), 0 0 20px rgba(139, 92, 246, 0.05), inset 0 1px 0 rgba(255,255,255,0.05);
-}
+        .glass-card {
+            background: rgba(18, 18, 26, 0.6);
+            backdrop-filter: blur(20px) saturate(1.3);
+            -webkit-backdrop-filter: blur(20px) saturate(1.3);
+            border: 1px solid rgba(42, 42, 62, 0.6);
+            border-radius: 24px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03);
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card:hover {
+            border-color: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 25px 60px rgba(0,0,0,0.4), 0 0 20px rgba(139, 92, 246, 0.05);
+        }
 
-.nav-btn-active {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05));
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    color: #a78bfa;
-    box-shadow: 0 0 15px rgba(139, 92, 246, 0.1);
-}
+        .nav-btn-active {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #a78bfa;
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.1);
+        }
 
-.glow-accent {
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3), 0 8px 30px rgba(139, 92, 246, 0.2);
-}
+        .glow-accent {
+            box-shadow: 0 0 20px rgba(139, 92, 246, 0.3), 0 8px 30px rgba(139, 92, 246, 0.2);
+        }
 
-.search-result-item {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.search-result-item:hover {
-    transform: translateX(-4px);
-    border-color: rgba(139, 92, 246, 0.4);
-    background: rgba(139, 92, 246, 0.05);
-}
-.search-result-item:active {
-    transform: scale(0.98);
-}
+        .search-result-item, .lib-card, .recent-item {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .search-result-item:hover, .recent-item:hover {
+            transform: translateX(-4px);
+            border-color: rgba(139, 92, 246, 0.4);
+            background: rgba(139, 92, 246, 0.05);
+        }
+        .lib-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(139, 92, 246, 0.4);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3), 0 0 15px rgba(139, 92, 246, 0.08);
+        }
 
-.lib-card {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.lib-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(139, 92, 246, 0.4);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3), 0 0 15px rgba(139, 92, 246, 0.08);
-}
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
 
-.pulse-dot {
-    animation: pulse 2s infinite;
-}
-@keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.8); }
-}
+        .sidebar-glow { position: relative; }
+        .sidebar-glow::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(180deg, rgba(139, 92, 246, 0.03) 0%, transparent 50%, rgba(139, 92, 246, 0.02) 100%);
+            pointer-events: none;
+        }
 
-.sidebar-glow {
-    position: relative;
-}
-.sidebar-glow::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(180deg, rgba(139, 92, 246, 0.03) 0%, transparent 50%, rgba(139, 92, 246, 0.02) 100%);
-    pointer-events: none;
-}
-
-.playlist-card {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.playlist-card:hover {
-    transform: translateY(-3px);
-    border-color: rgba(139, 92, 246, 0.4);
-    box-shadow: 0 15px 40px rgba(0,0,0,0.3), 0 0 20px rgba(139, 92, 246, 0.08);
-}
-
-.recent-item {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.recent-item:hover {
-    transform: translateX(-3px);
-    background: rgba(139, 92, 246, 0.05);
-    border-color: rgba(139, 92, 246, 0.3);
-}
-
-@media (max-width: 768px) {
-    #floatingPlayer {
-        width: calc(100vw - 24px);
-        left: 12px;
-        bottom: 12px;
-        border-radius: 22px;
-    }
-}
-</style>
+        @media (max-width: 640px) {
+            .sidebar-glow {
+                width: 64px !important;
+            }
+            #floatingPlayer {
+                left: 8px;
+                bottom: 8px;
+                width: calc(100vw - 16px);
+                border-radius: 20px;
+            }
+            .btn {
+                padding: 0.75rem 1.2rem;
+                font-size: 13px;
+            }
+        }
+    </style>
 </head>
-<body class="antialiased flex h-[100dvh] w-full select-none">
+<body class="antialiased flex h-[100dvh] w-full select-none overflow-hidden bg-bgDark">
     <div id="toast"></div>
 
-    <!-- Sidebar -->
-    <aside class="sidebar-glow w-[72px] md:w-[82px] bg-panel/80 backdrop-blur-xl border-l border-panelBorder/50 flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar-glow w-[68px] md:w-[82px] bg-panel/80 backdrop-blur-xl border-l border-panelBorder/50 flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
         <div>
-            <div class="h-20 flex items-center justify-center border-b border-panelBorder/30">
-                <div class="w-11 h-11 bg-gradient-to-br from-accent/20 to-purple-900/30 rounded-2xl flex items-center justify-center text-accent text-xl relative group cursor-pointer border border-accent/20">
+            <div class="h-16 md:h-20 flex items-center justify-center border-b border-panelBorder/30">
+                <div class="w-10 h-10 md:w-11 md:h-11 bg-gradient-to-br from-accent/20 to-purple-900/30 rounded-2xl flex items-center justify-center text-accent text-xl relative group cursor-pointer border border-accent/20">
                     <div class="absolute inset-0 bg-accent/10 rounded-2xl blur-lg opacity-60 group-hover:opacity-100 transition-opacity"></div>
                     <i class="fas fa-headphones z-10 text-sm text-accentLight"></i>
                 </div>
             </div>
-            <nav class="mt-6 px-2 space-y-3">
-                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn nav-btn-active w-12 h-12 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl transition-all duration-300" title="البحث والتحميل">
-                    <i class="fas fa-search text-[15px]"></i>
+            <nav class="mt-4 md:mt-6 px-1.5 md:px-2 space-y-3">
+                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn nav-btn-active w-11 h-11 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl transition-all duration-300" title="البحث والتحميل">
+                    <i class="fas fa-search text-[14px] md:text-[15px]"></i>
                     <span class="text-[9px] mt-1 font-bold hidden md:block">البحث</span>
                 </button>
-                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn w-12 h-12 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelLight hover:text-white transition-all duration-300" title="ملفاتي">
-                    <i class="fas fa-folder-open text-[15px]"></i>
+                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn w-11 h-11 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelLight hover:text-white transition-all duration-300" title="ملفاتي">
+                    <i class="fas fa-folder-open text-[14px] md:text-[15px]"></i>
                     <span class="text-[9px] mt-1 font-medium hidden md:block">ملفاتي</span>
                 </button>
-                <button onclick="switchView('playlistsView')" id="nav-playlistsView" class="nav-btn w-12 h-12 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelLight hover:text-white transition-all duration-300" title="قوائم التشغيل">
-                    <i class="fas fa-list-music text-[15px]"></i>
-                    <span class="text-[9px] mt-1 font-medium hidden md:block">قوائم</span>
-                </button>
-                <button onclick="switchView('recentView')" id="nav-recentView" class="nav-btn w-12 h-12 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelLight hover:text-white transition-all duration-300" title="الاستماع مؤخراً">
-                    <i class="fas fa-history text-[15px]"></i>
+                <button onclick="switchView('recentView')" id="nav-recentView" class="nav-btn w-11 h-11 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelLight hover:text-white transition-all duration-300" title="الاستماع مؤخراً">
+                    <i class="fas fa-history text-[14px] md:text-[15px]"></i>
                     <span class="text-[9px] mt-1 font-medium hidden md:block">مؤخراً</span>
                 </button>
-                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn w-12 h-12 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelLight hover:text-white transition-all duration-300" title="الإعدادات">
-                    <i class="fas fa-sliders-h text-[15px]"></i>
+                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn w-11 h-11 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelLight hover:text-white transition-all duration-300" title="الإعدادات">
+                    <i class="fas fa-sliders-h text-[14px] md:text-[15px]"></i>
                     <span class="text-[9px] mt-1 font-medium hidden md:block">إعدادات</span>
                 </button>
             </nav>
         </div>
         <div class="p-2 pb-4 flex justify-center">
-            <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="w-12 h-12 rounded-2xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20 hover:scale-105 flex items-center justify-center transition-all duration-300 border border-tgBlue/20">
-                <i class="fab fa-telegram-plane text-lg"></i>
+            <a href="https://t.me/{BOT_USERNAME}" target="_blank" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20 hover:scale-105 flex items-center justify-center transition-all duration-300 border border-tgBlue/20">
+                <i class="fab fa-telegram-plane text-base md:text-lg"></i>
             </a>
         </div>
     </aside>
 
-    <!-- Main Content -->
-    <main class="flex-1 h-[100dvh] overflow-y-auto pb-28 relative scroll-smooth bg-bgDark">
+    <!-- Main Content Area -->
+    <main class="flex-1 h-[100dvh] overflow-y-auto pb-28 relative scroll-smooth bg-bgDark w-full">
         <div class="fixed top-0 left-0 w-full h-72 bg-gradient-to-b from-accent/[0.03] to-transparent pointer-events-none z-0"></div>
 
         <!-- Search View -->
-        <section id="searchView" class="view-section active p-4 md:p-8 max-w-4xl mx-auto relative z-10">
-            <div class="glass-card p-6 md:p-8 mb-6 mt-4 relative overflow-hidden">
+        <section id="searchView" class="view-section active p-3 sm:p-5 md:p-8 max-w-4xl mx-auto relative z-10 w-full">
+            <div class="glass-card p-4 sm:p-6 md:p-8 mb-6 mt-2 sm:mt-4 relative overflow-hidden">
                 <div class="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl"></div>
                 <div class="absolute bottom-0 left-0 w-24 h-24 bg-purple-600/5 rounded-full blur-2xl"></div>
                 <div class="relative">
                     <div class="flex items-center gap-3 mb-2">
-                        <h2 class="text-2xl md:text-3xl font-black text-white">PlayZone</h2>
-                        <span class="text-2xl md:text-3xl">🎵</span>
+                        <h2 class="text-xl sm:text-2xl md:text-3xl font-black text-white">PlayZone</h2>
+                        <span class="text-xl sm:text-2xl md:text-3xl">🎵</span>
                     </div>
-                    <p class="text-textMuted mb-6 text-sm leading-relaxed">ابحث عن مقاطع الفيديو أو الأغاني لتحميلها وتشغيلها مباشرة بأعلى جودة.</p>
-                    <div class="flex flex-col md:flex-row gap-3">
+                    <p class="text-textMuted mb-5 text-xs sm:text-sm leading-relaxed">ابحث عن مقاطع الفيديو أو الأغاني لتحميلها وتشغيلها مباشرة بأعلى جودة.</p>
+                    <div class="flex flex-col sm:flex-row gap-3">
                         <div class="relative flex-1">
                             <i class="fas fa-music absolute right-4 top-1/2 -translate-y-1/2 text-textDim text-sm"></i>
-                            <input type="text" id="url" placeholder="أدخل كلمة البحث أو رابط المقطع..." class="modern-input pr-11 flex-1">
+                            <input type="text" id="url" placeholder="أدخل كلمة البحث أو رابط المقطع..." class="modern-input pr-11 flex-1 text-xs sm:text-sm">
                         </div>
-                        <button onclick="processInput()" id="mainBtn" class="btn bg-gradient-to-r from-accent to-purple-600 hover:from-accentHover hover:to-purple-700 text-white md:w-40 shadow-lg glow-accent">
+                        <button onclick="processInput()" id="mainBtn" class="btn bg-gradient-to-r from-accent to-purple-600 hover:from-accentHover hover:to-purple-700 text-white sm:w-36 md:w-40 shadow-lg glow-accent">
                             <i class="fas fa-search"></i> بحث
                         </button>
                     </div>
                 </div>
 
                 <!-- Search Results -->
-                <div id="searchResults" class="hidden mt-8">
-                    <div class="bg-bgDeep/60 border border-panelBorder/50 rounded-2xl p-4 backdrop-blur-sm">
-                        <div class="mb-4 pb-3 border-b border-panelBorder/40 flex justify-between items-center">
-                            <h3 class="text-white font-bold text-sm flex items-center gap-2">
+                <div id="searchResults" class="hidden mt-6 sm:mt-8">
+                    <div class="bg-bgDeep/60 border border-panelBorder/50 rounded-2xl p-3 sm:p-4 backdrop-blur-sm">
+                        <div class="mb-3 pb-3 border-b border-panelBorder/40 flex justify-between items-center">
+                            <h3 class="text-white font-bold text-xs sm:text-sm flex items-center gap-2">
                                 <span class="w-2 h-2 bg-accent rounded-full pulse-dot"></span>
                                 نتائج البحث
                             </h3>
-                            <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="w-8 h-8 rounded-xl bg-panelLight/50 text-textMuted hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-all">
+                            <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="w-7 h-7 rounded-xl bg-panelLight/50 text-textMuted hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-all">
                                 <i class="fas fa-times text-xs"></i>
                             </button>
                         </div>
@@ -368,72 +345,72 @@ body {
             </div>
 
             <!-- Preview Box -->
-            <div id="previewBox" class="hidden glass-card p-6 relative overflow-hidden">
+            <div id="previewBox" class="hidden glass-card p-4 sm:p-6 relative overflow-hidden">
                 <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-accent/30 to-transparent"></div>
-                <div class="flex flex-col md:flex-row gap-6 items-center">
+                <div class="flex flex-col md:flex-row gap-5 items-center">
                     <div class="w-full md:w-1/3">
                         <div class="relative rounded-2xl overflow-hidden border border-panelBorder/40 shadow-xl">
                             <img id="thumb" class="w-full object-cover aspect-video" alt="thumbnail">
                             <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
                         </div>
                     </div>
-                    <div class="w-full md:w-2/3 space-y-4">
-                        <h3 id="title" class="font-bold text-base md:text-lg text-white line-clamp-2 leading-relaxed"></h3>
+                    <div class="w-full md:w-2/3 space-y-3.5">
+                        <h3 id="title" class="font-bold text-sm sm:text-base md:text-lg text-white line-clamp-2 leading-relaxed"></h3>
                         
                         <!-- Ad Gate -->
-                        <div id="adGate" class="bg-bgDeep/80 border border-panelBorder/50 p-5 rounded-2xl text-center backdrop-blur-sm">
-                            <div class="flex items-center justify-center gap-2 mb-3">
-                                <i class="fas fa-lock text-accent text-sm"></i>
+                        <div id="adGate" class="bg-bgDeep/80 border border-panelBorder/50 p-4 rounded-2xl text-center backdrop-blur-sm">
+                            <div class="flex items-center justify-center gap-2 mb-2.5">
+                                <i class="fas fa-lock text-accent text-xs sm:text-sm"></i>
                                 <p class="text-xs text-textMuted font-medium">يرجى فتح الإعلان ليفك رابط التحميل قفله تلقائياً</p>
                             </div>
-                            <div class="flex flex-col sm:flex-row gap-3">
-                                <a id="realAdLink" href="#" target="_blank" onclick="startAdVerificationCheck()" class="btn bg-gradient-to-r from-blue-600 to-blue-500 text-white flex-1 hover:from-blue-500 hover:to-blue-400 text-sm shadow-lg shadow-blue-600/20">
+                            <div class="flex flex-col sm:flex-row gap-2.5">
+                                <a id="realAdLink" href="#" target="_blank" onclick="startAdVerificationCheck()" class="btn bg-gradient-to-r from-blue-600 to-blue-500 text-white flex-1 hover:from-blue-500 hover:to-blue-400 text-xs sm:text-sm shadow-lg shadow-blue-600/20">
                                     <i class="fas fa-external-link-alt"></i> فتح الإعلان
                                 </a>
-                                <button id="verifyBtn" class="btn bg-panel/80 text-textMuted flex-1 border border-panelBorder text-sm cursor-wait">
+                                <button id="verifyBtn" class="btn bg-panel/80 text-textMuted flex-1 border border-panelBorder text-xs sm:text-sm cursor-wait">
                                     <i class="fas fa-sync fa-spin"></i> بانتظار فتح الإعلان...
                                 </button>
                             </div>
                         </div>
 
                         <!-- Download Options -->
-                        <div id="dlOptions" class="hidden space-y-4">
-                            <div class="grid grid-cols-2 gap-3">
-                                <select id="mode" onchange="toggleRes()" class="modern-input bg-bgDeep/80 py-3 text-sm">
+                        <div id="dlOptions" class="hidden space-y-3.5">
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <select id="mode" onchange="toggleRes()" class="modern-input bg-bgDeep/80 py-2.5 text-xs sm:text-sm">
                                     <option value="video">🎬 فيديو (MP4)</option>
                                     <option value="audio">🎵 صوت (MP3)</option>
                                 </select>
-                                <select id="resolution" class="modern-input bg-bgDeep/80 py-3 text-sm">
+                                <select id="resolution" class="modern-input bg-bgDeep/80 py-2.5 text-xs sm:text-sm">
                                     <option value="360">360p</option>
                                     <option value="480">480p</option>
                                     <option value="720" selected>720p HD</option>
                                     <option value="1080">1080p FHD</option>
                                 </select>
                             </div>
-                            <button onclick="startDownload(event)" class="btn bg-gradient-to-r from-accent via-purple-600 to-fuchsia-600 text-white w-full hover:from-accentHover hover:via-purple-700 hover:to-fuchsia-700 shadow-xl glow-accent text-sm">
+                            <button onclick="startDownload(event)" class="btn bg-gradient-to-r from-accent via-purple-600 to-fuchsia-600 text-white w-full hover:from-accentHover hover:via-purple-700 hover:to-fuchsia-700 shadow-xl glow-accent text-xs sm:text-sm">
                                 <i class="fas fa-download"></i> بدء التحميل
                             </button>
                         </div>
 
                         <!-- Progress Box -->
-                        <div id="progressBox" class="hidden bg-bgDeep/80 p-5 rounded-2xl border border-panelBorder/50 backdrop-blur-sm">
-                            <div class="flex justify-between items-center mb-3">
+                        <div id="progressBox" class="hidden bg-bgDeep/80 p-4 rounded-2xl border border-panelBorder/50 backdrop-blur-sm">
+                            <div class="flex justify-between items-center mb-2.5">
                                 <span id="progStatus" class="text-accent font-bold text-xs flex items-center gap-2">
                                     <i class="fas fa-circle-notch fa-spin"></i> جاري التحميل...
                                 </span>
-                                <span id="progPercent" class="font-mono font-black text-white text-lg transition-all duration-300">0%</span>
+                                <span id="progPercent" class="font-mono font-black text-white text-base sm:text-lg transition-all duration-300">0%</span>
                             </div>
-                            <div class="w-full bg-bgDeep rounded-full h-2.5 mb-3 overflow-hidden relative border border-panelBorder/30">
+                            <div class="w-full bg-bgDeep rounded-full h-2 mb-2.5 overflow-hidden relative border border-panelBorder/30">
                                 <div id="progBar" class="bg-gradient-to-r from-accent via-purple-500 to-fuchsia-500 h-full relative w-0 rounded-full">
                                     <div class="shimmer-bg"></div>
                                 </div>
                             </div>
-                            <div class="flex justify-between text-[11px] text-textDim font-mono">
+                            <div class="flex justify-between text-[10px] sm:text-[11px] text-textDim font-mono">
                                 <span id="progSize">-- MB / -- MB</span>
                                 <span id="progSpeed">-- MB/s</span>
                             </div>
-                            <div id="directDownloadArea" class="hidden mt-4 pt-4 border-t border-panelBorder/40">
-                                <a id="directDownloadBtn" href="#" download class="btn bg-gradient-to-r from-emerald-600 to-emerald-500 text-white w-full hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-600/20 text-sm">
+                            <div id="directDownloadArea" class="hidden mt-3 pt-3 border-t border-panelBorder/40">
+                                <a id="directDownloadBtn" href="#" download class="btn bg-gradient-to-r from-emerald-600 to-emerald-500 text-white w-full hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-600/20 text-xs sm:text-sm">
                                     <i class="fas fa-arrow-alt-circle-down"></i> تحميل إلى جهازك 💾
                                 </a>
                             </div>
@@ -444,23 +421,23 @@ body {
         </section>
 
         <!-- Library View -->
-        <section id="libraryView" class="view-section flex-layout p-4 md:p-8 max-w-6xl mx-auto h-full flex flex-col relative z-10">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 mt-2">
+        <section id="libraryView" class="view-section flex-layout p-3 sm:p-5 md:p-8 max-w-6xl mx-auto h-full flex flex-col relative z-10 w-full">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 mt-1 sm:mt-2">
                 <div>
-                    <h2 class="text-xl md:text-2xl font-black text-white flex items-center gap-2">
-                        <span class="w-8 h-8 bg-accent/10 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-folder-open text-accent text-sm"></i>
+                    <h2 class="text-lg sm:text-xl md:text-2xl font-black text-white flex items-center gap-2">
+                        <span class="w-7 h-7 sm:w-8 sm:h-8 bg-accent/10 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-folder-open text-accent text-xs sm:text-sm"></i>
                         </span>
                         ملفاتي المحفوظة
                     </h2>
-                    <p class="text-textMuted text-xs mt-1.5 mr-10">الملفات التي قمت بتحميلها مسبقاً</p>
+                    <p class="text-textMuted text-xs mt-1 mr-9">الملفات التي قمت بتحميلها مسبقاً</p>
                 </div>
-                <div class="flex flex-wrap gap-2.5 w-full md:w-auto">
-                    <div class="relative flex-1 md:w-64">
-                        <i class="fas fa-search absolute right-3.5 top-1/2 transform -translate-y-1/2 text-textDim text-xs"></i>
-                        <input type="text" id="libSearch" oninput="applyFilters()" placeholder="بحث في ملفاتك..." class="modern-input pl-3 pr-10 py-2.5 bg-panel/60 text-xs">
+                <div class="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
+                    <div class="relative flex-1 sm:w-56 md:w-64">
+                        <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-textDim text-xs"></i>
+                        <input type="text" id="libSearch" oninput="applyFilters()" placeholder="بحث في ملفاتك..." class="modern-input pl-3 pr-9 py-2 bg-panel/60 text-xs">
                     </div>
-                    <select id="libFilter" onchange="applyFilters(true)" class="modern-input py-2.5 px-4 w-auto bg-panel/60 text-accentLight font-bold text-xs border-accent/20">
+                    <select id="libFilter" onchange="applyFilters(true)" class="modern-input py-2 px-3 w-auto bg-panel/60 text-accentLight font-bold text-xs border-accent/20">
                         <option value="all">الكل</option>
                         <option value="favorites">❤️ المفضلة</option>
                         <option value="audio">🎵 الصوتيات</option>
@@ -468,124 +445,105 @@ body {
                     </select>
                 </div>
             </div>
-            <div id="libraryContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-3.5 flex-1 content-start"></div>
-            <div id="pagination" class="mt-8 flex justify-center items-center gap-2.5 pb-8"></div>
-        </section>
-
-        <!-- Playlists View -->
-        <section id="playlistsView" class="view-section p-4 md:p-8 max-w-4xl mx-auto relative z-10">
-            <div class="flex items-center justify-between mb-6 mt-2">
-                <div>
-                    <h2 class="text-xl md:text-2xl font-black text-white flex items-center gap-2">
-                        <span class="w-8 h-8 bg-accent/10 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-list text-accent text-sm"></i>
-                        </span>
-                        قوائم التشغيل
-                    </h2>
-                    <p class="text-textMuted text-xs mt-1.5 mr-10">أنشئ قوائم تشغيل مخصصة لأغانيك</p>
-                </div>
-                <button onclick="showCreatePlaylistModal()" class="btn bg-gradient-to-r from-accent to-purple-600 text-white text-sm shadow-lg glow-accent">
-                    <i class="fas fa-plus"></i> قائمة جديدة
-                </button>
-            </div>
-            <div id="playlistsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            <div id="libraryContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-3 flex-1 content-start w-full"></div>
+            <div id="pagination" class="mt-6 flex justify-center items-center gap-2 pb-6"></div>
         </section>
 
         <!-- Recent View -->
-        <section id="recentView" class="view-section p-4 md:p-8 max-w-4xl mx-auto relative z-10">
-            <div class="flex items-center justify-between mb-6 mt-2">
+        <section id="recentView" class="view-section p-3 sm:p-5 md:p-8 max-w-4xl mx-auto relative z-10 w-full">
+            <div class="flex items-center justify-between mb-5 mt-1 sm:mt-2">
                 <div>
-                    <h2 class="text-xl md:text-2xl font-black text-white flex items-center gap-2">
-                        <span class="w-8 h-8 bg-accent/10 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-history text-accent text-sm"></i>
+                    <h2 class="text-lg sm:text-xl md:text-2xl font-black text-white flex items-center gap-2">
+                        <span class="w-7 h-7 sm:w-8 sm:h-8 bg-accent/10 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-history text-accent text-xs sm:text-sm"></i>
                         </span>
                         الاستماع مؤخراً
                     </h2>
-                    <p class="text-textMuted text-xs mt-1.5 mr-10">آخر المقاطع التي استمعت إليها</p>
+                    <p class="text-textMuted text-xs mt-1 mr-9">آخر المقاطع التي استمعت إليها</p>
                 </div>
-                <button onclick="clearRecentHistory()" class="btn bg-panel/60 text-textMuted hover:text-red-400 text-xs border border-panelBorder/40">
+                <button onclick="clearRecentHistory()" class="btn bg-panel/60 text-textMuted hover:text-red-400 text-xs border border-panelBorder/40 py-2 px-3">
                     <i class="fas fa-trash-alt"></i> مسح السجل
                 </button>
             </div>
-            <div id="recentContainer" class="flex flex-col gap-3"></div>
+            <div id="recentContainer" class="flex flex-col gap-2.5 w-full"></div>
         </section>
 
         <!-- Settings View -->
-        <section id="settingsView" class="view-section p-4 md:p-8 max-w-3xl mx-auto relative z-10">
-            <div class="flex items-center gap-3 mb-6 mt-2">
-                <span class="w-9 h-9 bg-accent/10 rounded-xl flex items-center justify-center">
-                    <i class="fas fa-sliders-h text-accent text-sm"></i>
+        <section id="settingsView" class="view-section p-3 sm:p-5 md:p-8 max-w-3xl mx-auto relative z-10 w-full">
+            <div class="flex items-center gap-3 mb-5 mt-1 sm:mt-2">
+                <span class="w-8 h-8 sm:w-9 sm:h-9 bg-accent/10 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-sliders-h text-accent text-xs sm:text-sm"></i>
                 </span>
-                <h2 class="text-xl md:text-2xl font-black text-white">الإعدادات</h2>
+                <h2 class="text-lg sm:text-xl md:text-2xl font-black text-white">الإعدادات</h2>
             </div>
-            <div class="space-y-5">
+            <div class="space-y-4">
                 <!-- Sleep Timer -->
-                <div class="glass-card p-6">
-                    <div class="flex items-center gap-3 mb-4">
-                        <div class="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-moon text-indigo-400 text-sm"></i>
+                <div class="glass-card p-4 sm:p-6">
+                    <div class="flex items-center gap-3 mb-3.5">
+                        <div class="w-9 h-9 bg-indigo-500/10 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-moon text-indigo-400 text-xs sm:text-sm"></i>
                         </div>
                         <div>
-                            <h3 class="text-sm font-bold text-white">مؤقت النوم</h3>
-                            <p class="text-textDim text-[11px] mt-0.5">إيقاف التشغيل تلقائياً بعد مدة محددة</p>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">مؤقت النوم</h3>
+                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">إيقاف التشغيل تلقائياً بعد مدة محددة</p>
                         </div>
                     </div>
-                    <div id="sleepTimerStatus" class="hidden mb-4 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-center">
-                        <p class="text-indigo-300 text-sm font-bold"><i class="fas fa-clock"></i> المؤقت نشط: <span id="sleepCountdown">--:--</span></p>
-                        <button onclick="cancelSleepTimer()" class="mt-2 text-xs text-red-400 hover:text-red-300 underline">إلغاء المؤقت</button>
+                    <div id="sleepTimerStatus" class="hidden mb-3.5 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-center">
+                        <p class="text-indigo-300 text-xs sm:text-sm font-bold"><i class="fas fa-clock"></i> المؤقت نشط: <span id="sleepCountdown">--:--</span></p>
+                        <button onclick="cancelSleepTimer()" class="mt-1.5 text-xs text-red-400 hover:text-red-300 underline">إلغاء المؤقت</button>
                     </div>
                     <div class="grid grid-cols-4 gap-2">
-                        <button onclick="setSleepTimer(15)" class="btn bg-panelLight/50 text-white text-xs border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">15 د</button>
-                        <button onclick="setSleepTimer(30)" class="btn bg-panelLight/50 text-white text-xs border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">30 د</button>
-                        <button onclick="setSleepTimer(45)" class="btn bg-panelLight/50 text-white text-xs border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">45 د</button>
-                        <button onclick="setSleepTimer(60)" class="btn bg-panelLight/50 text-white text-xs border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">60 د</button>
+                        <button onclick="setSleepTimer(15)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">15 د</button>
+                        <button onclick="setSleepTimer(30)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">30 د</button>
+                        <button onclick="setSleepTimer(45)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">45 د</button>
+                        <button onclick="setSleepTimer(60)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">60 د</button>
                     </div>
                 </div>
 
                 <!-- Telegram Settings -->
-                <div class="glass-card p-6">
-                    <div class="flex items-center gap-3 mb-4">
-                        <div class="w-10 h-10 bg-tgBlue/10 rounded-xl flex items-center justify-center">
-                            <i class="fab fa-telegram text-tgBlue text-lg"></i>
+                <div class="glass-card p-4 sm:p-6">
+                    <div class="flex items-center gap-3 mb-3.5">
+                        <div class="w-9 h-9 bg-tgBlue/10 rounded-xl flex items-center justify-center">
+                            <i class="fab fa-telegram text-tgBlue text-base sm:text-lg"></i>
                         </div>
                         <div>
-                            <h3 class="text-sm font-bold text-white">ربط حساب تيليجرام</h3>
-                            <p class="text-textDim text-[11px] mt-0.5">أدخل معرف حسابك لتلقي الملفات عبر البوت</p>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">ربط حساب تيليجرام</h3>
+                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">أدخل معرف حسابك لتلقي الملفات عبر البوت</p>
                         </div>
                     </div>
-                    <div class="flex gap-3 mb-5">
-                        <input type="text" id="settingTgId" placeholder="أدخل الـ User ID هنا..." class="modern-input font-mono bg-bgDeep/60 text-sm">
-                        <button onclick="updateTgId()" class="btn bg-tgBlue hover:bg-tgBlueHover text-white px-6 text-sm shadow-lg shadow-tgBlue/20">حفظ</button>
+                    <div class="flex gap-2.5 mb-4">
+                        <input type="text" id="settingTgId" placeholder="أدخل الـ User ID هنا..." class="modern-input font-mono bg-bgDeep/60 text-xs sm:text-sm py-2.5">
+                        <button onclick="updateTgId()" class="btn bg-tgBlue hover:bg-tgBlueHover text-white px-5 text-xs sm:text-sm shadow-lg shadow-tgBlue/20">حفظ</button>
                     </div>
-                    <div class="flex items-center justify-between p-4 bg-bgDeep/60 rounded-2xl border border-panelBorder/40">
+                    <div class="flex items-center justify-between p-3.5 bg-bgDeep/60 rounded-2xl border border-panelBorder/40">
                         <div>
-                            <p class="font-bold text-white text-sm">إرسال تلقائي للبوت</p>
-                            <p class="text-[11px] text-textDim mt-0.5">إرسال الملف إلى حسابك فور اكتمال تحميله</p>
+                            <p class="font-bold text-white text-xs sm:text-sm">إرسال تلقائي للبوت</p>
+                            <p class="text-[10px] sm:text-[11px] text-textDim mt-0.5">إرسال الملف إلى حسابك فور اكتمال تحميله</p>
                         </div>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" id="autoForwardToggle" onchange="toggleAutoForward()" class="sr-only peer" checked>
-                            <div class="w-12 h-6 bg-zinc-800 rounded-full peer peer-checked:after:-translate-x-full peer-checked:bg-accent after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all duration-300"></div>
+                            <div class="w-11 h-6 bg-zinc-800 rounded-full peer peer-checked:after:-translate-x-full peer-checked:bg-accent after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all duration-300"></div>
                         </label>
                     </div>
                 </div>
 
                 <!-- Storage Settings -->
-                <div class="glass-card p-6">
-          0       <div class="flex items-center gap-3 mb-4">
-                        <div class="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-database text-red-400 text-sm"></i>
+                <div class="glass-card p-4 sm:p-6">
+                    <div class="flex items-center gap-3 mb-3.5">
+                        <div class="w-9 h-9 bg-red-500/10 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-database text-red-400 text-xs sm:text-sm"></i>
                         </div>
                         <div>
-                            <h3 class="text-sm font-bold text-white">إدارة الذاكرة التخزينية</h3>
-                            <p class="text-textDim text-[11px] mt-0.5">إدارة الملفات المحفوظة محلياً</p>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">إدارة الذاكرة التخزينية</h3>
+                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">إدارة الملفات المحفوظة محلياً</p>
                         </div>
                     </div>
-                    <div class="flex justify-between items-center p-4 bg-bgDeep/60 rounded-2xl border border-panelBorder/40">
+                    <div class="flex justify-between items-center p-3.5 bg-bgDeep/60 rounded-2xl border border-panelBorder/40">
                         <div>
-                            <p class="font-bold text-white text-sm" id="libCountStatus">سجل الملفات (0)</p>
-                            <p class="text-[11px] text-textDim mt-0.5">مسح سجل الملفات المحفوظة في هذا المتصفح</p>
+                            <p class="font-bold text-white text-xs sm:text-sm" id="libCountStatus">سجل الملفات (0)</p>
+                            <p class="text-[10px] sm:text-[11px] text-textDim mt-0.5">مسح سجل الملفات المحفوظة في هذا المتصفح</p>
                         </div>
-                        <button onclick="clearAllLibrary()" class="btn bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 text-xs px-5 border border-red-500/20">
+                        <button onclick="clearAllLibrary()" class="btn bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 text-xs px-4 py-2 border border-red-500/20">
                             <i class="fas fa-trash-alt"></i> مسح الكل
                         </button>
                     </div>
@@ -596,8 +554,8 @@ body {
 
     <!-- Floating Player -->
     <div id="floatingPlayer">
-        <div id="playerHeader" class="drag-handle p-3.5 bg-gradient-to-r from-bgDeep/80 to-panel/80 border-b border-panelBorder/30 flex items-center justify-between">
-            <div class="flex items-center gap-2.5 overflow-hidden flex-1">
+        <div id="playerHeader" class="drag-handle p-3 bg-gradient-to-r from-bgDeep/80 to-panel/80 border-b border-panelBorder/30 flex items-center justify-between">
+            <div class="flex items-center gap-2 overflow-hidden flex-1">
                 <div class="flex flex-col gap-[3px] opacity-40">
                     <div class="w-1 h-1 bg-textMuted rounded-full"></div>
                     <div class="w-1 h-1 bg-textMuted rounded-full"></div>
@@ -607,73 +565,73 @@ body {
                     <p id="playerTitle" class="font-bold text-xs text-white truncate w-full">جاهز للتشغيل</p>
                 </div>
             </div>
-            <div class="flex items-center gap-1.5 flex-shrink-0 mr-2">
-                <button onclick="toggleCompactMode(event)" class="w-7 h-7 rounded-lg bg-panelLight/50 text-textMuted hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all" title="تصغير">
+            <div class="flex items-center gap-1 flex-shrink-0 mr-2">
+                <button onclick="toggleCompactMode(event)" class="w-6 h-6 rounded-lg bg-panelLight/50 text-textMuted hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all" title="تصغير">
                     <i class="fas fa-compress-alt text-[10px]"></i>
                 </button>
-                <button onclick="resetPlayerPosition()" class="w-7 h-7 rounded-lg bg-panelLight/50 text-textMuted hover:text-white hover:bg-panelLight flex items-center justify-center transition-all" title="إعادة تعيين">
+                <button onclick="resetPlayerPosition()" class="w-6 h-6 rounded-lg bg-panelLight/50 text-textMuted hover:text-white hover:bg-panelLight flex items-center justify-center transition-all" title="إعادة تعيين">
                     <i class="fas fa-location-arrow text-[10px]"></i>
                 </button>
-                <button onclick="closePlayer()" class="w-7 h-7 rounded-lg bg-panelLight/50 text-textMuted hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-all">
+                <button onclick="closePlayer()" class="w-6 h-6 rounded-lg bg-panelLight/50 text-textMuted hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-all">
                     <i class="fas fa-times text-[10px]"></i>
                 </button>
             </div>
         </div>
-        <div id="playerBody" class="p-5 select-none">
-            <div id="videoContainer" class="hidden w-full aspect-video rounded-2xl overflow-hidden bg-black mb-4 border border-panelBorder/50 shadow-xl">
+        <div id="playerBody" class="p-4 select-none">
+            <div id="videoContainer" class="hidden w-full aspect-video rounded-2xl overflow-hidden bg-black mb-3 border border-panelBorder/50 shadow-xl">
                 <video id="globalVideoElement" class="w-full h-full object-contain" ontimeupdate="updatePlayerProgress()" onended="handleMediaEnd()"></video>
             </div>
-            <div id="audioVisualizer" class="flex flex-col items-center justify-center py-3 mb-2">
-                <div class="relative w-[100px] h-[100px] rounded-full border-2 border-accent/20 shadow-2xl overflow-hidden mb-3 bg-bgDeep">
+            <div id="audioVisualizer" class="flex flex-col items-center justify-center py-2 mb-2">
+                <div class="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-accent/20 shadow-2xl overflow-hidden mb-2 bg-bgDeep">
                     <img id="playerCoverImg" src="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png" class="w-full h-full object-cover album-spin" alt="album art">
                     <div class="absolute inset-0 bg-gradient-to-tr from-black/50 to-transparent"></div>
-                    <div class="absolute w-6 h-6 bg-bgDeep rounded-full top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 border-2 border-panelBorder flex items-center justify-center shadow-inner">
+                    <div class="absolute w-5 h-5 bg-bgDeep rounded-full top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 border-2 border-panelBorder flex items-center justify-center shadow-inner">
                         <div class="w-1.5 h-1.5 bg-accent rounded-full"></div>
                     </div>
                 </div>
-                <div id="visualizerBars" class="flex gap-1.5 items-end h-5 justify-center mt-2">
+                <div id="visualizerBars" class="flex gap-1.5 items-end h-4 justify-center mt-1">
                     <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
                 </div>
             </div>
             <!-- Progress -->
-            <div class="relative w-full h-2 bg-bgDeep rounded-full mb-3 cursor-pointer group border border-panelBorder/30" id="progressContainer" dir="ltr">
+            <div class="relative w-full h-2 bg-bgDeep rounded-full mb-2.5 cursor-pointer group border border-panelBorder/30" id="progressContainer" dir="ltr">
                 <div id="mediaProgressBar" class="absolute left-0 h-full bg-gradient-to-r from-accent to-purple-500 rounded-full w-0 pointer-events-none"></div>
-                <div id="mediaProgressSlider" class="absolute w-3.5 h-3.5 bg-white border-2 border-accent rounded-full -top-[3px] -ml-[7px] scale-100 group-hover:scale-125 transition-transform shadow-lg shadow-accent/30 pointer-events-none" style="left: 0%;"></div>
+                <div id="mediaProgressSlider" class="absolute w-3 h-3 bg-white border-2 border-accent rounded-full -top-[2px] -ml-[6px] scale-100 group-hover:scale-125 transition-transform shadow-lg shadow-accent/30 pointer-events-none" style="left: 0%;"></div>
             </div>
-            <div class="flex justify-between items-center text-[10px] text-textDim font-mono mb-4">
+            <div class="flex justify-between items-center text-[10px] text-textDim font-mono mb-3">
                 <span id="playerTime">0:00 / 0:00</span>
-                <span id="trackSource" class="bg-accent/10 text-accentLight px-2.5 py-0.5 rounded-lg text-[9px] font-bold border border-accent/20">صوت</span>
+                <span id="trackSource" class="bg-accent/10 text-accentLight px-2 py-0.5 rounded-lg text-[9px] font-bold border border-accent/20">صوت</span>
             </div>
             <!-- Controls -->
             <div class="flex items-center justify-between gap-2">
-                <div class="flex items-center gap-3">
-                    <button onclick="toggleShuffle()" id="shuffleBtn" class="w-8 h-8 rounded-lg text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs" title="عشوائي">
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleShuffle()" id="shuffleBtn" class="w-7 h-7 rounded-lg text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs" title="عشوائي">
                         <i class="fas fa-random"></i>
                     </button>
-                    <button onclick="playPrev()" class="w-8 h-8 rounded-lg text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-sm" title="السابق">
+                    <button onclick="playPrev()" class="w-7 h-7 rounded-lg text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs" title="السابق">
                         <i class="fas fa-step-backward"></i>
                     </button>
                 </div>
-                <button onclick="togglePlay()" id="playPauseBtn" class="w-12 h-12 rounded-full bg-gradient-to-br from-accent to-purple-700 hover:from-accentHover hover:to-purple-800 text-white flex items-center justify-center text-base shadow-lg glow-accent active:scale-90 transition-all">
+                <button onclick="togglePlay()" id="playPauseBtn" class="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-accent to-purple-700 hover:from-accentHover hover:to-purple-800 text-white flex items-center justify-center text-sm shadow-lg glow-accent active:scale-90 transition-all">
                     <i class="fas fa-play ml-0.5"></i>
                 </button>
-                <div class="flex items-center gap-3">
-                    <button onclick="playNext()" class="w-8 h-8 rounded-lg text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-sm" title="التالي">
+                <div class="flex items-center gap-2">
+                    <button onclick="playNext()" class="w-7 h-7 rounded-lg text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs" title="التالي">
                         <i class="fas fa-step-forward"></i>
                     </button>
-                    <button onclick="toggleRepeat()" id="repeatBtn" class="w-8 h-8 rounded-lg text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs" title="تكرار">
+                    <button onclick="toggleRepeat()" id="repeatBtn" class="w-7 h-7 rounded-lg text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs" title="تكرار">
                         <i class="fas fa-redo"></i>
                     </button>
                 </div>
             </div>
             <!-- Bottom Controls -->
-            <div class="flex items-center justify-between mt-4 pt-3.5 border-t border-panelBorder/30">
-                <button onclick="changeSpeed()" id="speedBtn" class="text-[10px] font-bold font-mono px-2.5 py-1 border border-panelBorder/50 rounded-lg text-textMuted hover:text-white hover:border-accent/30 transition-all bg-panelLight/30">1.0x</button>
-                <div class="flex items-center gap-2.5">
+            <div class="flex items-center justify-between mt-3 pt-3 border-t border-panelBorder/30">
+                <button onclick="changeSpeed()" id="speedBtn" class="text-[9px] font-bold font-mono px-2 py-0.5 border border-panelBorder/50 rounded-lg text-textMuted hover:text-white hover:border-accent/30 transition-all bg-panelLight/30">1.0x</button>
+                <div class="flex items-center gap-2">
                     <button onclick="toggleMute()" id="muteBtn" class="text-textMuted hover:text-white transition-colors">
                         <i class="fas fa-volume-up text-xs"></i>
                     </button>
-                    <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-16 h-1.5 bg-zinc-800 accent-accent rounded-lg cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md">
+                    <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-14 h-1.5 bg-zinc-800 accent-accent rounded-lg cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md">
                 </div>
                 <button onclick="triggerPiP()" id="pipBtn" class="text-textMuted hover:text-white hidden transition-colors" title="تشغيل مصغر">
                     <i class="fas fa-clone text-xs"></i>
@@ -684,983 +642,767 @@ body {
 
     <!-- Telegram Modal -->
     <div id="tgModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] hidden flex-col items-center justify-center p-4">
-        <div class="glass-card p-7 max-w-sm w-full text-center">
-            <div class="w-16 h-16 bg-tgBlue/15 text-tgBlue rounded-2xl flex items-center justify-center mx-auto mb-5 text-2xl border border-tgBlue/20">
+        <div class="glass-card p-5 sm:p-7 max-w-sm w-full text-center">
+            <div class="w-14 h-14 bg-tgBlue/15 text-tgBlue rounded-2xl flex items-center justify-center mx-auto mb-4 text-xl border border-tgBlue/20">
                 <i class="fab fa-telegram-plane"></i>
             </div>
-            <h3 class="text-lg font-black mb-1.5 text-white">ربط حساب Telegram</h3>
-            <p class="text-textMuted text-xs mb-5 leading-relaxed">يرجى إدخال معرف حسابك (User ID) لتفعيل خاصية الإرسال التلقائي عبر البوت.</p>
-            <button onclick="window.open('https://t.me/{BOT_USERNAME}', '_blank')" class="btn bg-tgBlue text-white w-full mb-3 text-sm hover:bg-tgBlueHover shadow-lg shadow-tgBlue/20">
+            <h3 class="text-base sm:text-lg font-black mb-1.5 text-white">ربط حساب Telegram</h3>
+            <p class="text-textMuted text-xs mb-4 leading-relaxed">يرجى إدخال معرف حسابك (User ID) لتفعيل خاصية الإرسال التلقائي عبر البوت.</p>
+            <button onclick="window.open('https://t.me/{BOT_USERNAME}', '_blank')" class="btn bg-tgBlue text-white w-full mb-3 text-xs sm:text-sm hover:bg-tgBlueHover shadow-lg shadow-tgBlue/20 py-2.5">
                 <i class="fas fa-robot"></i> الدخول للبوت ونسخ المعرف
             </button>
-            <input type="text" id="tgIdInput" placeholder="الصق المعرف هنا..." class="modern-input bg-bgDeep/80 text-center text-sm mb-4 font-mono py-3">
-      0     <div class="flex gap-3">
-                <button onclick="saveTgIdFromModal()" class="btn bg-gradient-to-r from-accent to-purple-600 text-white flex-1 text-sm shadow-lg glow-accent">حفظ ومتابعة</button>
-                <button onclick="closeTgModal()" class="btn bg-panelLight text-textMuted flex-1 hover:text-white text-sm border border-panelBorder/50">إلغاء</button>
+            <input type="text" id="tgIdInput" placeholder="الصق المعرف هنا..." class="modern-input bg-bgDeep/80 text-center text-xs sm:text-sm mb-3.5 font-mono py-2.5">
+            <div class="flex gap-2.5">
+                <button onclick="saveTgIdFromModal()" class="btn bg-gradient-to-r from-accent to-purple-600 text-white flex-1 text-xs sm:text-sm shadow-lg glow-accent py-2.5">حفظ ومتابعة</button>
+                <button onclick="closeTgModal()" class="btn bg-panelLight text-textMuted flex-1 hover:text-white text-xs sm:text-sm border border-panelBorder/50 py-2.5">إلغاء</button>
             </div>
         </div>
     </div>
 
-    <!-- Create Playlist Modal -->
-    <div id="playlistModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] hidden flex-col items-center justify-center p-4">
-        <div class="glass-card p-7 max-w-sm w-full text-center">
-            <div class="w-16 h-16 bg-accent/15 text-accent rounded-2xl flex items-center justify-center mx-auto mb-5 text-2xl border border-accent/20">
-                <i class="fas fa-list"></i>
-            </div>
-            <h3 class="text-lg font-black mb-1.5 text-white">قائمة تشغيل جديدة</h3>
-            <p class="text-textMuted text-xs mb-5 leading-relaxed">أدخل اسم القائمة الجديدة</p>
-            <input type="text" id="playlistNameInput" placeholder="اسم القائمة..." class="modern-input bg-bgDeep/80 text-center text-sm mb-4 py-3">
-            <div class="flex gap-3">
-                <button onclick="createPlaylist()" class="btn bg-gradient-to-r from-accent to-purple-600 text-white flex-1 text-sm shadow-lg glow-accent">إنشاء</button>
-                <button onclick="closePlaylistModal()" class="btn bg-panelLight text-textMuted flex-1 hover:text-white text-sm border border-panelBorder/50">إلغاء</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Add to Playlist Modal -->
-    <div id="addToPlaylistModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] hidden flex-col items-center justify-center p-4">
-        <div class="glass-card p-7 max-w-sm w-full">
-            <h3 class="text-lg font-black mb-4 text-white text-center">إضافة إلى قائمة تشغيل</h3>
-            <div id="playlistSelectList" class="flex flex-col gap-2 max-h-60 overflow-y-auto"></div>
-            <button onclick="closeAddToPlaylistModal()" class="btn bg-panelLight text-textMuted w-full mt-4 hover:text-white text-sm border border-panelBorder/50">إلغاء</button>
-        </div>
-    </div>
-
+    <!-- JavaScript Application Logic -->
     <script type="module">
-// ===== PlayZone Music - Full Featured App =====
+        const BACKEND_URL = window.location.origin.includes('github.io') || window.location.origin.includes('localhost')
+            ? 'https://your-playzone-bot-backend.up.railway.app'
+            : window.location.origin;
 
-const BACKEND_URL = window.location.origin.includes('github.io') || window.location.origin.includes('localhost')
-    ? 'https://your-playzone-bot-backend.up.railway.app'
-    : window.location.origin;
+        const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+        const isMiniApp = tg && tg.initData && tg.initData !== "";
 
-const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-const isMiniApp = tg && tg.initData && tg.initData !== "";
+        // ===== State =====
+        let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
+        let recentlyPlayed = JSON.parse(localStorage.getItem('pz_recently_played')) || [];
+        let currentUrl = "";
+        let currentClickId = "";
+        let adCheckInterval = null;
+        let adFallbackTimeout = null;
+        let currentPlayingIndex = -1;
+        let isShuffle = false;
+        let isRepeat = false;
+        let libraryPage = 1;
+        const itemsPerPage = 6;
+        let isMuted = false;
+        let lastVolume = 1;
+        let currentPlayingMode = 'audio';
+        let isScrubbing = false;
+        let lastLoggedPercent = 0;
+        let sleepTimerInterval = null;
+        let sleepTimerEndTime = null;
+        let pendingTgItem = null;
 
-// ===== State =====
-let myLibrary = JSON.parse(localStorage.getItem('pz_enterprise_library')) || [];
-let playlists = JSON.parse(localStorage.getItem('pz_playlists')) || [];
-let recentlyPlayed = JSON.parse(localStorage.getItem('pz_recently_played')) || [];
-let currentUrl = "";
-let currentClickId = "";
-let adCheckInterval = null;
-let adFallbackTimeout = null;
-let currentPlayingIndex = -1;
-let isShuffle = false;
-let isRepeat = false;
-let libraryPage = 1;
-const itemsPerPage = 6;
-let isMuted = false;
-let lastVolume = 1;
-let currentPlayingMode = 'audio';
-let isScrubbing = false;
-let lastLoggedPercent = 0;
-let sleepTimerInterval = null;
-let sleepTimerEndTime = null;
-let pendingTgItem = null;
-let currentPlaylistContext = null; // for playing from playlist
+        const mediaContainer = document.getElementById('floatingPlayer');
+        const videoElement = document.getElementById('globalVideoElement');
 
-const mediaContainer = document.getElementById('floatingPlayer');
-const videoElement = document.getElementById('globalVideoElement');
+        // ===== Initialization =====
+        window.addEventListener('DOMContentLoaded', () => {
+            if (isMiniApp) {
+                tg.ready();
+                tg.expand();
+                try { tg.setHeaderColor('#0a0a0f'); tg.setBackgroundColor('#0a0a0f'); } catch(e){}
+                const tgUser = tg.initDataUnsafe && tg.initDataUnsafe.user;
+                if (tgUser && tgUser.id) {
+                    localStorage.setItem('pz_tg_id', tgUser.id);
+                    document.getElementById('settingTgId').value = tgUser.id;
+                    document.getElementById('settingTgId').disabled = true;
+                }
+            }
+            const savedId = localStorage.getItem('pz_tg_id') || "";
+            if(savedId && !document.getElementById('settingTgId').disabled) {
+                document.getElementById('settingTgId').value = savedId;
+            }
+            document.getElementById('tgIdInput').value = savedId;
+            const autoFwd = localStorage.getItem('pz_auto_tg') !== 'false';
+            document.getElementById('autoForwardToggle').checked = autoFwd;
 
-// ===== Initialization =====
-window.addEventListener('DOMContentLoaded', () => {
-    if (isMiniApp) {
-        tg.ready();
-        tg.expand();
-        try { tg.setHeaderColor('#0a0a0f'); tg.setBackgroundColor('#0a0a0f'); } catch(e){}
-        const tgUser = tg.initDataUnsafe && tg.initDataUnsafe.user;
-        if (tgUser && tgUser.id) {
-            localStorage.setItem('pz_tg_id', tgUser.id);
-            document.getElementById('settingTgId').value = tgUser.id;
-            document.getElementById('settingTgId').disabled = true;
+            updateLibraryCount();
+            switchView('searchView');
+            setupAdvancedDraggable(mediaContainer, document.getElementById('playerHeader'));
+            setupScrubbing();
+            setupVideoEvents();
+
+            document.getElementById('url').addEventListener('keydown', function(e) {
+                if(e.key === 'Enter') { e.preventDefault(); this.blur(); processInput(); }
+            });
+
+            // Restore sleep timer if active
+            const savedSleepEnd = localStorage.getItem('pz_sleep_end');
+            if (savedSleepEnd && Number(savedSleepEnd) > Date.now()) {
+                sleepTimerEndTime = Number(savedSleepEnd);
+                startSleepCountdown();
+            }
+        });
+
+        function setupVideoEvents() {
+            videoElement.onplay = () => {
+                document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
+                if (currentPlayingMode === 'audio') {
+                    document.getElementById('playerCoverImg').style.animationPlayState = 'running';
+                    animateVisualizerBars(true);
+                }
+                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
+            };
+            videoElement.onpause = () => {
+                document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
+                document.getElementById('playerCoverImg').style.animationPlayState = 'paused';
+                animateVisualizerBars(false);
+                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
+            };
         }
-    }
-    const savedId = localStorage.getItem('pz_tg_id') || "";
-    if(savedId && !document.getElementById('settingTgId').disabled) {
-        document.getElementById('settingTgId').value = savedId;
-    }
-    document.getElementById('tgIdInput').value = savedId;
-    const autoFwd = localStorage.getItem('pz_auto_tg') !== 'false';
-    document.getElementById('autoForwardToggle').checked = autoFwd;
 
-    updateLibraryCount();
-    switchView('searchView');
-    setupAdvancedDraggable(mediaContainer, document.getElementById('playerHeader'));
-    setupScrubbing();
-    setupVideoEvents();
-
-    document.getElementById('url').addEventListener('keydown', function(e) {
-        if(e.key === 'Enter') { e.preventDefault(); this.blur(); processInput(); }
-    });
-
-    // Restore sleep timer if active
-    const savedSleepEnd = localStorage.getItem('pz_sleep_end');
-    if (savedSleepEnd && Number(savedSleepEnd) > Date.now()) {
-        sleepTimerEndTime = Number(savedSleepEnd);
-        startSleepCountdown();
-    }
-});
-
-function setupVideoEvents() {
-    videoElement.onplay = () => {
-        document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
-        if (currentPlayingMode === 'audio') {
-            document.getElementById('playerCoverImg').style.animationPlayState = 'running';
-            animateVisualizerBars(true);
+        // ===== Utilities =====
+        function formatTime(secs) {
+            if(isNaN(secs) || secs === null) return "0:00";
+            const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
+            return m + ":" + (s < 10 ? '0' + s : s);
         }
-        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "playing";
-    };
-    videoElement.onpause = () => {
-        document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-play ml-0.5"></i>';
-        document.getElementById('playerCoverImg').style.animationPlayState = 'paused';
-        animateVisualizerBars(false);
-        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "paused";
-    };
-}
 
-// ===== Utilities =====
-function formatTime(secs) {
-    if(isNaN(secs) || secs === null) return "0:00";
-    const m = Math.floor(secs / 60), s = Math.floor(secs % 60);
-    return m + ":" + (s < 10 ? '0' + s : s);
-}
+        function triggerHaptic(style = 'light') {
+            if (isMiniApp && tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred(style);
+            } else if (navigator.vibrate) {
+                if (style === 'light') navigator.vibrate(10);
+                else if (style === 'medium') navigator.vibrate(20);
+                else if (style === 'heavy') navigator.vibrate(40);
+            }
+        }
 
-function triggerHaptic(style = 'light') {
-    if (isMiniApp && tg.HapticFeedback) {
-        tg.HapticFeedback.impactOccurred(style);
-    } else if (navigator.vibrate) {
-        if (style === 'light') navigator.vibrate(10);
-        else if (style === 'medium') navigator.vibrate(20);
-        else if (style === 'heavy') navigator.vibrate(40);
-    }
-}
+        function triggerNotification(type = 'success') {
+            if (isMiniApp && tg.HapticFeedback) {
+                tg.HapticFeedback.notificationOccurred(type);
+            } else if (navigator.vibrate) {
+                if (type === 'success') navigator.vibrate([20, 50, 20]);
+                else navigator.vibrate([50, 50, 50]);
+            }
+        }
 
-function triggerNotification(type = 'success') {
-    if (isMiniApp && tg.HapticFeedback) {
-        tg.HapticFeedback.notificationOccurred(type);
-    } else if (navigator.vibrate) {
-        if (type === 'success') navigator.vibrate([20, 50, 20]);
-        else navigator.vibrate([50, 50, 50]);
-    }
-}
+        function showToast(message, type = "success") {
+            const toast = document.getElementById('toast');
+            toast.innerText = message; toast.className = "show";
+            if (type === "error") toast.style.background = "linear-gradient(135deg, #ef4444, #dc2626)";
+            else toast.style.background = "linear-gradient(135deg, #8b5cf6, #7c3aed)";
+            setTimeout(() => { toast.className = ""; }, 3500);
+            setTimeout(() => { triggerNotification(type === "error" ? "error" : "success"); }, 50);
+        }
 
-function showToast(message, type = "success") {
-    const toast = document.getElementById('toast');
-    toast.innerText = message; toast.className = "show";
-    if (type === "error") toast.style.background = "linear-gradient(135deg, #ef4444, #dc2626)";
-    else toast.style.background = "linear-gradient(135deg, #8b5cf6, #7c3aed)";
-    setTimeout(() => { toast.className = ""; }, 3500);
-    setTimeout(() => { triggerNotification(type === "error" ? "error" : "success"); }, 50);
-}
+        function timeAgo(timestamp) {
+            const diff = Date.now() - timestamp;
+            const mins = Math.floor(diff / 60000);
+            if (mins < 1) return 'الآن';
+            if (mins < 60) return `منذ ${mins} دقيقة`;
+            const hours = Math.floor(mins / 60);
+            if (hours < 24) return `منذ ${hours} ساعة`;
+            const days = Math.floor(hours / 24);
+            return `منذ ${days} يوم`;
+        }
 
-function timeAgo(timestamp) {
-    const diff = Date.now() - timestamp;
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'الآن';
-    if (mins < 60) return `منذ ${mins} دقيقة`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `منذ ${hours} ساعة`;
-    const days = Math.floor(hours / 24);
-    return `منذ ${days} يوم`;
-}
+        // ===== Navigation =====
+        window.switchView = function(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => {
+                el.style.setProperty('display', 'none', 'important'); el.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.className = btn.className.replace(/nav-btn-active/g, '').trim();
+                btn.classList.remove('text-accent');
+                btn.classList.add('text-textMuted', 'hover:bg-panelLight', 'hover:text-white');
+            });
+            const targetSection = document.getElementById(viewId);
+            if (targetSection) {
+                if (targetSection.classList.contains('flex-layout')) targetSection.style.setProperty('display', 'flex', 'important');
+                else targetSection.style.setProperty('display', 'block', 'important');
+                targetSection.classList.add('active');
+            }
+            const activeBtn = document.getElementById('nav-' + viewId);
+            if (activeBtn) {
+                activeBtn.classList.remove('text-textMuted', 'hover:bg-panelLight', 'hover:text-white');
+                activeBtn.classList.add('nav-btn-active');
+            }
+            if (viewId === 'libraryView') applyFilters();
+            if (viewId === 'recentView') renderRecentlyPlayed();
+        };
 
-// ===== Navigation =====
-window.switchView = function(viewId) {
-    document.querySelectorAll('.view-section').forEach(el => {
-        el.style.setProperty('display', 'none', 'important'); el.classList.remove('active');
-    });
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.className = btn.className.replace(/nav-btn-active/g, '').trim();
-        btn.classList.remove('text-accent');
-        btn.classList.add('text-textMuted', 'hover:bg-panelLight', 'hover:text-white');
-    });
-    const targetSection = document.getElementById(viewId);
-    if (targetSection) {
-        if (targetSection.classList.contains('flex-layout')) targetSection.style.setProperty('display', 'flex', 'important');
-        else targetSection.style.setProperty('display', 'block', 'important');
-        targetSection.classList.add('active');
-    }
-    const activeBtn = document.getElementById('nav-' + viewId);
-    if (activeBtn) {
-        activeBtn.classList.remove('text-textMuted', 'hover:bg-panelLight', 'hover:text-white');
-        activeBtn.classList.add('nav-btn-active');
-    }
-    if (viewId === 'libraryView') applyFilters();
-    if (viewId === 'playlistsView') renderPlaylists();
-    if (viewId === 'recentView') renderRecentlyPlayed();
-};
+        // ===== Search & Download =====
+        window.processInput = async function() {
+            const input = document.getElementById('url').value.trim(); if(!input) return;
+            const btn = document.getElementById('mainBtn'); btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري...'; btn.disabled = true;
+            document.getElementById('previewBox').classList.add('hidden');
+            if (input.startsWith('http')) { await renderPreview(input); }
+            else {
+                try {
+                    const res = await fetch(`${BACKEND_URL}/api/search`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:input})});
+                    const data = await res.json();
+                    if(data.success && data.entries.length) {
+                        let box = document.getElementById('searchResultsList'); box.innerHTML = '';
+                        data.entries.forEach((v) => {
+                            box.innerHTML += `
+                            <div onclick="renderPreview('https://youtube.com/watch?v=${v.id}')" class="search-result-item w-full flex items-center p-3 bg-panel/50 border border-panelBorder/40 rounded-2xl cursor-pointer shadow-sm">
+                                <div class="flex-shrink-0 w-20 h-12 rounded-xl overflow-hidden border border-panelBorder/30 relative ml-3 shadow-md">
+                                    <img src="${v.thumbnail}" class="w-full h-full object-cover" alt="${v.title}">
+                                    <div class="absolute bottom-0.5 right-0.5 bg-black/85 text-white text-[8px] px-1 py-0.5 rounded font-mono">${formatTime(v.duration || 0)}</div>
+                                </div>
+                                <div class="flex-1 min-w-0 flex flex-col justify-center text-right">
+                                    <h4 class="text-white font-bold text-xs sm:text-sm truncate w-full mb-0.5">${v.title}</h4>
+                                    <p class="text-textDim text-[10px] sm:text-xs truncate w-full flex items-center gap-1">
+                                        <i class="fas fa-user-circle text-accent/60"></i> ${v.uploader}
+                                    </p>
+                                </div>
+                                <div class="flex-shrink-0 w-8 h-8 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mr-2">
+                                    <i class="fas fa-download text-xs"></i>
+                                </div>
+                            </div>`;
+                        });
+                        document.getElementById('searchResults').classList.remove('hidden');
+                    } else showToast("لم يتم العثور على نتائج", "error");
+                } catch(e) { showToast("حدث خطأ في البحث", "error"); }
+            }
+            btn.innerHTML = '<i class="fas fa-search"></i> بحث'; btn.disabled = false;
+        };
 
-// ===== Search & Download =====
-window.processInput = async function() {
-    const input = document.getElementById('url').value.trim(); if(!input) return;
-    const btn = document.getElementById('mainBtn'); btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري...'; btn.disabled = true;
-    document.getElementById('previewBox').classList.add('hidden');
-    if (input.startsWith('http')) { await renderPreview(input); }
-    else {
-        try {
-            const res = await fetch(`${BACKEND_URL}/api/search`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:input})});
-            const data = await res.json();
-            if(data.success && data.entries.length) {
-                let box = document.getElementById('searchResultsList'); box.innerHTML = '';
-                data.entries.forEach((v) => {
-                    box.innerHTML += `
-                    <div onclick="renderPreview('https://youtube.com/watch?v=${v.id}')" class="search-result-item w-full flex items-center p-3.5 bg-panel/50 border border-panelBorder/40 rounded-2xl cursor-pointer shadow-sm">
-                        <div class="flex-shrink-0 w-[88px] h-[52px] rounded-xl overflow-hidden border border-panelBorder/30 relative ml-3 shadow-md">
-                            <img src="${v.thumbnail}" class="w-full h-full object-cover" alt="${v.title}">
-                            <div class="absolute bottom-1 right-1 bg-black/85 text-white text-[9px] px-1.5 py-0.5 rounded-md font-mono">${formatTime(v.duration || 0)}</div>
+        window.renderPreview = async function(url) {
+            currentUrl = url; document.getElementById('searchResults').classList.add('hidden');
+            document.getElementById('previewBox').classList.add('hidden'); document.getElementById('progressBox').classList.add('hidden');
+            document.getElementById('dlOptions').classList.add('hidden');
+            if(adCheckInterval) clearInterval(adCheckInterval);
+            if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/preview`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:url})});
+                const data = await res.json();
+                if(data.success) {
+                    document.getElementById('previewBox').classList.remove('hidden');
+                    document.getElementById('thumb').src = data.thumb; document.getElementById('title').innerText = data.title;
+                    const sessionRes = await fetch(`${BACKEND_URL}/api/generate_ad_session`);
+                    const sessionData = await sessionRes.json();
+                    currentClickId = sessionData.click_id;
+                    document.getElementById('realAdLink').href = sessionData.ad_link;
+                    document.getElementById('adGate').classList.remove('hidden');
+                    let vBtn = document.getElementById('verifyBtn');
+                    vBtn.className = "btn bg-panel/80 text-textMuted flex-1 border border-panelBorder text-xs sm:text-sm cursor-wait";
+                    vBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> بانتظار فحص الإعلان...';
+                } else showToast("الرابط غير صالح للتحميل", "error");
+            } catch(e) { showToast("فشل تحميل المعاينة", "error"); }
+        };
+
+        window.toggleRes = function() { document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; };
+
+        window.startAdVerificationCheck = function() {
+            showToast("جاري فحص الاتصال وتأكيد الجلسة... ⏳", "success");
+            if(adCheckInterval) clearInterval(adCheckInterval);
+            if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
+            let vBtn = document.getElementById('verifyBtn');
+            vBtn.className = "btn bg-accent/10 text-accent flex-1 border border-accent/30 text-xs sm:text-sm cursor-wait";
+            vBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> جاري التحقق من الإعلان...';
+            adFallbackTimeout = setTimeout(() => {
+                document.getElementById('adGate').classList.add('hidden');
+                document.getElementById('dlOptions').classList.remove('hidden');
+                showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
+            }, 10000);
+        };
+
+        function animatePercentCounter(targetPercent) {
+            let start = lastLoggedPercent; let end = parseFloat(targetPercent) || 0;
+            if (start === end) return;
+            let duration = 400; let startTime = null; const percentEl = document.getElementById('progPercent');
+            function step(timestamp) {
+                if (!startTime) startTime = timestamp;
+                let progress = timestamp - startTime;
+                let current = start + (end - start) * Math.min(progress / duration, 1);
+                percentEl.innerText = Math.floor(current) + '%';
+                percentEl.style.transform = 'scale(1.05)';
+                if (progress < duration) window.requestAnimationFrame(step);
+                else { percentEl.innerText = end + '%'; percentEl.style.transform = 'scale(1.0)'; lastLoggedPercent = end; }
+            }
+            window.requestAnimationFrame(step);
+        }
+
+        window.startDownload = async function(event) {
+            const btn = event.currentTarget; const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
+            document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
+            document.getElementById('directDownloadArea').classList.add('hidden');
+            lastLoggedPercent = 0;
+            document.getElementById('progPercent').innerText = '0%'; document.getElementById('progBar').style.width = '0%';
+            document.getElementById('progSize').innerText = '-- / --'; document.getElementById('progSpeed').innerText = '--';
+            document.getElementById('progStatus').innerHTML = '<i class="fas fa-cloud-download-alt"></i> جاري بدء الاتصال...';
+            const mode = document.getElementById('mode').value, resVal = document.getElementById('resolution').value;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/download`, {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({url:currentUrl, mode:mode, resolution:resVal, click_id: currentClickId})
+                });
+                const data = await res.json();
+                if(data.success) {
+                    const interval = setInterval(async ()=>{
+                        try {
+                            const progRes = await fetch(`${BACKEND_URL}/api/progress/${data.job_id}`); const prog = await progRes.json();
+                            if(prog.status === 'downloading') {
+                                document.getElementById('progStatus').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري تحميل الملف...';
+                                document.getElementById('progBar').style.width = prog.percent + '%';
+                                document.getElementById('progSize').innerText = prog.dl_mb + ' / ' + prog.total_mb;
+                                document.getElementById('progSpeed').innerText = prog.spd_mb;
+                                animatePercentCounter(prog.percent);
+                            }
+                            else if(prog.status === 'converting') {
+                                document.getElementById('progStatus').innerHTML = '<i class="fas fa-cog fa-spin"></i> جاري معالجة الملف...';
+                                document.getElementById('progBar').style.width = '100%'; document.getElementById('progPercent').innerText = '99%';
+                            }
+                            else if(prog.status === 'completed') {
+                                clearInterval(interval);
+                                document.getElementById('progStatus').innerHTML = '<span class="text-emerald-400"><i class="fas fa-check-circle"></i> اكتمل التحميل</span>';
+                                document.getElementById('progPercent').innerText = '100%'; document.getElementById('progBar').style.width = '100%';
+                                const dlArea = document.getElementById('directDownloadArea'); const dlBtn = document.getElementById('directDownloadBtn');
+                                dlBtn.href = BACKEND_URL + prog.url; dlBtn.setAttribute('download', prog.title + (prog.is_audio ? '.mp3' : '.mp4'));
+                                dlArea.classList.remove('hidden');
+                                myLibrary.unshift({ id: Date.now().toString(), title: prog.title, url: BACKEND_URL + prog.url, thumb: prog.thumb, uploader: prog.uploader, duration: prog.duration, is_audio: prog.is_audio, timestamp: Date.now(), favorite: false });
+                                localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+                                if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
+                                showToast("تم حفظ الملف بنجاح", "success");
+                                if(localStorage.getItem('pz_auto_tg') !== 'false') {
+                                    const tgId = localStorage.getItem('pz_tg_id');
+                                    if (!tgId) {
+                                        pendingTgItem = { url: BACKEND_URL + prog.url, is_audio: prog.is_audio, title: prog.title, uploader: prog.uploader, duration: prog.duration, thumb: prog.thumb };
+                                        document.getElementById('tgIdInput').value = "";
+                                        document.getElementById('tgModal').classList.replace('hidden', 'flex');
+                                        showToast("يرجى ربط حسابك ليتم إرسال هذا الملف إلى البوت ⚠️", "error");
+                                    } else {
+                                        sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
+                                    }
+                                }
+                            }
+                            else if(prog.status === 'error') {
+                                clearInterval(interval);
+                                document.getElementById('progStatus').innerHTML = '<span class="text-red-400"><i class="fas fa-exclamation-circle"></i> فشل التحميل</span>';
+                                showToast("حدث خطأ أثناء معالجة الملف", "error");
+                            }
+                        } catch(err) {}
+                    }, 1000);
+                } else {
+                    showToast(data.error, "error");
+                    document.getElementById('progStatus').innerHTML = `<span class="text-red-400">${data.error}</span>`;
+                }
+            } catch(e) { showToast("فشل الاتصال بالخادم", "error"); }
+            btn.innerHTML = original; btn.disabled = false;
+        };
+
+        // ===== Library =====
+        window.applyFilters = function(withHaptic = false) {
+            if(withHaptic) triggerHaptic('light');
+            const query = document.getElementById('libSearch').value.toLowerCase();
+            const filter = document.getElementById('libFilter').value;
+            let filtered = myLibrary.filter(item => {
+                const matchesSearch = item.title.toLowerCase().includes(query) || (item.uploader && item.uploader.toLowerCase().includes(query));
+                let matchesType = true;
+                if (filter === 'favorites') matchesType = item.favorite;
+                else if (filter === 'audio') matchesType = item.is_audio;
+                else if (filter === 'video') matchesType = !item.is_audio;
+                return matchesSearch && matchesType;
+            });
+            const totalItems = filtered.length; const totalPages = Math.ceil(totalItems / itemsPerPage);
+            if (libraryPage > totalPages) libraryPage = Math.max(1, totalPages);
+            const start = (libraryPage - 1) * itemsPerPage; const pageItems = filtered.slice(start, start + itemsPerPage);
+            const container = document.getElementById('libraryContainer'); container.innerHTML = "";
+            if (pageItems.length === 0) {
+                container.innerHTML = `<div class="col-span-full py-16 text-center text-textMuted">
+                    <div class="w-14 h-14 bg-panelLight/50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-folder-open text-xl text-textDim"></i>
+                    </div>
+                    <p class="text-xs sm:text-sm font-medium">لا توجد ملفات حالياً</p>
+                    <p class="text-[11px] text-textDim mt-1">ابدأ بتحميل أغانيك المفضلة</p>
+                </div>`;
+                document.getElementById('pagination').innerHTML = ""; return;
+            }
+            pageItems.forEach((item) => {
+                const actualIndex = myLibrary.findIndex(i => i.id === item.id);
+                const durationStr = formatTime(item.duration || 0);
+                const favClass = item.favorite ? 'fas fa-heart text-red-400' : 'far fa-heart';
+                const typeTag = item.is_audio ? '<span class="bg-accent/10 text-accentLight text-[9px] px-2 py-0.5 rounded-md font-bold">MP3</span>' : '<span class="bg-fuchsia-500/10 text-fuchsia-400 text-[9px] px-2 py-0.5 rounded-md font-bold">MP4</span>';
+                const fileExt = item.is_audio ? 'mp3' : 'mp4';
+                container.innerHTML += `
+                    <div class="lib-card bg-panel/60 backdrop-blur-sm rounded-2xl p-3.5 border border-panelBorder/40 flex gap-3 items-center relative group w-full">
+                        <div class="relative w-20 h-12 rounded-xl overflow-hidden border border-panelBorder/40 flex-shrink-0 cursor-pointer shadow-lg" onclick="playMediaTrack(${actualIndex})">
+                            <img src="${item.thumb || 'https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png'}" class="w-full h-full object-cover" alt="${item.title}">
+                            <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
+                                <div class="w-6 h-6 bg-accent/90 rounded-full flex items-center justify-center shadow-lg">
+                                    <i class="fas fa-play text-white text-[8px] ml-0.5"></i>
+                                </div>
+                            </div>
+                            <div class="absolute bottom-0.5 right-0.5 bg-black/80 text-[8px] px-1 py-0.5 font-mono rounded text-white/80">${durationStr}</div>
                         </div>
-                        <div class="flex-1 min-w-0 flex flex-col justify-center text-right">
-                            <h4 class="text-white font-bold text-xs md:text-sm truncate w-full mb-1">${v.title}</h4>
-                            <p class="text-textDim text-[10px] md:text-xs truncate w-full flex items-center gap-1">
-                                <i class="fas fa-user-circle text-accent/60"></i> ${v.uploader}
-                            </p>
+                        <div class="flex-1 min-w-0 text-right">
+                            <h4 class="text-white font-bold text-xs sm:text-sm truncate cursor-pointer hover:text-accentLight transition-colors" onclick="playMediaTrack(${actualIndex})">${item.title}</h4>
+                            <div class="flex items-center gap-2 mt-1">
+                                ${typeTag}
+                                <p class="text-textDim text-[10px] truncate">${item.uploader || 'غير معروف'}</p>
+                            </div>
                         </div>
-                        <div class="flex-shrink-0 w-9 h-9 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mr-2">
-                            <i class="fas fa-download text-xs"></i>
+                        <div class="flex items-center gap-1 flex-row-reverse flex-shrink-0">
+                            <button onclick="deleteFromLibrary('${item.id}')" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 active:scale-90 transition-all flex items-center justify-center" title="حذف">
+                                <i class="fas fa-trash-alt text-[10px]"></i>
+                            </button>
+                            <a href="${item.url}" download="${item.title}.${fileExt}" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 active:scale-90 transition-all flex items-center justify-center" title="تحميل">
+                                <i class="fas fa-download text-[10px]"></i>
+                            </a>
+                            <button onclick="triggerSendToTelegram('${item.id}')" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-tgBlue hover:bg-tgBlue/10 hover:border-tgBlue/20 active:scale-90 transition-all flex items-center justify-center" title="إرسال لتيليجرام">
+                                <i class="fab fa-telegram-plane text-[10px]"></i>
+                            </button>
+                            <button onclick="toggleFavorite('${item.id}')" class="w-7 h-7 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 active:scale-90 transition-all flex items-center justify-center" title="المفضلة">
+                                <i class="${favClass} text-[10px]"></i>
+                            </button>
                         </div>
                     </div>`;
+            });
+            renderPagination(totalPages);
+        };
+
+        function renderPagination(totalPages) {
+            const pagBox = document.getElementById('pagination'); pagBox.innerHTML = ""; if (totalPages <= 1) return;
+            let html = `<button onclick="changePage(${libraryPage - 1})" ${libraryPage === 1 ? 'disabled' : ''} class="btn px-3 py-1.5 bg-panel/60 border border-panelBorder/40 text-xs text-textMuted hover:text-white hover:border-accent/30 disabled:opacity-30 rounded-xl">السابق</button>`;
+            for (let i = 1; i <= totalPages; i++) {
+                const activeClass = (libraryPage === i) ? 'bg-gradient-to-r from-accent to-purple-600 text-white shadow-lg glow-accent' : 'bg-panel/60 border border-panelBorder/40 text-textMuted hover:text-white hover:border-accent/30';
+                html += `<button onclick="changePage(${i})" class="btn px-3 py-1.5 ${activeClass} text-xs font-mono rounded-xl">${i}</button>`;
+            }
+            html += `<button onclick="changePage(${libraryPage + 1})" ${libraryPage === totalPages ? 'disabled' : ''} class="btn px-3 py-1.5 bg-panel/60 border border-panelBorder/40 text-xs text-textMuted hover:text-white hover:border-accent/30 disabled:opacity-30 rounded-xl">التالي</button>`;
+            pagBox.innerHTML = html;
+        }
+
+        window.changePage = function(page) { libraryPage = page; applyFilters(); };
+
+        window.toggleFavorite = function(id) {
+            const index = myLibrary.findIndex(i => i.id === id);
+            if (index !== -1) {
+                myLibrary[index].favorite = !myLibrary[index].favorite;
+                localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary)); applyFilters();
+                showToast(myLibrary[index].favorite ? "تمت الإضافة للمفضلة ❤️" : "تمت الإزالة من المفضلة", "success");
+            }
+        };
+
+        window.deleteFromLibrary = function(id) {
+            if (isMiniApp && tg.showConfirm) {
+                tg.showConfirm("هل تريد بالتأكيد حذف هذا الملف؟", function(confirmed) { if (confirmed) executeDelete(id); });
+            } else {
+                if (confirm("هل تريد حذف هذا الملف؟")) executeDelete(id);
+            }
+        };
+
+        function executeDelete(id) {
+            myLibrary = myLibrary.filter(i => i.id !== id); localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+            applyFilters(); updateLibraryCount(); showToast("تم الحذف بنجاح", "success");
+        }
+
+        function updateLibraryCount() { document.getElementById('libCountStatus').innerText = "سجل الملفات (" + myLibrary.length + ")"; }
+
+        window.clearAllLibrary = function() {
+            if (isMiniApp && tg.showConfirm) {
+                tg.showConfirm("هل تود مسح السجل بالكامل؟", function(confirmed) { if (confirmed) executeClearAll(); });
+            } else {
+                if (confirm("هل تود مسح السجل بالكامل؟")) executeClearAll();
+            }
+        };
+
+        function executeClearAll() {
+            myLibrary = []; localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+            applyFilters(); updateLibraryCount(); showToast("تم مسح السجل", "success");
+        }
+
+        // ===== Telegram =====
+        window.updateTgId = function() {
+            const tgId = document.getElementById('settingTgId').value.trim();
+            if (!tgId) { localStorage.removeItem('pz_tg_id'); showToast("تمت إزالة المعرف", "success"); }
+            else { localStorage.setItem('pz_tg_id', tgId); showToast("تم الحفظ بنجاح ✓", "success"); }
+        };
+
+        window.toggleAutoForward = function() {
+            const val = document.getElementById('autoForwardToggle').checked;
+            localStorage.setItem('pz_auto_tg', val ? 'true' : 'false');
+            showToast(val ? "تم تفعيل الإرسال التلقائي" : "تم تعطيل الإرسال التلقائي", "success");
+        };
+
+        window.triggerSendToTelegram = function(id) {
+            const item = myLibrary.find(i => i.id === id); if (!item) return;
+            const tgId = localStorage.getItem('pz_tg_id');
+            if (!tgId) {
+                pendingTgItem = item; document.getElementById('tgIdInput').value = "";
+                document.getElementById('tgModal').classList.replace('hidden', 'flex');
+            } else {
+                sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
+            }
+        };
+
+        async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {
+            const chatId = localStorage.getItem('pz_tg_id'); if (!chatId) return;
+            showToast(auto ? "جاري الإرسال لبوت تيليجرام تلقائياً..." : "جاري إرسال الملف إلى تيليجرام...", "success");
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/send_telegram`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_url: fileUrl, chat_id: chatId.toString(), is_audio: isAudio, title: title, performer: performer, duration: Math.floor(Number(duration)) || 0, thumb: thumb || "" })
                 });
-                document.getElementById('searchResults').classList.remove('hidden');
-            } else showToast("لم يتم العثور على نتائج", "error");
-        } catch(e) { showToast("حدث خطأ في البحث", "error"); }
-    }
-    btn.innerHTML = '<i class="fas fa-search"></i> بحث'; btn.disabled = false;
-};
-
-window.renderPreview = async function(url) {
-    currentUrl = url; document.getElementById('searchResults').classList.add('hidden');
-    document.getElementById('previewBox').classList.add('hidden'); document.getElementById('progressBox').classList.add('hidden');
-    document.getElementById('dlOptions').classList.add('hidden');
-    if(adCheckInterval) clearInterval(adCheckInterval);
-    if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/preview`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url:url})});
-        const data = await res.json();
-        if(data.success) {
-            document.getElementById('previewBox').classList.remove('hidden');
-            document.getElementById('thumb').src = data.thumb; document.getElementById('title').innerText = data.title;
-            const sessionRes = await fetch(`${BACKEND_URL}/api/generate_ad_session`);
-            const sessionData = await sessionRes.json();
-            currentClickId = sessionData.click_id;
-            document.getElementById('realAdLink').href = sessionData.ad_link;
-            document.getElementById('adGate').classList.remove('hidden');
-            let vBtn = document.getElementById('verifyBtn');
-            vBtn.className = "btn bg-panel/80 text-textMuted flex-1 border border-panelBorder text-sm cursor-wait";
-            vBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> بانتظار فحص الإعلان...';
-        } else showToast("الرابط غير صالح للتحميل", "error");
-    } catch(e) { showToast("فشل تحميل المعاينة", "error"); }
-};
-
-window.toggleRes = function() { document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; };
-
-window.startAdVerificationCheck = function() {
-    showToast("جاري فحص الاتصال وتأكيد الجلسة... ⏳", "success");
-    if(adCheckInterval) clearInterval(adCheckInterval);
-    if(adFallbackTimeout) clearTimeout(adFallbackTimeout);
-    let vBtn = document.getElementById('verifyBtn');
-    vBtn.className = "btn bg-accent/10 text-accent flex-1 border border-accent/30 text-sm cursor-wait";
-    vBtn.innerHTML = '<i class="fas fa-sync fa-spin"></i> جاري التحقق من الإعلان...';
-    adFallbackTimeout = setTimeout(() => {
-        document.getElementById('adGate').classList.add('hidden');
-        document.getElementById('dlOptions').classList.remove('hidden');
-        showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
-    }, 10000);
-};
-
-function animatePercentCounter(targetPercent) {
-    let start = lastLoggedPercent; let end = parseFloat(targetPercent) || 0;
-    if (start === end) return;
-    let duration = 400; let startTime = null; const percentEl = document.getElementById('progPercent');
-    function step(timestamp) {
-        if (!startTime) startTime = timestamp;
-        let progress = timestamp - startTime;
-        let current = start + (end - start) * Math.min(progress / duration, 1);
-        percentEl.innerText = Math.floor(current) + '%';
-        percentEl.style.transform = 'scale(1.05)';
-        if (progress < duration) window.requestAnimationFrame(step);
-        else { percentEl.innerText = end + '%'; percentEl.style.transform = 'scale(1.0)'; lastLoggedPercent = end; }
-    }
-    window.requestAnimationFrame(step);
-}
-
-window.startDownload = async function(event) {
-    const btn = event.currentTarget; const original = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
-    document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
-    document.getElementById('directDownloadArea').classList.add('hidden');
-    lastLoggedPercent = 0;
-    document.getElementById('progPercent').innerText = '0%'; document.getElementById('progBar').style.width = '0%';
-    document.getElementById('progSize').innerText = '-- / --'; document.getElementById('progSpeed').innerText = '--';
-    document.getElementById('progStatus').innerHTML = '<i class="fas fa-cloud-download-alt"></i> جاري بدء الاتصال...';
-    const mode = document.getElementById('mode').value, resVal = document.getElementById('resolution').value;
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/download`, {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({url:currentUrl, mode:mode, resolution:resVal, click_id: currentClickId})
-        });
-        const data = await res.json();
-        if(data.success) {
-            const interval = setInterval(async ()=>{
-                try {
-                    const progRes = await fetch(`${BACKEND_URL}/api/progress/${data.job_id}`); const prog = await progRes.json();
-                    if(prog.status === 'downloading') {
-                        document.getElementById('progStatus').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري تحميل الملف...';
-                        document.getElementById('progBar').style.width = prog.percent + '%';
-                        document.getElementById('progSize').innerText = prog.dl_mb + ' / ' + prog.total_mb;
-                        document.getElementById('progSpeed').innerText = prog.spd_mb;
-                        animatePercentCounter(prog.percent);
-                    }
-                    else if(prog.status === 'converting') {
-                        document.getElementById('progStatus').innerHTML = '<i class="fas fa-cog fa-spin"></i> جاري معالجة الملف...';
-                        document.getElementById('progBar').style.width = '100%'; document.getElementById('progPercent').innerText = '99%';
-                    }
-                    else if(prog.status === 'completed') {
-                        clearInterval(interval);
-                        document.getElementById('progStatus').innerHTML = '<span class="text-emerald-400"><i class="fas fa-check-circle"></i> اكتمل التحميل</span>';
-                        document.getElementById('progPercent').innerText = '100%'; document.getElementById('progBar').style.width = '100%';
-                        const dlArea = document.getElementById('directDownloadArea'); const dlBtn = document.getElementById('directDownloadBtn');
-                        dlBtn.href = BACKEND_URL + prog.url; dlBtn.setAttribute('download', prog.title + (prog.is_audio ? '.mp3' : '.mp4'));
-                        dlArea.classList.remove('hidden');
-                        myLibrary.unshift({ id: Date.now().toString(), title: prog.title, url: BACKEND_URL + prog.url, thumb: prog.thumb, uploader: prog.uploader, duration: prog.duration, is_audio: prog.is_audio, timestamp: Date.now(), favorite: false });
-                        localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
-                        if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
-                        showToast("تم حفظ الملف بنجاح", "success");
-                        if(localStorage.getItem('pz_auto_tg') !== 'false') {
-                            const tgId = localStorage.getItem('pz_tg_id');
-                            if (!tgId) {
-                                pendingTgItem = { url: BACKEND_URL + prog.url, is_audio: prog.is_audio, title: prog.title, uploader: prog.uploader, duration: prog.duration, thumb: prog.thumb };
-                                document.getElementById('tgIdInput').value = "";
-                                document.getElementById('tgModal').classList.replace('hidden', 'flex');
-                                showToast("يرجى ربط حسابك ليتم إرسال هذا الملف إلى البوت ⚠️", "error");
-                            } else {
-                                sendToTelegram(BACKEND_URL + prog.url, prog.is_audio, true, prog.title, prog.uploader, prog.duration, prog.thumb);
-                            }
-                        }
-                    }
-                    else if(prog.status === 'error') {
-                        clearInterval(interval);
-                        document.getElementById('progStatus').innerHTML = '<span class="text-red-400"><i class="fas fa-exclamation-circle"></i> فشل التحميل</span>';
-                        showToast("حدث خطأ أثناء معالجة الملف", "error");
-                    }
-                } catch(err) {}
-            }, 1000);
-        } else {
-            showToast(data.error, "error");
-            document.getElementById('progStatus').innerHTML = `<span class="text-red-400">${data.error}</span>`;
+                const data = await res.json();
+                if (data.success) showToast("تم إرسال الملف إلى حسابك بنجاح! 🎉", "success");
+                else showToast("فشل الإرسال للبوت: " + data.error, "error");
+            } catch(e) { showToast("فشل الاتصال بالخادم لإرسال تيليجرام", "error"); }
         }
-    } catch(e) { showToast("فشل الاتصال بالخادم", "error"); }
-    btn.innerHTML = original; btn.disabled = false;
-};
 
-// ===== Library =====
-window.applyFilters = function(withHaptic = false) {
-    if(withHaptic) triggerHaptic('light');
-    const query = document.getElementById('libSearch').value.toLowerCase();
-    const filter = document.getElementById('libFilter').value;
-    let filtered = myLibrary.filter(item => {
-        const matchesSearch = item.title.toLowerCase().includes(query) || (item.uploader && item.uploader.toLowerCase().includes(query));
-        let matchesType = true;
-        if (filter === 'favorites') matchesType = item.favorite;
-        else if (filter === 'audio') matchesType = item.is_audio;
-        else if (filter === 'video') matchesType = !item.is_audio;
-        return matchesSearch && matchesType;
-    });
-    const totalItems = filtered.length; const totalPages = Math.ceil(totalItems / itemsPerPage);
-    if (libraryPage > totalPages) libraryPage = Math.max(1, totalPages);
-    const start = (libraryPage - 1) * itemsPerPage; const pageItems = filtered.slice(start, start + itemsPerPage);
-    const container = document.getElementById('libraryContainer'); container.innerHTML = "";
-    if (pageItems.length === 0) {
-        container.innerHTML = `<div class="col-span-full py-20 text-center text-textMuted">
-            <div class="w-16 h-16 bg-panelLight/50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <i class="fas fa-folder-open text-2xl text-textDim"></i>
-            </div>
-            <p class="text-sm font-medium">لا توجد ملفات حالياً</p>
-            <p class="text-xs text-textDim mt-1">ابدأ بتحميل أغانيك المفضلة</p>
-        </div>`;
-        document.getElementById('pagination').innerHTML = ""; return;
-    }
-    pageItems.forEach((item) => {
-        const actualIndex = myLibrary.findIndex(i => i.id === item.id);
-        const durationStr = formatTime(item.duration || 0);
-        const favClass = item.favorite ? 'fas fa-heart text-red-400' : 'far fa-heart';
-        const typeTag = item.is_audio ? '<span class="bg-accent/10 text-accentLight text-[9px] px-2 py-0.5 rounded-md font-bold">MP3</span>' : '<span class="bg-fuchsia-500/10 text-fuchsia-400 text-[9px] px-2 py-0.5 rounded-md font-bold">MP4</span>';
-        const fileExt = item.is_audio ? 'mp3' : 'mp4';
-        container.innerHTML += `
-            <div class="lib-card bg-panel/60 backdrop-blur-sm rounded-2xl p-4 border border-panelBorder/40 flex gap-4 items-center relative group">
-                <div class="relative w-[88px] h-[56px] rounded-xl overflow-hidden border border-panelBorder/40 flex-shrink-0 cursor-pointer shadow-lg" onclick="playMediaTrack(${actualIndex})">
-                    <img src="${item.thumb || 'https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png'}" class="w-full h-full object-cover" alt="${item.title}">
-                    <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-                        <div class="w-7 h-7 bg-accent/90 rounded-full flex items-center justify-center shadow-lg">
-                            <i class="fas fa-play text-white text-[9px] ml-0.5"></i>
+        window.closeTgModal = function() { document.getElementById('tgModal').classList.replace('flex', 'hidden'); pendingTgItem = null; };
+
+        window.saveTgIdFromModal = function() {
+            const val = document.getElementById('tgIdInput').value.trim();
+            if (!val) return showToast("أدخل معرف صالح", "error");
+            localStorage.setItem('pz_tg_id', val); document.getElementById('settingTgId').value = val;
+            closeTgModal(); showToast("تم الحفظ بنجاح وجاري الإرسال للبوت... 🎉", "success");
+            if (pendingTgItem) {
+                sendToTelegram(pendingTgItem.url, pendingTgItem.is_audio, false, pendingTgItem.title, pendingTgItem.uploader || "PlayZone", pendingTgItem.duration, pendingTgItem.thumb);
+            }
+        };
+
+        // ===== Player =====
+        window.playMediaTrack = function(index) {
+            currentPlayingIndex = index; const track = myLibrary[index]; if (!track) return;
+            mediaContainer.classList.add('active-player');
+            if (track.is_audio) {
+                currentPlayingMode = 'audio'; document.getElementById('trackSource').innerText = '🎵 صوت';
+                document.getElementById('videoContainer').classList.add('hidden'); document.getElementById('audioVisualizer').classList.remove('hidden');
+                document.getElementById('pipBtn').classList.add('hidden');
+                document.getElementById('playerCoverImg').src = track.thumb || 'https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png';
+            } else {
+                currentPlayingMode = 'video'; document.getElementById('trackSource').innerText = '🎬 فيديو';
+                document.getElementById('videoContainer').classList.remove('hidden'); document.getElementById('audioVisualizer').classList.add('hidden');
+                document.getElementById('pipBtn').classList.remove('hidden');
+            }
+            videoElement.src = track.url; videoElement.load();
+            videoElement.play().catch(() => { showToast("اضغط زر التشغيل للمتابعة", "success"); });
+            document.getElementById('playerTitle').innerText = track.title;
+            if (mediaContainer.classList.contains('compact-mode')) removeCompactLayout();
+
+            addToRecentlyPlayed(track);
+
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: track.title, artist: track.uploader || 'PlayZone', album: 'PlayZone Music',
+                    artwork: [{ src: track.thumb || 'https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png', sizes: '512x512', type: 'image/png' }]
+                });
+                setupMediaSessionActions();
+            }
+        };
+
+        window.togglePlay = function() {
+            if (videoElement.paused) videoElement.play().catch(()=>{});
+            else videoElement.pause();
+        };
+
+        function setupMediaSessionActions() {
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
+                navigator.mediaSession.setActionHandler('pause', () => { togglePlay(); });
+                navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
+                navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
+            }
+        }
+
+        window.playNext = function() {
+            if (myLibrary.length === 0) return;
+            if (isShuffle) { playMediaTrack(Math.floor(Math.random() * myLibrary.length)); }
+            else { let idx = currentPlayingIndex + 1; if (idx >= myLibrary.length) idx = 0; playMediaTrack(idx); }
+        };
+
+        window.playPrev = function() {
+            if (myLibrary.length === 0) return;
+            let idx = currentPlayingIndex - 1; if (idx < 0) idx = myLibrary.length - 1; playMediaTrack(idx);
+        };
+
+        window.toggleShuffle = function() {
+            isShuffle = !isShuffle; const btn = document.getElementById('shuffleBtn');
+            if (isShuffle) { btn.classList.add('text-accent', 'bg-accent/10'); btn.classList.remove('text-textMuted'); }
+            else { btn.classList.remove('text-accent', 'bg-accent/10'); btn.classList.add('text-textMuted'); }
+        };
+
+        window.toggleRepeat = function() {
+            isRepeat = !isRepeat; const btn = document.getElementById('repeatBtn');
+            if (isRepeat) { btn.classList.add('text-accent', 'bg-accent/10'); btn.classList.remove('text-textMuted'); }
+            else { btn.classList.remove('text-accent', 'bg-accent/10'); btn.classList.add('text-textMuted'); }
+        };
+
+        window.updatePlayerProgress = function() {
+            if (isScrubbing) return; const cur = videoElement.currentTime; const dur = videoElement.duration; if (isNaN(dur)) return;
+            const pct = (cur / dur) * 100; document.getElementById('mediaProgressBar').style.width = pct + '%';
+            document.getElementById('mediaProgressSlider').style.left = pct + '%'; document.getElementById('playerTime').innerText = formatTime(cur) + ' / ' + formatTime(dur);
+        };
+
+        function setupScrubbing() {
+            const container = document.getElementById('progressContainer');
+            container.addEventListener('pointerdown', (e) => {
+                isScrubbing = true; performScrub(e); container.setPointerCapture(e.pointerId);
+                container.addEventListener('pointermove', performScrub); container.addEventListener('pointerup', endScrub); container.addEventListener('pointercancel', endScrub);
+            });
+            function performScrub(e) {
+                if (!isScrubbing) return; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
+                const pct = Math.max(0, Math.min(1, clickX / rect.width)); document.getElementById('mediaProgressBar').style.width = (pct * 100) + '%';
+                document.getElementById('mediaProgressSlider').style.left = (pct * 100) + '%';
+                if (!isNaN(videoElement.duration)) { document.getElementById('playerTime').innerText = formatTime(pct * videoElement.duration) + ' / ' + formatTime(videoElement.duration); }
+            }
+            function endScrub(e) {
+                if (!isScrubbing) return; isScrubbing = false; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
+                const pct = Math.max(0, Math.min(1, clickX / rect.width));
+                if (!isNaN(videoElement.duration)) { videoElement.currentTime = pct * videoElement.duration; }
+                try { container.releasePointerCapture(e.pointerId); } catch(err) {}
+                container.removeEventListener('pointermove', performScrub); container.removeEventListener('pointerup', endScrub); container.removeEventListener('pointercancel', endScrub);
+            }
+        }
+
+        window.changeVolume = function() {
+            const val = document.getElementById('volumeSlider').value; videoElement.volume = val; lastVolume = val;
+            const i = document.getElementById('muteBtn').querySelector('i');
+            if (val == 0) { i.className = "fas fa-volume-mute text-xs"; isMuted = true; } else { i.className = "fas fa-volume-up text-xs"; isMuted = false; }
+        };
+
+        window.toggleMute = function() {
+            const i = document.getElementById('muteBtn').querySelector('i');
+            if (isMuted) { videoElement.volume = lastVolume || 1; document.getElementById('volumeSlider').value = lastVolume || 1; i.className = "fas fa-volume-up text-xs"; isMuted = false; }
+            else { videoElement.volume = 0; document.getElementById('volumeSlider').value = 0; i.className = "fas fa-volume-mute text-xs"; isMuted = true; }
+        };
+
+        let currentSpeed = 1;
+        window.changeSpeed = function() {
+            const spds = [1, 1.25, 1.5, 1.75, 2]; let idx = spds.indexOf(currentSpeed); idx = (idx + 1) % spds.length;
+            currentSpeed = spds[idx]; videoElement.playbackRate = currentSpeed; document.getElementById('speedBtn').innerText = currentSpeed + 'x';
+        };
+
+        window.handleMediaEnd = function() { if (isRepeat) { videoElement.currentTime = 0; videoElement.play().catch(()=>{}); } else { playNext(); } };
+        window.closePlayer = function() { videoElement.pause(); mediaContainer.classList.remove('active-player'); animateVisualizerBars(false); };
+        window.triggerPiP = function() { if (document.pictureInPictureEnabled && videoElement && currentPlayingMode === 'video') { if (document.pictureInPictureElement) document.exitPictureInPicture(); else videoElement.requestPictureInPicture().catch(()=>{}); } };
+        window.toggleCompactMode = function(e) { e.stopPropagation(); const icon = e.currentTarget.querySelector('i'); if (mediaContainer.classList.contains('compact-mode')) { removeCompactLayout(); icon.className = "fas fa-compress-alt text-[10px]"; } else { mediaContainer.classList.add('compact-mode'); document.getElementById('playerBody').style.display = 'none'; icon.className = "fas fa-expand-alt text-[10px]"; } };
+        function removeCompactLayout() { mediaContainer.classList.remove('compact-mode'); document.getElementById('playerBody').style.display = 'block'; }
+        window.resetPlayerPosition = function() { mediaContainer.style.top = 'auto'; mediaContainer.style.left = '16px'; mediaContainer.style.bottom = '16px'; mediaContainer.style.right = 'auto'; mediaContainer.style.transform = 'none'; };
+        function animateVisualizerBars(run) { const visualizer = document.getElementById('visualizerBars'); if (run) visualizer.classList.add('playing-visualizer'); else visualizer.classList.remove('playing-visualizer'); }
+
+        // ===== Draggable Player =====
+        function setupAdvancedDraggable(el, handle) {
+            let isDragging = false; let startX, startY, initialLeft, initialTop;
+            handle.addEventListener('pointerdown', dragStart);
+            function dragStart(e) {
+                if (e.target.closest('button, input, a, select')) return;
+                isDragging = true; handle.style.cursor = 'grabbing'; el.classList.add('dragging-player');
+                startX = e.clientX; startY = e.clientY; initialLeft = el.offsetLeft; initialTop = el.offsetTop;
+                el.style.transition = 'none'; handle.setPointerCapture(e.pointerId);
+                handle.addEventListener('pointermove', dragMove); handle.addEventListener('pointerup', dragEnd); handle.addEventListener('pointercancel', dragEnd);
+            }
+            function dragMove(e) {
+                if (!isDragging) return; const dx = e.clientX - startX; const dy = e.clientY - startY;
+                let newLeft = initialLeft + dx; let newTop = initialTop + dy; const padding = 8;
+                const maxLeft = window.innerWidth - el.offsetWidth - padding; const maxTop = window.innerHeight - el.offsetHeight - padding;
+                newLeft = Math.max(padding, Math.min(newLeft, maxLeft)); newTop = Math.max(padding, Math.min(newTop, maxTop));
+                el.style.left = newLeft + "px"; el.style.top = newTop + "px"; el.style.bottom = "auto"; el.style.right = "auto";
+            }
+            function dragEnd(e) {
+                if (!isDragging) return; isDragging = false; handle.style.cursor = 'grab'; el.classList.remove('dragging-player');
+                el.style.transition = 'opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+                try { handle.releasePointerCapture(e.pointerId); } catch(err) {}
+                handle.removeEventListener('pointermove', dragMove); handle.removeEventListener('pointerup', dragEnd); handle.removeEventListener('pointercancel', dragEnd);
+            }
+        }
+
+        // ===== Recently Played Feature =====
+        function addToRecentlyPlayed(track) {
+            recentlyPlayed = recentlyPlayed.filter(r => r.id !== track.id);
+            recentlyPlayed.unshift({ ...track, playedAt: Date.now() });
+            if (recentlyPlayed.length > 20) recentlyPlayed = recentlyPlayed.slice(0, 20);
+            localStorage.setItem('pz_recently_played', JSON.stringify(recentlyPlayed));
+        }
+
+        function renderRecentlyPlayed() {
+            const container = document.getElementById('recentContainer');
+            container.innerHTML = '';
+            if (recentlyPlayed.length === 0) {
+                container.innerHTML = `<div class="py-16 text-center text-textMuted">
+                    <div class="w-14 h-14 bg-panelLight/50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-history text-xl text-textDim"></i>
+                    </div>
+                    <p class="text-xs sm:text-sm font-medium">لم تستمع لأي مقطع بعد</p>
+                    <p class="text-[11px] text-textDim mt-1">ابدأ بتشغيل أغانيك المفضلة</p>
+                </div>`;
+                return;
+            }
+            recentlyPlayed.forEach((item, idx) => {
+                const durationStr = formatTime(item.duration || 0);
+                const typeIcon = item.is_audio ? '<i class="fas fa-music text-accent text-[9px]"></i>' : '<i class="fas fa-video text-fuchsia-400 text-[9px]"></i>';
+                container.innerHTML += `
+                    <div class="recent-item bg-panel/50 border border-panelBorder/40 rounded-2xl p-3 flex items-center gap-3 cursor-pointer w-full" onclick="playRecentTrack(${idx})">
+                        <div class="relative w-16 h-10 rounded-xl overflow-hidden border border-panelBorder/30 flex-shrink-0 shadow-md">
+                            <img src="${item.thumb || 'https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png'}" class="w-full h-full object-cover" alt="${item.title}">
+                            <div class="absolute bottom-0.5 right-0.5 bg-black/80 text-[8px] px-1 py-0.5 font-mono rounded text-white/80">${durationStr}</div>
                         </div>
-                    </div>
-                    <div class="absolute bottom-1 right-1 bg-black/80 text-[9px] px-1.5 py-0.5 font-mono rounded-md text-white/80">${durationStr}</div>
-                </div>
-                <div class="flex-1 min-w-0 text-right">
-                    <h4 class="text-white font-bold text-xs md:text-sm truncate cursor-pointer hover:text-accentLight transition-colors" onclick="playMediaTrack(${actualIndex})">${item.title}</h4>
-                    <div class="flex items-center gap-2 mt-1.5">
-                        ${typeTag}
-                        <p class="text-textDim text-[10px] truncate">${item.uploader || 'غير معروف'}</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-1 flex-row-reverse">
-                    <button onclick="deleteFromLibrary('${item.id}')" class="w-8 h-8 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 active:scale-90 transition-all flex items-center justify-center">
-                        <i class="fas fa-trash-alt text-[10px]"></i>
-                    </button>
-                    <a href="${item.url}" download="${item.title}.${fileExt}" class="w-8 h-8 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 active:scale-90 transition-all flex items-center justify-center">
-                        <i class="fas fa-download text-[10px]"></i>
-                    </a>
-                    <button onclick="triggerSendToTelegram('${item.id}')" class="w-8 h-8 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-tgBlue hover:bg-tgBlue/10 hover:border-tgBlue/20 active:scale-90 transition-all flex items-center justify-center">
-                        <i class="fab fa-telegram-plane text-[10px]"></i>
-                    </button>
-                    <button onclick="toggleFavorite('${item.id}')" class="w-8 h-8 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 active:scale-90 transition-all flex items-center justify-center">
-                        <i class="${favClass} text-[10px]"></i>
-                    </button>
-                    <button onclick="showAddToPlaylistModal('${item.id}')" class="w-8 h-8 rounded-xl bg-bgDeep/60 border border-panelBorder/30 text-textMuted hover:text-accent hover:bg-accent/10 hover:border-accent/20 active:scale-90 transition-all flex items-center justify-center">
-                        <i class="fas fa-plus text-[10px]"></i>
-                    </button>
-                </div>
-            </div>`;
-    });
-    renderPagination(totalPages);
-};
-
-function renderPagination(totalPages) {
-    const pagBox = document.getElementById('pagination'); pagBox.innerHTML = ""; if (totalPages <= 1) return;
-    let html = `<button onclick="changePage(${libraryPage - 1})" ${libraryPage === 1 ? 'disabled' : ''} class="btn px-3.5 py-2 bg-panel/60 border border-panelBorder/40 text-xs text-textMuted hover:text-white hover:border-accent/30 disabled:opacity-30 rounded-xl">السابق</button>`;
-    for (let i = 1; i <= totalPages; i++) {
-        const activeClass = (libraryPage === i) ? 'bg-gradient-to-r from-accent to-purple-600 text-white shadow-lg glow-accent' : 'bg-panel/60 border border-panelBorder/40 text-textMuted hover:text-white hover:border-accent/30';
-        html += `<button onclick="changePage(${i})" class="btn px-3.5 py-2 ${activeClass} text-xs font-mono rounded-xl">${i}</button>`;
-    }
-    html += `<button onclick="changePage(${libraryPage + 1})" ${libraryPage === totalPages ? 'disabled' : ''} class="btn px-3.5 py-2 bg-panel/60 border border-panelBorder/40 text-xs text-textMuted hover:text-white hover:border-accent/30 disabled:opacity-30 rounded-xl">التالي</button>`;
-    pagBox.innerHTML = html;
-}
-
-window.changePage = function(page) { libraryPage = page; applyFilters(); };
-
-window.toggleFavorite = function(id) {
-    const index = myLibrary.findIndex(i => i.id === id);
-    if (index !== -1) {
-        myLibrary[index].favorite = !myLibrary[index].favorite;
-        localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary)); applyFilters();
-        showToast(myLibrary[index].favorite ? "تمت الإضافة للمفضلة ❤️" : "تمت الإزالة من المفضلة", "success");
-    }
-};
-
-window.deleteFromLibrary = function(id) {
-    if (isMiniApp && tg.showConfirm) {
-        tg.showConfirm("هل تريد بالتأكيد حذف هذا الملف؟", function(confirmed) { if (confirmed) executeDelete(id); });
-    } else {
-        if (confirm("هل تريد حذف هذا الملف؟")) executeDelete(id);
-    }
-};
-
-function executeDelete(id) {
-    myLibrary = myLibrary.filter(i => i.id !== id); localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
-    applyFilters(); updateLibraryCount(); showToast("تم الحذف بنجاح", "success");
-}
-
-function updateLibraryCount() { document.getElementById('libCountStatus').innerText = "سجل الملفات (" + myLibrary.length + ")"; }
-
-window.clearAllLibrary = function() {
-    if (isMiniApp && tg.showConfirm) {
-        tg.showConfirm("هل تود مسح السجل بالكامل؟", function(confirmed) { if (confirmed) executeClearAll(); });
-    } else {
-        if (confirm("هل تود مسح السجل بالكامل؟")) executeClearAll();
-    }
-};
-
-function executeClearAll() {
-    myLibrary = []; localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
-    applyFilters(); updateLibraryCount(); showToast("تم مسح السجل", "success");
-}
-
-// ===== Telegram =====
-window.updateTgId = function() {
-    const tgId = document.getElementById('settingTgId').value.trim();
-    if (!tgId) { localStorage.removeItem('pz_tg_id'); showToast("تمت إزالة المعرف", "success"); }
-    else { localStorage.setItem('pz_tg_id', tgId); showToast("تم الحفظ بنجاح ✓", "success"); }
-};
-
-window.toggleAutoForward = function() {
-    const val = document.getElementById('autoForwardToggle').checked;
-    localStorage.setItem('pz_auto_tg', val ? 'true' : 'false');
-    showToast(val ? "تم تفعيل الإرسال التلقائي" : "تم تعطيل الإرسال التلقائي", "success");
-};
-
-window.triggerSendToTelegram = function(id) {
-    const item = myLibrary.find(i => i.id === id); if (!item) return;
-    const tgId = localStorage.getItem('pz_tg_id');
-    if (!tgId) {
-        pendingTgItem = item; document.getElementById('tgIdInput').value = "";
-        document.getElementById('tgModal').classList.replace('hidden', 'flex');
-    } else {
-        sendToTelegram(item.url, item.is_audio, false, item.title, item.uploader, item.duration, item.thumb);
-    }
-};
-
-async function sendToTelegram(fileUrl, isAudio, auto = false, title = "مقطع", performer = "PlayZone", duration = 0, thumb = "") {
-    const chatId = localStorage.getItem('pz_tg_id'); if (!chatId) return;
-    showToast(auto ? "جاري الإرسال لبوت تيليجرام تلقائياً..." : "جاري إرسال الملف إلى تيليجرام...", "success");
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/send_telegram`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_url: fileUrl, chat_id: chatId.toString(), is_audio: isAudio, title: title, performer: performer, duration: Math.floor(Number(duration)) || 0, thumb: thumb || "" })
-        });
-        const data = await res.json();
-        if (data.success) showToast("تم إرسال الملف إلى حسابك بنجاح! 🎉", "success");
-        else showToast("فشل الإرسال للبوت: " + data.error, "error");
-    } catch(e) { showToast("فشل الاتصال بالخادم لإرسال تيليجرام", "error"); }
-}
-
-window.closeTgModal = function() { document.getElementById('tgModal').classList.replace('flex', 'hidden'); pendingTgItem = null; };
-
-window.saveTgIdFromModal = function() {
-    const val = document.getElementById('tgIdInput').value.trim();
-    if (!val) return showToast("أدخل معرف صالح", "error");
-    localStorage.setItem('pz_tg_id', val); document.getElementById('settingTgId').value = val;
-    closeTgModal(); showToast("تم الحفظ بنجاح وجاري الإرسال للبوت... 🎉", "success");
-    if (pendingTgItem) {
-        sendToTelegram(pendingTgItem.url, pendingTgItem.is_audio, false, pendingTgItem.title, pendingTgItem.uploader || "PlayZone", pendingTgItem.duration, pendingTgItem.thumb);
-    }
-};
-
-// ===== Player =====
-window.playMediaTrack = function(index) {
-    currentPlayingIndex = index; const track = myLibrary[index]; if (!track) return;
-    mediaContainer.classList.add('active-player');
-    if (track.is_audio) {
-        currentPlayingMode = 'audio'; document.getElementById('trackSource').innerText = '🎵 صوت';
-        document.getElementById('videoContainer').classList.add('hidden'); document.getElementById('audioVisualizer').classList.remove('hidden');
-        document.getElementById('pipBtn').classList.add('hidden');
-        document.getElementById('playerCoverImg').src = track.thumb || 'https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png';
-    } else {
-        currentPlayingMode = 'video'; document.getElementById('trackSource').innerText = '🎬 فيديو';
-        document.getElementById('videoContainer').classList.remove('hidden'); document.getElementById('audioVisualizer').classList.add('hidden');
-        document.getElementById('pipBtn').classList.remove('hidden');
-    }
-    videoElement.src = track.url; videoElement.load();
-    videoElement.play().catch(() => { showToast("اضغط زر التشغيل للمتابعة", "success"); });
-    document.getElementById('playerTitle').innerText = track.title;
-    if (mediaContainer.classList.contains('compact-mode')) removeCompactLayout();
-
-    // Add to recently played
-    addToRecentlyPlayed(track);
-
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: track.title, artist: track.uploader || 'PlayZone', album: 'PlayZone Music',
-            artwork: [{ src: track.thumb || 'https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png', sizes: '512x512', type: 'image/png' }]
-        });
-        setupMediaSessionActions();
-    }
-};
-
-window.togglePlay = function() {
-    if (videoElement.paused) videoElement.play().catch(()=>{});
-    else videoElement.pause();
-};
-
-function setupMediaSessionActions() {
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.setActionHandler('play', () => { togglePlay(); });
-        navigator.mediaSession.setActionHandler('pause', () => { togglePlay(); });
-        navigator.mediaSession.setActionHandler('previoustrack', () => { playPrev(); });
-        navigator.mediaSession.setActionHandler('nexttrack', () => { playNext(); });
-    }
-}
-
-window.playNext = function() {
-    if (currentPlaylistContext) {
-        const pl = playlists.find(p => p.id === currentPlaylistContext);
-        if (pl && pl.tracks.length > 0) {
-            let idx = currentPlayingIndex + 1;
-            if (isShuffle) idx = Math.floor(Math.random() * pl.tracks.length);
-            else if (idx >= pl.tracks.length) idx = 0;
-            currentPlayingIndex = idx;
-            playPlaylistTrack(pl.id, idx);
-            return;
+                        <div class="flex-1 min-w-0 text-right">
+                            <h4 class="text-white font-bold text-xs truncate">${item.title}</h4>
+                            <div class="flex items-center gap-2 mt-0.5">
+                                ${typeIcon}
+                                <span class="text-textDim text-[10px]">${timeAgo(item.playedAt)}</span>
+                            </div>
+                        </div>
+                        <div class="w-7 h-7 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent flex-shrink-0">
+                            <i class="fas fa-play text-[8px] ml-0.5"></i>
+                        </div>
+                    </div>`;
+            });
         }
-    }
-    if (myLibrary.length === 0) return;
-    if (isShuffle) { playMediaTrack(Math.floor(Math.random() * myLibrary.length)); }
-    else { let idx = currentPlayingIndex + 1; if (idx >= myLibrary.length) idx = 0; playMediaTrack(idx); }
-};
 
-window.playPrev = function() {
-    if (currentPlaylistContext) {
-        const pl = playlists.find(p => p.id === currentPlaylistContext);
-        if (pl && pl.tracks.length > 0) {
-            let idx = currentPlayingIndex - 1; if (idx < 0) idx = pl.tracks.length - 1;
-            currentPlayingIndex = idx;
-            playPlaylistTrack(pl.id, idx);
-            return;
+        window.playRecentTrack = function(recentIndex) {
+            const track = recentlyPlayed[recentIndex];
+            if (!track) return;
+            const libIndex = myLibrary.findIndex(i => i.id === track.id);
+            if (libIndex !== -1) {
+                playMediaTrack(libIndex);
+            } else {
+                showToast("المقطع لم يعد موجوداً في المكتبة", "error");
+            }
+        };
+
+        window.clearRecentHistory = function() {
+            if (confirm("هل تريد مسح سجل الاستماع؟")) {
+                recentlyPlayed = [];
+                localStorage.setItem('pz_recently_played', JSON.stringify(recentlyPlayed));
+                renderRecentlyPlayed();
+                showToast("تم مسح السجل", "success");
+            }
+        };
+
+        // ===== Sleep Timer Feature =====
+        window.setSleepTimer = function(minutes) {
+            sleepTimerEndTime = Date.now() + (minutes * 60 * 1000);
+            localStorage.setItem('pz_sleep_end', sleepTimerEndTime);
+            startSleepCountdown();
+            showToast(`مؤقت النوم: ${minutes} دقيقة ⏰`, "success");
+        };
+
+        function startSleepCountdown() {
+            if (sleepTimerInterval) clearInterval(sleepTimerInterval);
+            document.getElementById('sleepTimerStatus').classList.remove('hidden');
+            sleepTimerInterval = setInterval(() => {
+                const remaining = sleepTimerEndTime - Date.now();
+                if (remaining <= 0) {
+                    executeSleepTimer();
+                    return;
+                }
+                const mins = Math.floor(remaining / 60000);
+                const secs = Math.floor((remaining % 60000) / 1000);
+                document.getElementById('sleepCountdown').innerText = `${mins}:${secs < 10 ? '0' + secs : secs}`;
+            }, 1000);
         }
-    }
-    if (myLibrary.length === 0) return;
-    let idx = currentPlayingIndex - 1; if (idx < 0) idx = myLibrary.length - 1; playMediaTrack(idx);
-};
 
-window.toggleShuffle = function() {
-    isShuffle = !isShuffle; const btn = document.getElementById('shuffleBtn');
-    if (isShuffle) { btn.classList.add('text-accent', 'bg-accent/10'); btn.classList.remove('text-textMuted'); }
-    else { btn.classList.remove('text-accent', 'bg-accent/10'); btn.classList.add('text-textMuted'); }
-};
-
-window.toggleRepeat = function() {
-    isRepeat = !isRepeat; const btn = document.getElementById('repeatBtn');
-    if (isRepeat) { btn.classList.add('text-accent', 'bg-accent/10'); btn.classList.remove('text-textMuted'); }
-    else { btn.classList.remove('text-accent', 'bg-accent/10'); btn.classList.add('text-textMuted'); }
-};
-
-window.updatePlayerProgress = function() {
-    if (isScrubbing) return; const cur = videoElement.currentTime; const dur = videoElement.duration; if (isNaN(dur)) return;
-    const pct = (cur / dur) * 100; document.getElementById('mediaProgressBar').style.width = pct + '%';
-    document.getElementById('mediaProgressSlider').style.left = pct + '%'; document.getElementById('playerTime').innerText = formatTime(cur) + ' / ' + formatTime(dur);
-};
-
-function setupScrubbing() {
-    const container = document.getElementById('progressContainer');
-    container.addEventListener('pointerdown', (e) => {
-        isScrubbing = true; performScrub(e); container.setPointerCapture(e.pointerId);
-        container.addEventListener('pointermove', performScrub); container.addEventListener('pointerup', endScrub); container.addEventListener('pointercancel', endScrub);
-    });
-    function performScrub(e) {
-        if (!isScrubbing) return; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
-        const pct = Math.max(0, Math.min(1, clickX / rect.width)); document.getElementById('mediaProgressBar').style.width = (pct * 100) + '%';
-        document.getElementById('mediaProgressSlider').style.left = (pct * 100) + '%';
-        if (!isNaN(videoElement.duration)) { document.getElementById('playerTime').innerText = formatTime(pct * videoElement.duration) + ' / ' + formatTime(videoElement.duration); }
-    }
-    function endScrub(e) {
-        if (!isScrubbing) return; isScrubbing = false; const rect = container.getBoundingClientRect(); const clickX = e.clientX - rect.left;
-        const pct = Math.max(0, Math.min(1, clickX / rect.width));
-        if (!isNaN(videoElement.duration)) { videoElement.currentTime = pct * videoElement.duration; }
-        try { container.releasePointerCapture(e.pointerId); } catch(err) {}
-        container.removeEventListener('pointermove', performScrub); container.removeEventListener('pointerup', endScrub); container.removeEventListener('pointercancel', endScrub);
-    }
-}
-
-window.changeVolume = function() {
-    const val = document.getElementById('volumeSlider').value; videoElement.volume = val; lastVolume = val;
-    const i = document.getElementById('muteBtn').querySelector('i');
-    if (val == 0) { i.className = "fas fa-volume-mute text-xs"; isMuted = true; } else { i.className = "fas fa-volume-up text-xs"; isMuted = false; }
-};
-
-window.toggleMute = function() {
-    const i = document.getElementById('muteBtn').querySelector('i');
-    if (isMuted) { videoElement.volume = lastVolume || 1; document.getElementById('volumeSlider').value = lastVolume || 1; i.className = "fas fa-volume-up text-xs"; isMuted = false; }
-    else { videoElement.volume = 0; document.getElementById('volumeSlider').value = 0; i.className = "fas fa-volume-mute text-xs"; isMuted = true; }
-};
-
-let currentSpeed = 1;
-window.changeSpeed = function() {
-    const spds = [1, 1.25, 1.5, 1.75, 2]; let idx = spds.indexOf(currentSpeed); idx = (idx + 1) % spds.length;
-    currentSpeed = spds[idx]; videoElement.playbackRate = currentSpeed; document.getElementById('speedBtn').innerText = currentSpeed + 'x';
-};
-
-window.handleMediaEnd = function() { if (isRepeat) { videoElement.currentTime = 0; videoElement.play().catch(()=>{}); } else { playNext(); } };
-window.closePlayer = function() { videoElement.pause(); mediaContainer.classList.remove('active-player'); animateVisualizerBars(false); };
-window.triggerPiP = function() { if (document.pictureInPictureEnabled && videoElement && currentPlayingMode === 'video') { if (document.pictureInPictureElement) document.exitPictureInPicture(); else videoElement.requestPictureInPicture().catch(()=>{}); } };
-window.toggleCompactMode = function(e) { e.stopPropagation(); const icon = e.currentTarget.querySelector('i'); if (mediaContainer.classList.contains('compact-mode')) { removeCompactLayout(); icon.className = "fas fa-compress-alt text-[10px]"; } else { mediaContainer.classList.add('compact-mode'); document.getElementById('playerBody').style.display = 'none'; icon.className = "fas fa-expand-alt text-[10px]"; } };
-function removeCompactLayout() { mediaContainer.classList.remove('compact-mode'); document.getElementById('playerBody').style.display = 'block'; }
-window.resetPlayerPosition = function() { mediaContainer.style.top = 'auto'; mediaContainer.style.left = '24px'; mediaContainer.style.bottom = '24px'; mediaContainer.style.right = 'auto'; mediaContainer.style.transform = 'none'; };
-function animateVisualizerBars(run) { const visualizer = document.getElementById('visualizerBars'); if (run) visualizer.classList.add('playing-visualizer'); else visualizer.classList.remove('playing-visualizer'); }
-
-// ===== Draggable Player =====
-function setupAdvancedDraggable(el, handle) {
-    let isDragging = false; let startX, startY, initialLeft, initialTop;
-    handle.addEventListener('pointerdown', dragStart);
-    function dragStart(e) {
-        if (e.target.closest('button, input, a, select')) return;
-        isDragging = true; handle.style.cursor = 'grabbing'; el.classList.add('dragging-player');
-        startX = e.clientX; startY = e.clientY; initialLeft = el.offsetLeft; initialTop = el.offsetTop;
-        el.style.transition = 'none'; handle.setPointerCapture(e.pointerId);
-        handle.addEventListener('pointermove', dragMove); handle.addEventListener('pointerup', dragEnd); handle.addEventListener('pointercancel', dragEnd);
-    }
-    function dragMove(e) {
-        if (!isDragging) return; const dx = e.clientX - startX; const dy = e.clientY - startY;
-        let newLeft = initialLeft + dx; let newTop = initialTop + dy; const padding = 12;
-        const maxLeft = window.innerWidth - el.offsetWidth - padding; const maxTop = window.innerHeight - el.offsetHeight - padding;
-        newLeft = Math.max(padding, Math.min(newLeft, maxLeft)); newTop = Math.max(padding, Math.min(newTop, maxTop));
-        el.style.left = newLeft + "px"; el.style.top = newTop + "px"; el.style.bottom = "auto"; el.style.right = "auto";
-    }
-    function dragEnd(e) {
-        if (!isDragging) return; isDragging = false; handle.style.cursor = 'grab'; el.classList.remove('dragging-player');
-        el.style.transition = 'opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-        try { handle.releasePointerCapture(e.pointerId); } catch(err) {}
-        handle.removeEventListener('pointermove', dragMove); handle.removeEventListener('pointerup', dragEnd); handle.removeEventListener('pointercancel', dragEnd);
-    }
-}
-
-// ===== Playlists Feature =====
-window.showCreatePlaylistModal = function() {
-    document.getElementById('playlistNameInput').value = '';
-    document.getElementById('playlistModal').classList.replace('hidden', 'flex');
-};
-
-window.closePlaylistModal = function() {
-    document.getElementById('playlistModal').classList.replace('flex', 'hidden');
-};
-
-window.createPlaylist = function() {
-    const name = document.getElementById('playlistNameInput').value.trim();
-    if (!name) return showToast("أدخل اسم القائمة", "error");
-    const newPlaylist = { id: Date.now().toString(), name: name, tracks: [], createdAt: Date.now() };
-    playlists.push(newPlaylist);
-    localStorage.setItem('pz_playlists', JSON.stringify(playlists));
-    closePlaylistModal();
-    renderPlaylists();
-    showToast(`تم إنشاء قائمة "${name}" بنجاح 🎶`, "success");
-};
-
-window.showAddToPlaylistModal = function(trackId) {
-    const list = document.getElementById('playlistSelectList');
-    list.innerHTML = '';
-    if (playlists.length === 0) {
-        list.innerHTML = '<p class="text-textMuted text-sm text-center py-4">لا توجد قوائم تشغيل. أنشئ واحدة أولاً.</p>';
-    } else {
-        playlists.forEach(pl => {
-            list.innerHTML += `<button onclick="addTrackToPlaylist('${trackId}', '${pl.id}')" class="w-full p-3 bg-panel/60 border border-panelBorder/40 rounded-xl text-white text-sm font-bold text-right hover:border-accent/40 hover:bg-accent/5 transition-all flex items-center gap-3">
-                <span class="w-8 h-8 bg-accent/10 rounded-lg flex items-center justify-center flex-shrink-0"><i class="fas fa-list text-accent text-xs"></i></span>
-                <span class="truncate">${pl.name}</span>
-                <span class="text-textDim text-[10px] mr-auto">${pl.tracks.length} مقطع</span>
-            </button>`;
-        });
-    }
-    document.getElementById('addToPlaylistModal').classList.replace('hidden', 'flex');
-};
-
-window.closeAddToPlaylistModal = function() {
-    document.getElementById('addToPlaylistModal').classList.replace('flex', 'hidden');
-};
-
-window.addTrackToPlaylist = function(trackId, playlistId) {
-    const pl = playlists.find(p => p.id === playlistId);
-    if (!pl) return;
-    if (pl.tracks.includes(trackId)) {
-        showToast("المقطع موجود بالفعل في هذه القائمة", "error");
-        return;
-    }
-    pl.tracks.push(trackId);
-    localStorage.setItem('pz_playlists', JSON.stringify(playlists));
-    closeAddToPlaylistModal();
-    showToast(`تمت الإضافة إلى "${pl.name}" ✓`, "success");
-};
-
-function renderPlaylists() {
-    const container = document.getElementById('playlistsContainer');
-    container.innerHTML = '';
-    if (playlists.length === 0) {
-        container.innerHTML = `<div class="col-span-full py-20 text-center text-textMuted">
-            <div class="w-16 h-16 bg-panelLight/50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <i class="fas fa-list text-2xl text-textDim"></i>
-            </div>
-            <p class="text-sm font-medium">لا توجد قوائم تشغيل</p>
-            <p class="text-xs text-textDim mt-1">أنشئ قائمة جديدة لتنظيم أغانيك</p>
-        </div>`;
-        return;
-    }
-    playlists.forEach(pl => {
-        const trackCount = pl.tracks.length;
-        const tracksPreview = pl.tracks.slice(0, 3).map(tid => {
-            const t = myLibrary.find(i => i.id === tid);
-            return t ? t.title : '';
-        }).filter(Boolean).join(' • ');
-        container.innerHTML += `
-            <div class="playlist-card glass-card p-5 cursor-pointer relative group" onclick="openPlaylist('${pl.id}')">
-                <div class="absolute top-3 left-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button onclick="event.stopPropagation(); renamePlaylist('${pl.id}')" class="w-7 h-7 rounded-lg bg-panelLight/80 text-textMuted hover:text-accent flex items-center justify-center transition-all">
-                        <i class="fas fa-pen text-[9px]"></i>
-                    </button>
-                    <button onclick="event.stopPropagation(); deletePlaylist('${pl.id}')" class="w-7 h-7 rounded-lg bg-panelLight/80 text-textMuted hover:text-red-400 flex items-center justify-center transition-all">
-                        <i class="fas fa-trash text-[9px]"></i>
-                    </button>
-                </div>
-                <div class="flex items-center gap-4">
-                    <div class="w-14 h-14 bg-gradient-to-br from-accent/20 to-purple-800/30 rounded-2xl flex items-center justify-center border border-accent/20 flex-shrink-0">
-                        <i class="fas fa-play text-accent text-lg"></i>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="text-white font-bold text-sm truncate">${pl.name}</h3>
-                        <p class="text-textDim text-[11px] mt-1">${trackCount} مقطع</p>
-                        <p class="text-textDim text-[10px] mt-0.5 truncate">${tracksPreview || 'قائمة فارغة'}</p>
-                    </div>
-                </div>
-            </div>`;
-    });
-}
-
-window.openPlaylist = function(playlistId) {
-    const pl = playlists.find(p => p.id === playlistId);
-    if (!pl) return;
-    if (pl.tracks.length === 0) {
-        showToast("القائمة فارغة. أضف مقاطع من المكتبة", "error");
-        return;
-    }
-    currentPlaylistContext = playlistId;
-    currentPlayingIndex = 0;
-    playPlaylistTrack(playlistId, 0);
-    showToast(`تشغيل قائمة "${pl.name}" 🎶`, "success");
-};
-
-function playPlaylistTrack(playlistId, trackIndex) {
-    const pl = playlists.find(p => p.id === playlistId);
-    if (!pl || !pl.tracks[trackIndex]) return;
-    const trackId = pl.tracks[trackIndex];
-    const track = myLibrary.find(i => i.id === trackId);
-    if (!track) {
-        showToast("المقطع غير موجود في المكتبة", "error");
-        return;
-    }
-    currentPlaylistContext = playlistId;
-    currentPlayingIndex = trackIndex;
-    mediaContainer.classList.add('active-player');
-    if (track.is_audio) {
-        currentPlayingMode = 'audio'; document.getElementById('trackSource').innerText = '🎵 صوت';
-        document.getElementById('videoContainer').classList.add('hidden'); document.getElementById('audioVisualizer').classList.remove('hidden');
-        document.getElementById('pipBtn').classList.add('hidden');
-        document.getElementById('playerCoverImg').src = track.thumb || 'https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png';
-    } else {
-        currentPlayingMode = 'video'; document.getElementById('trackSource').innerText = '🎬 فيديو';
-        document.getElementById('videoContainer').classList.remove('hidden'); document.getElementById('audioVisualizer').classList.add('hidden');
-        document.getElementById('pipBtn').classList.remove('hidden');
-    }
-    videoElement.src = track.url; videoElement.load();
-    videoElement.play().catch(() => {});
-    document.getElementById('playerTitle').innerText = track.title;
-    if (mediaContainer.classList.contains('compact-mode')) removeCompactLayout();
-    addToRecentlyPlayed(track);
-}
-
-window.renamePlaylist = function(id) {
-    const pl = playlists.find(p => p.id === id);
-    if (!pl) return;
-    const newName = prompt("أدخل الاسم الجديد:", pl.name);
-    if (newName && newName.trim()) {
-        pl.name = newName.trim();
-        localStorage.setItem('pz_playlists', JSON.stringify(playlists));
-        renderPlaylists();
-        showToast("تم تغيير الاسم بنجاح", "success");
-    }
-};
-
-window.deletePlaylist = function(id) {
-    if (confirm("هل تريد حذف هذه القائمة؟")) {
-        playlists = playlists.filter(p => p.id !== id);
-        localStorage.setItem('pz_playlists', JSON.stringify(playlists));
-        if (currentPlaylistContext === id) currentPlaylistContext = null;
-        renderPlaylists();
-        showToast("تم حذف القائمة", "success");
-    }
-};
-
-// ===== Recently Played Feature =====
-function addToRecentlyPlayed(track) {
-    recentlyPlayed = recentlyPlayed.filter(r => r.id !== track.id);
-    recentlyPlayed.unshift({ ...track, playedAt: Date.now() });
-    if (recentlyPlayed.length > 20) recentlyPlayed = recentlyPlayed.slice(0, 20);
-    localStorage.setItem('pz_recently_played', JSON.stringify(recentlyPlayed));
-}
-
-function renderRecentlyPlayed() {
-    const container = document.getElementById('recentContainer');
-    container.innerHTML = '';
-    if (recentlyPlayed.length === 0) {
-        container.innerHTML = `<div class="py-20 text-center text-textMuted">
-            <div class="w-16 h-16 bg-panelLight/50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <i class="fas fa-history text-2xl text-textDim"></i>
-            </div>
-            <p class="text-sm font-medium">لم تستمع لأي مقطع بعد</p>
-            <p class="text-xs text-textDim mt-1">ابدأ بتشغيل أغانيك المفضلة</p>
-        </div>`;
-        return;
-    }
-    recentlyPlayed.forEach((item, idx) => {
-        const durationStr = formatTime(item.duration || 0);
-        const typeIcon = item.is_audio ? '<i class="fas fa-music text-accent text-[9px]"></i>' : '<i class="fas fa-video text-fuchsia-400 text-[9px]"></i>';
-        container.innerHTML += `
-            <div class="recent-item bg-panel/50 border border-panelBorder/40 rounded-2xl p-3.5 flex items-center gap-3.5 cursor-pointer" onclick="playRecentTrack(${idx})">
-                <div class="relative w-[72px] h-[44px] rounded-xl overflow-hidden border border-panelBorder/30 flex-shrink-0 shadow-md">
-                    <img src="${item.thumb || 'https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png'}" class="w-full h-full object-cover" alt="${item.title}">
-                    <div class="absolute bottom-0.5 right-0.5 bg-black/80 text-[8px] px-1 py-0.5 font-mono rounded text-white/80">${durationStr}</div>
-                </div>
-                <div class="flex-1 min-w-0 text-right">
-                    <h4 class="text-white font-bold text-xs truncate">${item.title}</h4>
-                    <div class="flex items-center gap-2 mt-1">
-                        ${typeIcon}
-                        <span class="text-textDim text-[10px]">${timeAgo(item.playedAt)}</span>
-                    </div>
-                </div>
-                <div class="w-8 h-8 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent flex-shrink-0">
-                    <i class="fas fa-play text-[9px] ml-0.5"></i>
-                </div>
-            </div>`;
-    });
-}
-
-window.playRecentTrack = function(recentIndex) {
-    const track = recentlyPlayed[recentIndex];
-    if (!track) return;
-    const libIndex = myLibrary.findIndex(i => i.id === track.id);
-    if (libIndex !== -1) {
-        currentPlaylistContext = null;
-        playMediaTrack(libIndex);
-    } else {
-        showToast("المقطع لم يعد موجوداً في المكتبة", "error");
-    }
-};
-
-window.clearRecentHistory = function() {
-    if (confirm("هل تريد مسح سجل الاستماع؟")) {
-        recentlyPlayed = [];
-        localStorage.setItem('pz_recently_played', JSON.stringify(recentlyPlayed));
-        renderRecentlyPlayed();
-        showToast("تم مسح السجل", "success");
-    }
-};
-
-// ===== Sleep Timer Feature =====
-window.setSleepTimer = function(minutes) {
-    sleepTimerEndTime = Date.now() + (minutes * 60 * 1000);
-    localStorage.setItem('pz_sleep_end', sleepTimerEndTime);
-    startSleepCountdown();
-    showToast(`مؤقت النوم: ${minutes} دقيقة ⏰`, "success");
-};
-
-function startSleepCountdown() {
-    if (sleepTimerInterval) clearInterval(sleepTimerInterval);
-    document.getElementById('sleepTimerStatus').classList.remove('hidden');
-    sleepTimerInterval = setInterval(() => {
-        const remaining = sleepTimerEndTime - Date.now();
-        if (remaining <= 0) {
-            executeSleepTimer();
-            return;
+        function executeSleepTimer() {
+            clearInterval(sleepTimerInterval);
+            sleepTimerInterval = null;
+            sleepTimerEndTime = null;
+            localStorage.removeItem('pz_sleep_end');
+            document.getElementById('sleepTimerStatus').classList.add('hidden');
+            videoElement.pause();
+            showToast("تم إيقاف التشغيل - مؤقت النوم 🌙", "success");
         }
-        const mins = Math.floor(remaining / 60000);
-        const secs = Math.floor((remaining % 60000) / 1000);
-        document.getElementById('sleepCountdown').innerText = `${mins}:${secs < 10 ? '0' + secs : secs}`;
-    }, 1000);
-}
 
-function executeSleepTimer() {
-    clearInterval(sleepTimerInterval);
-    sleepTimerInterval = null;
-    sleepTimerEndTime = null;
-    localStorage.removeItem('pz_sleep_end');
-    document.getElementById('sleepTimerStatus').classList.add('hidden');
-    videoElement.pause();
-    showToast("تم إيقاف التشغيل - مؤقت النوم 🌙", "success");
-}
-
-window.cancelSleepTimer = function() {
-    clearInterval(sleepTimerInterval);
-    sleepTimerInterval = null;
-    sleepTimerEndTime = null;
-    localStorage.removeItem('pz_sleep_end');
-    document.getElementById('sleepTimerStatus').classList.add('hidden');
-    showToast("تم إلغاء مؤقت النوم", "success");
-};
-</script>
+        window.cancelSleepTimer = function() {
+            clearInterval(sleepTimerInterval);
+            sleepTimerInterval = null;
+            sleepTimerEndTime = null;
+            localStorage.removeItem('pz_sleep_end');
+            document.getElementById('sleepTimerStatus').classList.add('hidden');
+            showToast("تم إلغاء مؤقت النوم", "success");
+        };
+    </script>
 <script src="https://pl30415120.effectivecpmnetwork.com/4a/6d/62/4a6d62278909f4c7def1f7baaeb9509b.js"></script>
 </body>
 </html>
