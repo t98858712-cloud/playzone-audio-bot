@@ -136,11 +136,12 @@
             transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
         #floatingPlayer.active-player { display: block !important; opacity: 1; transform: scale(1) translateY(0); }
+        
         #floatingPlayer.dragging-player {
-            transform: scale(0.98) !important;
-            opacity: 0.95 !important;
-            border-color: rgba(139, 92, 246, 0.5) !important;
-            box-shadow: 0 40px 80px rgba(0,0,0,0.9), 0 0 40px rgba(139, 92, 246, 0.25) !important;
+            transform: scale(0.96) !important;
+            opacity: 0.65 !important;
+            border-color: rgba(139, 92, 246, 0.6) !important;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.9), 0 0 40px rgba(139, 92, 246, 0.35) !important;
         }
 
         .drag-handle { cursor: grab; user-select: none; touch-action: none; }
@@ -492,11 +493,18 @@
                         <p class="text-indigo-300 text-xs sm:text-sm font-bold"><i class="fas fa-clock"></i> المؤقت نشط: <span id="sleepCountdown">--:--</span></p>
                         <button onclick="cancelSleepTimer()" class="mt-1.5 text-xs text-red-400 hover:text-red-300 underline">إلغاء المؤقت</button>
                     </div>
-                    <div class="grid grid-cols-4 gap-2">
+                    <div class="grid grid-cols-4 gap-2 mb-3">
                         <button onclick="setSleepTimer(15)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">15 د</button>
                         <button onclick="setSleepTimer(30)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">30 د</button>
                         <button onclick="setSleepTimer(45)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">45 د</button>
                         <button onclick="setSleepTimer(60)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">60 د</button>
+                    </div>
+                    <!-- Custom Sleep Timer Input -->
+                    <div class="flex gap-2">
+                        <input type="number" id="customSleepInput" placeholder="تحديد وقت مخصص (بالدقائق)..." min="1" max="1440" class="modern-input font-mono bg-bgDeep/60 text-xs py-2 flex-1">
+                        <button onclick="setCustomSleepTimer()" class="btn bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 shadow-lg shadow-indigo-600/20 flex-shrink-0">
+                            <i class="fas fa-check"></i> تفعيل
+                        </button>
                     </div>
                 </div>
 
@@ -541,7 +549,7 @@
                     <div class="flex justify-between items-center p-3.5 bg-bgDeep/60 rounded-2xl border border-panelBorder/40">
                         <div>
                             <p class="font-bold text-white text-xs sm:text-sm" id="libCountStatus">سجل الملفات (0)</p>
-                            <p class="text-[10px] sm:text-[11px] text-textDim mt-0.5">مسح سجل الملفات المحفوظة في هذا المتصفح والذاكرة التخزينية</p>
+                            <p class="text-[10px] sm:text-[11px] text-textDim mt-0.5">مسح سجل الملفات، وسجل الاستماع، والذاكرة التخزينية</p>
                         </div>
                         <button onclick="clearAllLibrary()" class="btn bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 text-xs px-4 py-2 border border-red-500/20">
                             <i class="fas fa-trash-alt"></i> مسح الكل
@@ -1168,17 +1176,22 @@
 
         window.clearAllLibrary = function() {
             if (isMiniApp && tg.showConfirm) {
-                tg.showConfirm("هل تود مسح السجل بالكامل؟", function(confirmed) { if (confirmed) executeClearAll(); });
+                tg.showConfirm("هل تود مسح الذاكرة وسجل الاستماع بالكامل؟", function(confirmed) { if (confirmed) executeClearAll(); });
             } else {
-                if (confirm("هل تود مسح السجل بالكامل؟")) executeClearAll();
+                if (confirm("هل تود مسح الذاكرة وسجل الاستماع بالكامل؟")) executeClearAll();
             }
         };
 
         function executeClearAll() {
             myLibrary = [];
+            recentlyPlayed = [];
             localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
+            localStorage.setItem('pz_recently_played', JSON.stringify(recentlyPlayed));
             clearAllTrackBlobs();
-            applyFilters(); updateLibraryCount(); showToast("تم مسح السجل والذاكرة التخزينية", "success");
+            applyFilters();
+            renderRecentlyPlayed();
+            updateLibraryCount();
+            showToast("تم مسح الملفات وسجل الاستماع والذاكرة بنجاح", "success");
         }
 
         // ===== Telegram =====
@@ -1466,6 +1479,13 @@
             localStorage.setItem('pz_sleep_end', sleepTimerEndTime);
             startSleepCountdown();
             showToast(`مؤقت النوم: ${minutes} دقيقة ⏰`, "success");
+        };
+
+        window.setCustomSleepTimer = function() {
+            const val = parseInt(document.getElementById('customSleepInput').value);
+            if (!val || val <= 0) return showToast("يرجى إدخال عدد دقائق صحيح", "error");
+            setSleepTimer(val);
+            document.getElementById('customSleepInput').value = "";
         };
 
         function startSleepCountdown() {
