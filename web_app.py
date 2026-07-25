@@ -11,12 +11,14 @@ from pydantic import BaseModel, field_validator
 import yt_dlp
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+# تم الإبقاء على اليوزر نيم الخاص بك هنا دون أي تغيير
 BOT_USERNAME = "MusicPlayZoneBot"
 
 try:
-    from core.config import BASE_DOWNLOAD_DIR, ADSTERRA_LINK
+    from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK
 except ImportError:
     BASE_DOWNLOAD_DIR = Path("./downloads")
+    HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z"
     ADSTERRA_LINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
 
 app = FastAPI(title="PlayZone Enterprise Dashboard")
@@ -37,6 +39,7 @@ DB_PATH = "playzone_core.db"
 
 @contextmanager
 def get_db():
+    """ إدارة حصرية ومغلقة لاتصالات SQLite لمنع عطل قفل قاعدة البيانات على Railway """
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL;")  
     conn.row_factory = sqlite3.Row
@@ -183,7 +186,7 @@ def generate_ad_session():
     with get_db() as conn:
         conn.execute("INSERT INTO ads (click_id, status, created_at) VALUES (?, ?, ?)", (click_id, "pending", time.time()))
         conn.commit()
-    AD_LINK = ADSTERRA_LINK if ADSTERRA_LINK else "https://example.com/ad"
+    AD_LINK = ADSTERRA_LINK  # تم التوجيه إلى Adsterra مباشرة
     separator = "&" if "?" in AD_LINK else "?"
     return {"click_id": click_id, "ad_link": f"{AD_LINK}{separator}clickid={click_id}"}
 
@@ -213,7 +216,8 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     def hook(d):
         if d['status'] == 'downloading':
             now = time.time()
-            if now - last_update[0] < 0.8:  # خفض ضغط الكتابة لحماية قواعد البيانات من القفل
+            # تقليل وتيرة الكتابة في قاعدة البيانات للحماية من تجمد وقفل SQLite
+            if now - last_update[0] < 1.0:
                 return
             last_update[0] = now
 
@@ -268,7 +272,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             conn.commit()
 
 @app.post("/api/download")
-async def start_download(req: URLRequest):
+def start_download(req: URLRequest):
     with get_db() as conn:
         cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (req.click_id,))
         row = cursor.fetchone()
@@ -285,7 +289,7 @@ async def start_download(req: URLRequest):
     return {"success": True, "job_id": job_id}
 
 @app.get("/api/progress/{job_id}")
-async def get_progress(job_id: str):
+def get_progress(job_id: str):
     with get_db() as conn:
         cursor = conn.execute("SELECT * FROM progress WHERE job_id = ?", (job_id,))
         row = cursor.fetchone()
@@ -308,8 +312,10 @@ def send_to_telegram(req: TelegramRequest):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(req.duration) if req.duration else 0
         
+        # تنسيق الكابشن المطلوب بنفس الشكل بالضبط
         caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else f"- @P1ay_Z0ne_Bot"
         
+        # تجهيز زر المشاركة بالنص المطلوب والرابط بالضبط
         share_bot_url = "https://t.me/MusicPlayZoneBot"
         share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:"
         full_share_url = f"https://t.me/share/url?url={quote(share_bot_url)}&text={quote(share_text)}"
@@ -333,7 +339,7 @@ def send_to_telegram(req: TelegramRequest):
                 data.update({'width': probe_data['streams'][0]['width'], 'height': probe_data['streams'][0]['height']})
             except Exception: pass
 
-        # فتح الملف كـ Stream لحماية ذاكرة السيرفر (RAM) من الانهيار
+        # فتح الملف كـ Stream لحماية ذاكرة السيرفر على Railway من الانهيار (OOM Limit)
         with open(file_path, 'rb') as f_media:
             files = {'audio' if req.is_audio else 'video': (filename, f_media)}
             
