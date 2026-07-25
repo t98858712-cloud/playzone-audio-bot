@@ -13,10 +13,9 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = "MusicPlayZoneBot"
 
 try:
-    from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK
+    from core.config import BASE_DOWNLOAD_DIR, ADSTERRA_LINK
 except ImportError:
     BASE_DOWNLOAD_DIR = Path("./downloads")
-    HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z"
     ADSTERRA_LINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
 
 app = FastAPI(title="PlayZone Enterprise Dashboard")
@@ -283,10 +282,6 @@ def get_progress(job_id: str):
 
 @app.post("/api/send_telegram")
 async def send_to_telegram(request: Request):
-    """
-    نقطة النهاية الاحترافية المزدوجة التي تدعم استقبال JSON و Multipart Form Data.
-    تتعامل مع رفع الـ Blobs وتحافظ على تنسيق الحقوق المطلوب بالضبط.
-    """
     temp_file_created = False
     file_path = None
     try:
@@ -300,7 +295,6 @@ async def send_to_telegram(request: Request):
         thumb = ""
         file_url = ""
 
-        # 1. القراءة والتفكيك حسب نوع الطلب
         if "application/json" in content_type.lower():
             body = await request.json()
             chat_id = str(body.get("chat_id", ""))
@@ -351,7 +345,6 @@ async def send_to_telegram(request: Request):
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(duration) if duration else 0
         
-        # التنسيق المطلوب للحقوق والمدة بالضبط
         caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else "- @P1ay_Z0ne_Bot"
         
         share_bot_url = "https://t.me/MusicPlayZoneBot"
@@ -378,7 +371,6 @@ async def send_to_telegram(request: Request):
             except Exception:
                 pass
 
-        # فتح الملف بنظام Stream
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
