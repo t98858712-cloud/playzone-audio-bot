@@ -36,6 +36,7 @@ DB_PATH = "playzone_core.db"
 
 @contextmanager
 def get_db():
+    """ إدارة حصرية ومغلقة لاتصالات SQLite مع نمط WAL للحماية من التعليق """
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL;")  
     conn.row_factory = sqlite3.Row
@@ -66,6 +67,7 @@ init_db()
 DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
 
 def cleanup_cron():
+    """ تنظيف دوري صامت للملفات والسجلات القديمة """
     while True:
         try:
             now = time.time()
@@ -83,7 +85,7 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- مسارات تقديم الملفات الثابتة (CSS & JS & HTML) ---
+# --- مسارات تقديم الملفات الثابتة ---
 
 @app.get("/", response_class=HTMLResponse)
 def home():
@@ -107,7 +109,7 @@ def get_js():
         return FileResponse("app.js", media_type="application/javascript")
     raise HTTPException(status_code=404, detail="File not found")
 
-# --- باقي الـ Endpoints الخاصة بالنظام ---
+# --- باقي Endpoints الخادم ---
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
@@ -361,7 +363,8 @@ async def send_to_telegram(request: Request):
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(duration) if duration else 0
         
-        caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else "- @P1ay_Z0ne_Bot"
+        # الكابشن المنسق بالظبط بالخانات المزدوجة (مثال: - @P1ay_Z0ne_Bot , 03:06)
+        caption = f"- @P1ay_Z0ne_Bot , {dur // 60:02d}:{dur % 60:02d}" if dur > 0 else "- @P1ay_Z0ne_Bot"
         
         share_bot_url = "https://t.me/MusicPlayZoneBot"
         share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:"
