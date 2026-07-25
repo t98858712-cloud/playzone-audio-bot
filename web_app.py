@@ -2,6 +2,7 @@ import os, sys, uuid, time, requests, json, subprocess, sqlite3
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
+from contextlib import contextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -34,11 +35,15 @@ app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
 DB_PATH = "playzone_core.db"
 
+@contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL;")  
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def init_db():
     with get_db() as conn:
@@ -126,12 +131,15 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     return opts
 
 @app.get("/", response_class=HTMLResponse)
-async def home():
-    with open("index.html", "r", encoding="utf-8") as f:
+def home():
+    index_path = Path("index.html")
+    if not index_path.exists():
+        return HTMLResponse(content="<h2>الملف index.html غير موجود</h2>", status_code=404)
+    with open(index_path, "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
 
 @app.post("/api/search")
-async def api_search(req: SearchRequest):
+def api_search(req: SearchRequest):
     try:
         opts = get_hardened_ydl_options()
         opts['extract_flat'] = True
@@ -161,7 +169,7 @@ async def api_search(req: SearchRequest):
         return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
-async def get_preview(req: URLRequest):
+def get_preview(req: URLRequest):
     try:
         opts = get_hardened_ydl_options()
         with yt_dlp.YoutubeDL(opts) as ydl:
@@ -200,8 +208,15 @@ def check_ad_status(click_id: str):
         return {"status": row["status"]}
 
 def bg_download_worker(job_id: str, url: str, mode: str, res: str):
+    last_update = [0.0]
+
     def hook(d):
         if d['status'] == 'downloading':
+            now = time.time()
+            if now - last_update[0] < 0.8:  # خفض ضغط الكتابة لحماية قواعد البيانات من القفل
+                return
+            last_update[0] = now
+
             total = d.get('total_bytes') or d.get('total_bytes_estimate', 1)
             downloaded = d.get('downloaded_bytes', 0)
             speed = d.get('speed', 0)
@@ -210,13 +225,19 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 "total_mb": f"{total / 1048576:.1f} MB", "dl_mb": f"{downloaded / 1048576:.1f} MB",
                 "spd_mb": f"{speed / 1048576:.1f} MB/s" if speed else "0 MB/s"
             }
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.execute("UPDATE progress SET status='downloading', data=?, timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
-                conn.commit()
+            try:
+                with get_db() as conn:
+                    conn.execute("UPDATE progress SET status='downloading', data=?, timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
+                    conn.commit()
+            except Exception:
+                pass
         elif d['status'] == 'finished':
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.execute("UPDATE progress SET status='converting', timestamp=? WHERE job_id=?", (time.time(), job_id))
-                conn.commit()
+            try:
+                with get_db() as conn:
+                    conn.execute("UPDATE progress SET status='converting', timestamp=? WHERE job_id=?", (time.time(), job_id))
+                    conn.commit()
+            except Exception:
+                pass
 
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     if mode == 'audio':
@@ -237,12 +258,12 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 "thumb": info.get('thumbnail', ''), "uploader": info.get('uploader', 'غير معروف'),
                 "duration": info.get('duration', 0), "is_audio": mode == 'audio'
             }
-            with sqlite3.connect(DB_PATH) as conn:
+            with get_db() as conn:
                 conn.execute("UPDATE progress SET status='completed', data=? WHERE job_id=?", (json.dumps(payload), job_id))
                 conn.commit()
     except Exception as e:
         payload = {"status": "error", "error": str(e)}
-        with sqlite3.connect(DB_PATH) as conn:
+        with get_db() as conn:
             conn.execute("UPDATE progress SET status='error', data=? WHERE job_id=?", (json.dumps(payload), job_id))
             conn.commit()
 
@@ -312,17 +333,18 @@ def send_to_telegram(req: TelegramRequest):
                 data.update({'width': probe_data['streams'][0]['width'], 'height': probe_data['streams'][0]['height']})
             except Exception: pass
 
-        with open(file_path, 'rb') as f: file_data = f.read()
-        files = {'audio' if req.is_audio else 'video': (filename, file_data)}
-        
-        if req.thumb and req.is_audio:
-            try:
-                t_res = requests.get(req.thumb, timeout=4)
-                if t_res.status_code == 200: files['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
-            except: pass
-                
-        response = requests.post(url, data=data, files=files, timeout=60)
-        res_data = response.json()
+        # فتح الملف كـ Stream لحماية ذاكرة السيرفر (RAM) من الانهيار
+        with open(file_path, 'rb') as f_media:
+            files = {'audio' if req.is_audio else 'video': (filename, f_media)}
+            
+            if req.thumb and req.is_audio:
+                try:
+                    t_res = requests.get(req.thumb, timeout=4)
+                    if t_res.status_code == 200: files['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
+                except: pass
+                    
+            response = requests.post(url, data=data, files=files, timeout=120)
+            res_data = response.json()
         
         if response.status_code == 200 and res_data.get("ok"): return {"success": True}
         return {"success": False, "error": res_data.get("description", "تأكد من بدء البوت أولاً.")}
