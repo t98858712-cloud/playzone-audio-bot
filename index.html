@@ -1052,42 +1052,67 @@
         const mediaContainer = document.getElementById('floatingPlayer');
         const videoElement = document.getElementById('globalVideoElement');
 
-        // حفظ واسترجاع حالة الجلسة لمنع إعادة التعيين عند الضغط على زر الرجوع من الإعلان
+        // 🔥 الحل المضمون: حفظ واسترجاع حالة البحث والتحميل في localStorage لمنع التصفير عند ضغط رجوع في الاختصار
         function saveCurrentSessionState() {
+            const titleEl = document.getElementById('title');
+            const thumbEl = document.getElementById('thumb');
+            const adGateEl = document.getElementById('adGate');
+            const dlOptionsEl = document.getElementById('dlOptions');
+
+            if (!currentUrl || !titleEl) return;
+
             const state = {
                 url: currentUrl,
                 clickId: currentClickId,
                 adUrl: currentAdUrl,
-                title: document.getElementById('title').innerText,
-                thumb: document.getElementById('thumb').src,
-                adGateHidden: document.getElementById('adGate').classList.contains('hidden'),
-                dlOptionsHidden: document.getElementById('dlOptions').classList.contains('hidden')
+                title: titleEl.innerText || '',
+                thumb: thumbEl ? thumbEl.src : '',
+                adGateHidden: adGateEl ? adGateEl.classList.contains('hidden') : false,
+                dlOptionsHidden: dlOptionsEl ? dlOptionsEl.classList.contains('hidden') : true,
+                savedAt: Date.now()
             };
-            sessionStorage.setItem('pz_active_session', JSON.stringify(state));
+            localStorage.setItem('pz_active_download_state', JSON.stringify(state));
         }
 
         function restoreSessionState() {
-            const saved = sessionStorage.getItem('pz_active_session');
+            const saved = localStorage.getItem('pz_active_download_state');
             if (!saved) return;
             try {
                 const state = JSON.parse(saved);
-                if (state && state.url) {
-                    currentUrl = state.url;
-                    currentClickId = state.clickId;
-                    currentAdUrl = state.adUrl;
-                    document.getElementById('title').innerText = state.title || '';
-                    document.getElementById('thumb').src = state.thumb || '';
-                    document.getElementById('previewBox').classList.remove('hidden');
-
-                    if (state.adGateHidden) {
-                        document.getElementById('adGate').classList.add('hidden');
-                        document.getElementById('dlOptions').classList.remove('hidden');
-                    } else {
-                        document.getElementById('adGate').classList.remove('hidden');
-                        document.getElementById('dlOptions').classList.add('hidden');
-                    }
+                // التجاهل إذا مرت أكثر من 30 دقيقة على عملية البحث
+                if (!state || !state.url || (Date.now() - (state.savedAt || 0) > 1800000)) {
+                    localStorage.removeItem('pz_active_download_state');
+                    return;
                 }
-            } catch(e){}
+
+                currentUrl = state.url;
+                currentClickId = state.clickId || '';
+                currentAdUrl = state.adUrl || '';
+
+                const titleEl = document.getElementById('title');
+                const thumbEl = document.getElementById('thumb');
+                const previewBox = document.getElementById('previewBox');
+                const adGateEl = document.getElementById('adGate');
+                const dlOptionsEl = document.getElementById('dlOptions');
+
+                if (titleEl) titleEl.innerText = state.title || '';
+                if (thumbEl) thumbEl.src = state.thumb || '';
+                if (previewBox) previewBox.classList.remove('hidden');
+
+                if (state.adGateHidden) {
+                    if (adGateEl) adGateEl.classList.add('hidden');
+                    if (dlOptionsEl) dlOptionsEl.classList.remove('hidden');
+                } else {
+                    if (adGateEl) adGateEl.classList.remove('hidden');
+                    if (dlOptionsEl) dlOptionsEl.classList.add('hidden');
+                }
+            } catch(e) {
+                localStorage.removeItem('pz_active_download_state');
+            }
+        }
+
+        function clearActiveSessionState() {
+            localStorage.removeItem('pz_active_download_state');
         }
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -1095,12 +1120,7 @@
             initTypewriter();
             checkStandaloneAndHideBar();
             
-            // تهيئة السجل للحفاظ على التطبيق عند الرجوع
-            window.history.pushState({ active: true }, '');
-            window.addEventListener('popstate', (e) => {
-                window.history.pushState({ active: true }, '');
-            });
-
+            // استرجاع المقطع المفتوح فورياً لمنع تصفير البحث
             restoreSessionState();
 
             if ('serviceWorker' in navigator) {
@@ -1162,7 +1182,6 @@
             }
         });
 
-        // مؤشر التحديث الفوري المباشر والمستمر لسجل الاستماع
         function setupContinuousRecentUpdates() {
             if (recentLiveTickerInterval) clearInterval(recentLiveTickerInterval);
             recentLiveTickerInterval = setInterval(() => {
@@ -1311,6 +1330,8 @@
                     const sessionData = await sessionRes.json();
                     currentClickId = sessionData.click_id;
                     currentAdUrl = sessionData.ad_link;
+                    
+                    // حفظ الحالة فوراً في الذاكرة الدائمة
                     saveCurrentSessionState();
 
                     document.getElementById('adGate').classList.remove('hidden');
@@ -1323,6 +1344,9 @@
 
         window.openAdAndVerify = function(event) {
             if (event) event.preventDefault();
+            // حفظ الحالات قبل مغادرة التطبيق
+            saveCurrentSessionState();
+            
             if (currentAdUrl && currentAdUrl !== '#') {
                 if (isMiniApp && tg && tg.openLink) {
                     tg.openLink(currentAdUrl);
@@ -1345,6 +1369,8 @@
             adFallbackTimeout = setTimeout(() => {
                 document.getElementById('adGate').classList.add('hidden');
                 document.getElementById('dlOptions').classList.remove('hidden');
+                
+                // تحديث الذاكرة الدائمة بأن الإعلان تم فتحه والتحقق منه بنجاح
                 saveCurrentSessionState();
                 showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
             }, 10000);
@@ -1447,6 +1473,9 @@
                                 localStorage.setItem('pz_enterprise_library', JSON.stringify(myLibrary));
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
                                 showToast("تم حفظ الملف بنجاح", "success");
+
+                                // مسح جلسة المعاينة بعد النجاح
+                                clearActiveSessionState();
 
                                 fetchAndCacheTrack(newItem.id, fullFileUrl);
 
@@ -1914,7 +1943,6 @@
             }
         }
 
-        // إضافة وتحديث لسجل الاستماع
         function addToRecentlyPlayed(track, reorderDOM = true) {
             recentlyPlayed = recentlyPlayed.filter(r => r.id !== track.id);
             recentlyPlayed.unshift({ ...track, playedAt: Date.now() });
@@ -1942,7 +1970,6 @@
             }
         });
 
-        // عرض وتحديث سجل الاستماع حياً
         function renderRecentlyPlayed() {
             const container = document.getElementById('recentContainer');
             if (!container) return;
