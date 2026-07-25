@@ -363,8 +363,12 @@ async def send_to_telegram(request: Request):
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(duration) if duration else 0
         
-        # الكابشن المنسق بالظبط بالخانات المزدوجة (مثال: - @P1ay_Z0ne_Bot , 03:06)
-        caption = f"- @P1ay_Z0ne_Bot , {dur // 60:02d}:{dur % 60:02d}" if dur > 0 else "- @P1ay_Z0ne_Bot"
+        # --- تعديل صيغة الوقت القابل للضغط باللون الأزرق ---
+        time_str = f"{dur // 60:02d}:{dur % 60:02d}"
+        if dur > 0:
+            caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>'
+        else:
+            caption = "- @P1ay_Z0ne_Bot"
         
         share_bot_url = "https://t.me/MusicPlayZoneBot"
         share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:"
@@ -376,7 +380,13 @@ async def send_to_telegram(request: Request):
             ]
         }
         
-        data_payload = {'chat_id': chat_id, 'caption': caption, 'reply_markup': json.dumps(reply_markup)}
+        # إضافة parse_mode: HTML لكي يتعرف التليجرام على رابط الوقت الأزرق
+        data_payload = {
+            'chat_id': chat_id,
+            'caption': caption,
+            'parse_mode': 'HTML',
+            'reply_markup': json.dumps(reply_markup)
+        }
         
         if is_audio:
             data_payload.update({'title': title, 'performer': performer, 'duration': dur})
