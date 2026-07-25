@@ -1,17 +1,15 @@
-import os, sys, uuid, time, requests, json, subprocess, sqlite3
+import os, sys, uuid, time, requests, json, subprocess, sqlite3, threading
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from contextlib import contextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, field_validator
 import yt_dlp
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-# تم الإبقاء على اليوزر نيم الخاص بك هنا دون أي تغيير
 BOT_USERNAME = "MusicPlayZoneBot"
 
 try:
@@ -39,7 +37,7 @@ DB_PATH = "playzone_core.db"
 
 @contextmanager
 def get_db():
-    """ إدارة حصرية ومغلقة لاتصالات SQLite لمنع عطل قفل قاعدة البيانات على Railway """
+    """ إدارة حصرية ومغلقة لاتصالات SQLite مع نمط WAL الحامي من تجمد وإغلاق القواعد """
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL;")  
     conn.row_factory = sqlite3.Row
@@ -70,7 +68,7 @@ init_db()
 DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
 
 def cleanup_cron():
-    """ تنظيف دوري صامت للملفات القديمة لتوفير المساحة """
+    """ تنظيف دوري صامت للملفات والإعلانات القديمة """
     while True:
         try:
             now = time.time()
@@ -86,31 +84,7 @@ def cleanup_cron():
             pass
         time.sleep(1800)
 
-import threading
 threading.Thread(target=cleanup_cron, daemon=True).start()
-
-class URLRequest(BaseModel):
-    url: str
-    mode: str = "video"
-    resolution: str = "720"
-    click_id: str = ""
-
-class SearchRequest(BaseModel):
-    query: str
-
-class TelegramRequest(BaseModel):
-    file_url: str
-    chat_id: str  
-    is_audio: bool
-    title: str = "مقطع"
-    performer: str = "PlayZone"
-    duration: int = 0
-    thumb: str = ""
-
-    @field_validator('chat_id', mode='before')
-    @classmethod
-    def coerce_str(cls, v):
-        return str(v)
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
@@ -142,15 +116,17 @@ def home():
         return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
 
 @app.post("/api/search")
-def api_search(req: SearchRequest):
+async def api_search(request: Request):
     try:
+        data = await request.json()
+        query = data.get("query", "")
         opts = get_hardened_ydl_options()
         opts['extract_flat'] = True
         if 'playlist_items' in opts: del opts['playlist_items']
         if 'noplaylist' in opts: del opts['noplaylist']
         
         with yt_dlp.YoutubeDL(opts) as ydl:
-            raw_results = ydl.extract_info(f"ytsearch25:{req.query}", download=False) or {}
+            raw_results = ydl.extract_info(f"ytsearch25:{query}", download=False) or {}
             
         entries = raw_results.get("entries") or []
         valid_videos = []
@@ -172,11 +148,13 @@ def api_search(req: SearchRequest):
         return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
-def get_preview(req: URLRequest):
+async def get_preview(request: Request):
     try:
+        data = await request.json()
+        url = data.get("url", "")
         opts = get_hardened_ydl_options()
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(req.url, download=False)
+            info = ydl.extract_info(url, download=False)
             return {"success": True, "title": info.get("title", "بدون عنوان"), "thumb": info.get("thumbnail", "")}
     except Exception as e: return {"success": False, "error": str(e)}
 
@@ -186,7 +164,7 @@ def generate_ad_session():
     with get_db() as conn:
         conn.execute("INSERT INTO ads (click_id, status, created_at) VALUES (?, ?, ?)", (click_id, "pending", time.time()))
         conn.commit()
-    AD_LINK = ADSTERRA_LINK  # تم التوجيه إلى Adsterra مباشرة
+    AD_LINK = ADSTERRA_LINK
     separator = "&" if "?" in AD_LINK else "?"
     return {"click_id": click_id, "ad_link": f"{AD_LINK}{separator}clickid={click_id}"}
 
@@ -216,7 +194,6 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     def hook(d):
         if d['status'] == 'downloading':
             now = time.time()
-            # تقليل وتيرة الكتابة في قاعدة البيانات للحماية من تجمد وقفل SQLite
             if now - last_update[0] < 1.0:
                 return
             last_update[0] = now
@@ -272,9 +249,15 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             conn.commit()
 
 @app.post("/api/download")
-def start_download(req: URLRequest):
+async def start_download(request: Request):
+    data = await request.json()
+    url = data.get("url", "")
+    mode = data.get("mode", "video")
+    resolution = data.get("resolution", "720")
+    click_id = data.get("click_id", "")
+
     with get_db() as conn:
-        cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (req.click_id,))
+        cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (click_id,))
         row = cursor.fetchone()
         if not row: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
         if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
@@ -285,7 +268,7 @@ def start_download(req: URLRequest):
         conn.execute("INSERT INTO progress (job_id, status, data, timestamp) VALUES (?, ?, ?, ?)", (job_id, "starting", "{}", time.time()))
         conn.commit()
         
-    DOWNLOAD_POOL.submit(bg_download_worker, job_id, req.url, req.mode, req.resolution)
+    DOWNLOAD_POOL.submit(bg_download_worker, job_id, url, mode, resolution)
     return {"success": True, "job_id": job_id}
 
 @app.get("/api/progress/{job_id}")
@@ -299,23 +282,78 @@ def get_progress(job_id: str):
         return json.loads(row["data"])
 
 @app.post("/api/send_telegram")
-def send_to_telegram(req: TelegramRequest):
+async def send_to_telegram(request: Request):
+    """
+    نقطة النهاية الاحترافية المزدوجة التي تدعم استقبال JSON و Multipart Form Data.
+    تتعامل مع رفع الـ Blobs وتحافظ على تنسيق الحقوق المطلوب بالضبط.
+    """
+    temp_file_created = False
+    file_path = None
     try:
-        filename = req.file_url.split("/")[-1]
-        file_path = WEB_DIR / filename
-        
-        if not file_path.exists(): return {"success": False, "error": "الملف غير موجود."}
-        if not TELEGRAM_TOKEN: return {"success": False, "error": "البوت غير مفعل بالخلفية."}
-        if file_path.stat().st_size / (1024 * 1024) > 49.5: return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
+        content_type = request.headers.get("content-type", "")
 
-        api_method = "sendAudio" if req.is_audio else "sendVideo"
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
-        dur = int(req.duration) if req.duration else 0
+        chat_id = ""
+        is_audio = True
+        title = "مقطع"
+        performer = "PlayZone"
+        duration = 0
+        thumb = ""
+        file_url = ""
+
+        # 1. القراءة والتفكيك حسب نوع الطلب
+        if "application/json" in content_type.lower():
+            body = await request.json()
+            chat_id = str(body.get("chat_id", ""))
+            is_audio = bool(body.get("is_audio", True))
+            title = str(body.get("title", "مقطع"))
+            performer = str(body.get("performer", "PlayZone"))
+            duration = int(body.get("duration", 0))
+            thumb = str(body.get("thumb", ""))
+            file_url = str(body.get("file_url", ""))
+        else:
+            form = await request.form()
+            chat_id = str(form.get("chat_id", ""))
+            is_audio_val = form.get("is_audio", "true")
+            is_audio = str(is_audio_val).lower() in ["true", "1", "yes"]
+            title = str(form.get("title", "مقطع"))
+            performer = str(form.get("performer", "PlayZone"))
+            try:
+                duration = int(form.get("duration", 0))
+            except (ValueError, TypeError):
+                duration = 0
+            thumb = str(form.get("thumb", ""))
+            file_url = str(form.get("file_url", ""))
+            
+            uploaded_file = form.get("file")
+            if uploaded_file and hasattr(uploaded_file, "filename") and uploaded_file.filename:
+                ext = ".mp3" if is_audio else ".mp4"
+                temp_name = f"temp_upload_{uuid.uuid4().hex[:8]}{ext}"
+                file_path = WEB_DIR / temp_name
+                with open(file_path, "wb") as f_out:
+                    f_out.write(await uploaded_file.read())
+                temp_file_created = True
+
+        if not file_path and file_url:
+            filename = file_url.split("/")[-1]
+            file_path = WEB_DIR / filename
+
+        if not file_path or not file_path.exists():
+            return {"success": False, "error": "الملف غير موجود على السيرفر."}
+
+        if not TELEGRAM_TOKEN:
+            return {"success": False, "error": "البوت غير مفعل بالخلفية."}
+
+        if file_path.stat().st_size / (1024 * 1024) > 49.5:
+            if temp_file_created: file_path.unlink(missing_ok=True)
+            return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
+
+        api_method = "sendAudio" if is_audio else "sendVideo"
+        telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
+        dur = int(duration) if duration else 0
         
-        # تنسيق الكابشن المطلوب بنفس الشكل بالضبط
-        caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else f"- @P1ay_Z0ne_Bot"
+        # التنسيق المطلوب للحقوق والمدة بالضبط
+        caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else "- @P1ay_Z0ne_Bot"
         
-        # تجهيز زر المشاركة بالنص المطلوب والرابط بالضبط
         share_bot_url = "https://t.me/MusicPlayZoneBot"
         share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:"
         full_share_url = f"https://t.me/share/url?url={quote(share_bot_url)}&text={quote(share_text)}"
@@ -326,33 +364,42 @@ def send_to_telegram(req: TelegramRequest):
             ]
         }
         
-        data = {'chat_id': req.chat_id, 'caption': caption, 'reply_markup': json.dumps(reply_markup)}
+        data_payload = {'chat_id': chat_id, 'caption': caption, 'reply_markup': json.dumps(reply_markup)}
         
-        if req.is_audio:
-            data.update({'title': req.title, 'performer': req.performer, 'duration': req.duration})
+        if is_audio:
+            data_payload.update({'title': title, 'performer': performer, 'duration': dur})
         else:
-            data.update({'supports_streaming': True, 'duration': req.duration})
+            data_payload.update({'supports_streaming': True, 'duration': dur})
             try:
                 cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
                 res = subprocess.run(cmd, capture_output=True, text=True)
                 probe_data = json.loads(res.stdout)
-                data.update({'width': probe_data['streams'][0]['width'], 'height': probe_data['streams'][0]['height']})
-            except Exception: pass
+                data_payload.update({'width': probe_data['streams'][0]['width'], 'height': probe_data['streams'][0]['height']})
+            except Exception:
+                pass
 
-        # فتح الملف كـ Stream لحماية ذاكرة السيرفر على Railway من الانهيار (OOM Limit)
+        # فتح الملف بنظام Stream
         with open(file_path, 'rb') as f_media:
-            files = {'audio' if req.is_audio else 'video': (filename, f_media)}
+            files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            if req.thumb and req.is_audio:
+            if thumb and is_audio:
                 try:
-                    t_res = requests.get(req.thumb, timeout=4)
-                    if t_res.status_code == 200: files['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
-                except: pass
+                    t_res = requests.get(thumb, timeout=4)
+                    if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
+                except Exception:
+                    pass
                     
-            response = requests.post(url, data=data, files=files, timeout=120)
+            response = requests.post(telegram_url, data=data_payload, files=files_payload, timeout=120)
             res_data = response.json()
         
-        if response.status_code == 200 and res_data.get("ok"): return {"success": True}
-        return {"success": False, "error": res_data.get("description", "تأكد من بدء البوت أولاً.")}
+        if temp_file_created:
+            file_path.unlink(missing_ok=True)
+
+        if response.status_code == 200 and res_data.get("ok"): 
+            return {"success": True}
+        return {"success": False, "error": res_data.get("description", "تأكد من بدء البوت مع الحساب أولاً.")}
         
-    except Exception as e: return {"success": False, "error": str(e)}
+    except Exception as e: 
+        if temp_file_created and file_path and file_path.exists():
+            file_path.unlink(missing_ok=True)
+        return {"success": False, "error": str(e)}
