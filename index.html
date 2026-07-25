@@ -87,7 +87,7 @@
             }
             aside {
                 padding-top: env(safe-area-inset-top, 0px);
-                padding-bottom: env(safe-area-inset-bottom, 0px);
+                padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px) !important;
             }
         }
 
@@ -386,8 +386,9 @@
                 </button>
             </nav>
         </div>
-        <div class="p-2 pb-4 flex flex-col items-center gap-2">
-            <a href="https://t.me/MusicPlayZoneBot" target="_blank" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20 hover:scale-105 flex items-center justify-center transition-all duration-300 border border-tgBlue/20">
+        <!-- تم رفع زر تيليجرام للأعلى بمرونة لمنع قطعه بشريط النظام السفلي -->
+        <div class="p-2 pb-10 md:pb-6 flex flex-col items-center gap-2 mb-2 md:mb-0">
+            <a href="https://t.me/MusicPlayZoneBot" target="_blank" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20 hover:scale-105 flex items-center justify-center transition-all duration-300 border border-tgBlue/20 shadow-md">
                 <i class="fab fa-telegram-plane text-base md:text-lg"></i>
             </a>
         </div>
@@ -483,7 +484,7 @@
                                     <option value="1080">1080p</option>
                                 </select>
                             </div>
-                            <button onclick="startDownload(event)" class="btn bg-gradient-to-r from-accent via-purple-600 to-fuchsia-600 text-white w-full hover:from-accentHover hover:via-purple-700 hover:to-fuchsia-700 shadow-xl glow-accent text-xs sm:text-sm">
+                            <button id="startDownloadBtnEl" onclick="startDownload(event)" class="btn bg-gradient-to-r from-accent via-purple-600 to-fuchsia-600 text-white w-full hover:from-accentHover hover:via-purple-700 hover:to-fuchsia-700 shadow-xl glow-accent text-xs sm:text-sm">
                                 <i class="fas fa-download"></i> بدء التحميل
                             </button>
                         </div>
@@ -845,7 +846,6 @@
             if (manifestElem) manifestElem.setAttribute('href', URL.createObjectURL(blob));
         }
 
-        // فحص حالة الفتح عبر الاختصار وتنسيق العناصر بناءً عليها
         function checkStandaloneAndHideBar() {
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone || isMiniApp;
             if (isStandalone) {
@@ -1136,6 +1136,34 @@
 
         function clearActiveSessionState() {
             localStorage.removeItem('pz_active_download_state');
+            localStorage.removeItem('pz_ad_opened_pending');
+        }
+
+        // ⭐ فحص واستكمال التحميل تلقائياً بمجرد الرجوع للتطبيق
+        function checkAndAutoContinueDownload() {
+            const isAdPending = localStorage.getItem('pz_ad_opened_pending');
+            if (isAdPending === 'true' && currentUrl) {
+                localStorage.removeItem('pz_ad_opened_pending');
+                
+                const adGateEl = document.getElementById('adGate');
+                const dlOptionsEl = document.getElementById('dlOptions');
+                const progressBox = document.getElementById('progressBox');
+                
+                if (adGateEl) adGateEl.classList.add('hidden');
+                if (dlOptionsEl) dlOptionsEl.classList.remove('hidden');
+                saveCurrentSessionState();
+
+                // البدء الفوري المباشر بعملية التحميل فور العودة
+                if (progressBox && progressBox.classList.contains('hidden')) {
+                    showToast("تم فتح الإعلان بنجاح وجاري بدء التحميل تلقائياً... 🚀", "success");
+                    setTimeout(() => {
+                        const btn = document.getElementById('startDownloadBtnEl');
+                        if (btn && !btn.disabled) {
+                            btn.click();
+                        }
+                    }, 400);
+                }
+            }
         }
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -1144,6 +1172,7 @@
             checkStandaloneAndHideBar();
             
             restoreSessionState();
+            checkAndAutoContinueDownload();
 
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/sw.js').catch(()=>{});
@@ -1200,6 +1229,14 @@
             if (savedSleepEnd && Number(savedSleepEnd) > Date.now()) {
                 sleepTimerEndTime = Number(savedSleepEnd);
                 startSleepCountdown();
+            }
+        });
+
+        // التقاط العودة للتطبيق لإتمام التحميل تلقائياً عند الرجوع
+        window.addEventListener('focus', checkAndAutoContinueDownload);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                checkAndAutoContinueDownload();
             }
         });
 
@@ -1355,6 +1392,9 @@
 
         window.openAdAndVerify = function(event) {
             if (event) event.preventDefault();
+            
+            // تسجيل حالة فتح الإعلان للاستكمال التلقائي للتحميل عند الرجوع
+            localStorage.setItem('pz_ad_opened_pending', 'true');
             saveCurrentSessionState();
             
             if (currentAdUrl && currentAdUrl !== '#') {
@@ -1438,8 +1478,9 @@
         };
 
         window.startDownload = async function(event) {
-            const btn = event.currentTarget; const original = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true;
+            const btn = event ? event.currentTarget : document.getElementById('startDownloadBtnEl');
+            const original = btn ? btn.innerHTML : '';
+            if (btn) { btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> جاري البدء...'; btn.disabled = true; }
             document.getElementById('dlOptions').classList.add('hidden'); document.getElementById('progressBox').classList.remove('hidden');
             document.getElementById('directDownloadArea').classList.add('hidden');
             lastLoggedPercent = 0;
@@ -1511,7 +1552,7 @@
                     document.getElementById('progStatus').innerHTML = `<span class="text-red-400">${data.error}</span>`;
                 }
             } catch(e) { showToast("فشل الاتصال بالخادم", "error"); }
-            btn.innerHTML = original; btn.disabled = false;
+            if (btn) { btn.innerHTML = original; btn.disabled = false; }
         };
 
         async function fetchAndCacheTrack(id, url) {
