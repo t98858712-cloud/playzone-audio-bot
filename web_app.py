@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from contextlib import contextmanager
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import yt_dlp
@@ -36,7 +36,6 @@ DB_PATH = "playzone_core.db"
 
 @contextmanager
 def get_db():
-    """ إدارة حصرية ومغلقة لاتصالات SQLite مع نمط WAL الحامي من تجمد وإغلاق القواعد """
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL;")  
     conn.row_factory = sqlite3.Row
@@ -67,7 +66,6 @@ init_db()
 DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
 
 def cleanup_cron():
-    """ تنظيف دوري صامت للملفات والإعلانات القديمة """
     while True:
         try:
             now = time.time()
@@ -84,6 +82,32 @@ def cleanup_cron():
         time.sleep(1800)
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
+
+# --- مسارات تقديم الملفات الثابتة (CSS & JS & HTML) ---
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    index_path = Path("index.html")
+    if not index_path.exists():
+        return HTMLResponse(content="<h2>الملف index.html غير موجود</h2>", status_code=404)
+    with open(index_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
+
+@app.get("/styles.css")
+def get_css():
+    css_path = Path("styles.css")
+    if css_path.exists():
+        return FileResponse("styles.css", media_type="text/css")
+    raise HTTPException(status_code=404, detail="File not found")
+
+@app.get("/app.js")
+def get_js():
+    js_path = Path("app.js")
+    if js_path.exists():
+        return FileResponse("app.js", media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="File not found")
+
+# --- باقي الـ Endpoints الخاصة بالنظام ---
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
@@ -105,14 +129,6 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if outtmpl_path: opts["outtmpl"] = str(outtmpl_path)
     if progress_hook: opts["progress_hooks"] = [progress_hook]
     return opts
-
-@app.get("/", response_class=HTMLResponse)
-def home():
-    index_path = Path("index.html")
-    if not index_path.exists():
-        return HTMLResponse(content="<h2>الملف index.html غير موجود</h2>", status_code=404)
-    with open(index_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
 
 @app.post("/api/search")
 async def api_search(request: Request):
