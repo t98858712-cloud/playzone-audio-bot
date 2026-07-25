@@ -13,10 +13,9 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = "MusicPlayZoneBot"
 
 try:
-    from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK
+    from core.config import BASE_DOWNLOAD_DIR, ADSTERRA_LINK
 except ImportError:
     BASE_DOWNLOAD_DIR = Path("./downloads")
-    HILLTOPADS_LINK = "https://bony-teaching.com/TwZD7z"
     ADSTERRA_LINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
 
 app = FastAPI(title="PlayZone Enterprise Dashboard")
@@ -176,7 +175,7 @@ def generate_ad_session():
     with get_db() as conn:
         conn.execute("INSERT INTO ads (click_id, status, created_at) VALUES (?, ?, ?)", (click_id, "pending", time.time()))
         conn.commit()
-    AD_LINK = HILLTOPADS_LINK if HILLTOPADS_LINK else (ADSTERRA_LINK or "https://example.com/ad")
+    AD_LINK = ADSTERRA_LINK if ADSTERRA_LINK else "https://example.com/ad"
     separator = "&" if "?" in AD_LINK else "?"
     return {"click_id": click_id, "ad_link": f"{AD_LINK}{separator}clickid={click_id}"}
 
@@ -290,7 +289,6 @@ def send_to_telegram(req: TelegramRequest):
         
         caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else f"- @P1ay_Z0ne_Bot"
         
-        # تجهيز نص ورابط المشاركة مع ترميز السطور والرموز تلقائياً
         share_bot_url = "https://t.me/MusicPlayZoneBot"
         share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:"
         full_share_url = f"https://t.me/share/url?url={quote(share_bot_url)}&text={quote(share_text)}"
