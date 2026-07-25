@@ -68,7 +68,7 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* مراعاة حواف الشاشة والنوتش بالأجهزة عند الفتح بالاختصار */
+        /* ترتيب وحفظ مساحات البروز والشريط السفلي عند التشغيل بالاختصار */
         body {
             padding-top: env(safe-area-inset-top, 0px);
             padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -77,14 +77,17 @@
         }
 
         @media (display-mode: standalone), (display-mode: window-controls-overlay) {
-            #topShortcutBar {
-                display: none !important;
-            }
+            #topShortcutBar { display: none !important; }
             main {
-                padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 7rem) !important;
+                padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem) !important;
+                padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6rem) !important;
             }
             #floatingPlayer {
                 bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
+            }
+            aside {
+                padding-top: env(safe-area-inset-top, 0px);
+                padding-bottom: env(safe-area-inset-bottom, 0px);
             }
         }
 
@@ -167,7 +170,7 @@
 
         #floatingPlayer {
             position: fixed;
-            bottom: 16px;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
             left: 16px;
             width: min(380px, calc(100vw - 84px));
             max-height: calc(100dvh - 24px);
@@ -565,17 +568,17 @@
                 <h2 class="text-lg sm:text-xl md:text-2xl font-black text-white">الإعدادات</h2>
             </div>
             <div class="space-y-4">
-                <div class="glass-card p-4 sm:p-6">
+                <div id="shortcutSettingCard" class="glass-card p-4 sm:p-6">
                     <div class="flex items-center gap-3 mb-3.5">
                         <div class="w-9 h-9 bg-accent/10 rounded-xl flex items-center justify-center">
                             <i class="fas fa-mobile-alt text-accent text-xs sm:text-sm"></i>
                         </div>
                         <div>
                             <h3 class="text-xs sm:text-sm font-bold text-white">اختصار الشاشة الرئيسية</h3>
-                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">إضافة اختصار مباشر للتطبيق على شاشة هاتفك للوصول السريع</p>
+                            <p id="shortcutStatusText" class="text-textDim text-[10px] sm:text-[11px] mt-0.5">إضافة اختصار مباشر للتطبيق على شاشة هاتفك للوصول السريع</p>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div id="shortcutButtonsGroup" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <button onclick="installAndroidApp()" id="androidInstallBtn" class="btn bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-500/30 text-xs py-2.5">
                             <i class="fab fa-android text-sm"></i> إضافة اختصار (أندرويد)
                         </button>
@@ -822,7 +825,6 @@
             deferredPrompt = e;
         });
 
-        // انشاء وربط Web App Manifest ديناميكياً لضمان قراءة الأيقونة على هواتف الأندرويد
         function setupDynamicManifest() {
             const logoUrl = "https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6smycajsa/playzone-logo-dark.png";
             const manifestData = {
@@ -839,17 +841,21 @@
             };
             const stringManifest = JSON.stringify(manifestData);
             const blob = new Blob([stringManifest], {type: 'application/json'});
-            const manifestURL = URL.createObjectURL(blob);
             const manifestElem = document.getElementById('manifestLink');
-            if (manifestElem) manifestElem.setAttribute('href', manifestURL);
+            if (manifestElem) manifestElem.setAttribute('href', URL.createObjectURL(blob));
         }
 
-        // التحقق من فتح التطبيق عبر الاختصار/Standalone وإخفاء الشريط العلوي تلقائياً
+        // فحص حالة الفتح عبر الاختصار وتنسيق العناصر بناءً عليها
         function checkStandaloneAndHideBar() {
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone || isMiniApp;
             if (isStandalone) {
                 const bar = document.getElementById('topShortcutBar');
                 if (bar) bar.style.display = 'none';
+
+                const statusText = document.getElementById('shortcutStatusText');
+                const btnsGroup = document.getElementById('shortcutButtonsGroup');
+                if (statusText) statusText.innerText = "التطبيق مضاف ومفعل حالياً على شاشتك الرئيسية 🎉";
+                if (btnsGroup) btnsGroup.style.display = 'none';
             }
         }
 
@@ -1067,12 +1073,10 @@
         let sleepTimerInterval = null;
         let sleepTimerEndTime = null;
         let pendingTgItem = null;
-        let recentLiveTickerInterval = null;
 
         const mediaContainer = document.getElementById('floatingPlayer');
         const videoElement = document.getElementById('globalVideoElement');
 
-        // حفظ واسترجاع حالة البحث والتحميل في localStorage لمنع التصفير عند فتح الاختصار
         function saveCurrentSessionState() {
             const titleEl = document.getElementById('title');
             const thumbEl = document.getElementById('thumb');
@@ -1139,7 +1143,6 @@
             initTypewriter();
             checkStandaloneAndHideBar();
             
-            // استرجاع المقطع المفتوح فورياً لمنع تصفير البحث
             restoreSessionState();
 
             if ('serviceWorker' in navigator) {
@@ -1170,7 +1173,6 @@
             setupAdvancedDraggable(mediaContainer, document.getElementById('playerHeader'));
             setupScrubbing();
             setupVideoEvents();
-            setupContinuousRecentUpdates();
 
             const inputsList = document.querySelectorAll('input, select, textarea');
             inputsList.forEach(inputEl => {
@@ -1200,15 +1202,6 @@
                 startSleepCountdown();
             }
         });
-
-        function setupContinuousRecentUpdates() {
-            if (recentLiveTickerInterval) clearInterval(recentLiveTickerInterval);
-            recentLiveTickerInterval = setInterval(() => {
-                if (document.getElementById('recentView') && document.getElementById('recentView').classList.contains('active')) {
-                    renderRecentlyPlayed();
-                }
-            }, 3000);
-        }
 
         function updateSidebarPlayingState(isPlaying) {
             const logoContainer = document.getElementById('sidebarLogoIcon');
@@ -1350,7 +1343,6 @@
                     currentClickId = sessionData.click_id;
                     currentAdUrl = sessionData.ad_link;
                     
-                    // حفظ الحالة فوراً في الذاكرة الدائمة
                     saveCurrentSessionState();
 
                     document.getElementById('adGate').classList.remove('hidden');
@@ -1363,7 +1355,6 @@
 
         window.openAdAndVerify = function(event) {
             if (event) event.preventDefault();
-            // حفظ الحالات قبل مغادرة التطبيق
             saveCurrentSessionState();
             
             if (currentAdUrl && currentAdUrl !== '#') {
@@ -1389,7 +1380,6 @@
                 document.getElementById('adGate').classList.add('hidden');
                 document.getElementById('dlOptions').classList.remove('hidden');
                 
-                // تحديث الذاكرة الدائمة بأن الإعلان تم فتحه والتحقق منه بنجاح
                 saveCurrentSessionState();
                 showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
             }, 10000);
@@ -1493,7 +1483,6 @@
                                 if(document.getElementById('libraryView').classList.contains('active')) applyFilters();
                                 showToast("تم حفظ الملف بنجاح", "success");
 
-                                // مسح جلسة المعاينة بعد النجاح
                                 clearActiveSessionState();
 
                                 fetchAndCacheTrack(newItem.id, fullFileUrl);
