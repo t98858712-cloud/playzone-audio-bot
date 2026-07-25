@@ -7,6 +7,7 @@ import subprocess
 import sqlite3
 import threading
 import requests
+import urllib.parse
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -20,7 +21,7 @@ from pydantic import BaseModel, field_validator
 import yt_dlp
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "P1ay_Z0ne_Bot"
+BOT_USERNAME = "MusicPlayZoneBot"
 
 try:
     from core.config import BASE_DOWNLOAD_DIR, HILLTOPADS_LINK, ADSTERRA_LINK
@@ -392,10 +393,19 @@ async def send_to_telegram(request: Request):
         dur = int(duration) if duration else 0
 
         caption = f"- @{BOT_USERNAME} , {dur // 60}:{dur % 60:02d}" if dur > 0 else f"- @{BOT_USERNAME}"
+        
+        # تجهيز نص ورابط المشاركة
+        share_bot_url = f"https://t.me/{BOT_USERNAME}"
+        share_text = """📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!
+⚡ بوت سريع، مجاني وبأعلى جودة.
+👇 جرّبه الآن:"""
+
+        share_link = f"https://t.me/share/url?url={urllib.parse.quote(share_bot_url)}&text={urllib.parse.quote(share_text)}"
+
         reply_markup = {
             "inline_keyboard": [[{
                 "text": "🌟 أعجبك البوت؟ شاركه",
-                "url": f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}"
+                "url": share_link
             }]]
         }
 
