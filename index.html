@@ -68,6 +68,26 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        /* مراعاة حواف الشاشة والنوتش بالأجهزة عند الفتح بالاختصار */
+        body {
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            padding-left: env(safe-area-inset-left, 0px);
+            padding-right: env(safe-area-inset-right, 0px);
+        }
+
+        @media (display-mode: standalone), (display-mode: window-controls-overlay) {
+            #topShortcutBar {
+                display: none !important;
+            }
+            main {
+                padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 7rem) !important;
+            }
+            #floatingPlayer {
+                bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
+            }
+        }
+
         input, textarea, select {
             user-select: text !important;
             -webkit-user-select: text !important;
@@ -322,7 +342,7 @@
             }
             #floatingPlayer {
                 left: 8px;
-                bottom: 8px;
+                bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
                 width: calc(100vw - 76px);
                 border-radius: 20px;
             }
@@ -1052,7 +1072,7 @@
         const mediaContainer = document.getElementById('floatingPlayer');
         const videoElement = document.getElementById('globalVideoElement');
 
-        // 🔥 الحل المضمون: حفظ واسترجاع حالة البحث والتحميل في localStorage لمنع التصفير عند ضغط رجوع في الاختصار
+        // حفظ واسترجاع حالة البحث والتحميل في localStorage لمنع التصفير عند فتح الاختصار
         function saveCurrentSessionState() {
             const titleEl = document.getElementById('title');
             const thumbEl = document.getElementById('thumb');
@@ -1079,7 +1099,6 @@
             if (!saved) return;
             try {
                 const state = JSON.parse(saved);
-                // التجاهل إذا مرت أكثر من 30 دقيقة على عملية البحث
                 if (!state || !state.url || (Date.now() - (state.savedAt || 0) > 1800000)) {
                     localStorage.removeItem('pz_active_download_state');
                     return;
