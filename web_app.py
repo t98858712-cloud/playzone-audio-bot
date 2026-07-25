@@ -1,6 +1,7 @@
 import os, sys, uuid, time, requests, json, subprocess, sqlite3
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import quote
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,7 +10,6 @@ from pydantic import BaseModel, field_validator
 import yt_dlp
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-# تم الإبقاء على اليوزر نيم الخاص بك هنا دون أي تغيير
 BOT_USERNAME = "MusicPlayZoneBot"
 
 try:
@@ -288,9 +288,18 @@ def send_to_telegram(req: TelegramRequest):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(req.duration) if req.duration else 0
         
-        # هنا تم تثبيت نص اليوزر ليكون @P1ay_Z0ne_Bot مع إبقاء مدة ووقت الملف دون لمس متغير BOT_USERNAME
         caption = f"- @P1ay_Z0ne_Bot , {dur//60}:{dur%60:02d}" if dur > 0 else f"- @P1ay_Z0ne_Bot"
-        reply_markup = {"inline_keyboard": [[{"text": "🌟 أعجبك البوت؟ شاركه", "url": "https://t.me/share/url?url=https://t.me/P1ay_Z0ne_Bot"}]]}
+        
+        # تجهيز نص ورابط المشاركة مع ترميز السطور والرموز تلقائياً
+        share_bot_url = "https://t.me/MusicPlayZoneBot"
+        share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:"
+        full_share_url = f"https://t.me/share/url?url={quote(share_bot_url)}&text={quote(share_text)}"
+
+        reply_markup = {
+            "inline_keyboard": [
+                [{"text": "🌟 أعجبك البوت؟ شاركه", "url": full_share_url}]
+            ]
+        }
         
         data = {'chat_id': req.chat_id, 'caption': caption, 'reply_markup': json.dumps(reply_markup)}
         
