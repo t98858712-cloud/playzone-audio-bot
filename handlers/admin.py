@@ -88,7 +88,7 @@ def make_ascii_bar(val1: int, val2: int, length: int = 8) -> str:
     return "█" * fill + "░" * (length - fill)
 
 def build_admin_stats_text(lang: str = "ar") -> str:
-    if db is None: return f"⚠️ <b>خطأ تشخيص حي في الاتصال بـ Firebase:</b>\n<code>{firebase_init_error}</code>"
+    if db is None: return f"⚠️ <b>خطأ في الاتصال بقاعدة البيانات:</b>\n<code>{firebase_init_error}</code>"
     analytics = load_full_analytics_sync()
     bot_bytes = format_size(analytics.get('bot_bytes', 0), lang)
     
@@ -101,7 +101,7 @@ def build_admin_stats_text(lang: str = "ar") -> str:
         f"────────────────────────\n\n"
         f"👥 <b>المستخدمون والنشاط:</b>\n"
         f"• إجمالي المستخدمين: <code>{analytics.get('total_users', 0)}</code>\n"
-        f"• النشطون (آخر 48h): <code>{analytics.get('active_48h', 0)}</code>\n\n"
+        f"• النشطون (آخر 48 ساعة): <code>{analytics.get('active_48h', 0)}</code>\n\n"
         f"🤖 <b>أداء بوت تيليجرام:</b>\n"
         f"• طلبات المعاينة والبحث: <code>{analytics.get('bot_requests', 0)}</code>\n"
         f"• التحميلات الناجحة: <code>{analytics.get('bot_success', 0)}</code>\n"
@@ -254,8 +254,8 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         try:
             subprocess.run(["pip", "install", "-U", "yt-dlp"], check=True)
             return await edit_message_smart(query.message, "✅ <b>تم تحديث محرك (yt-dlp) بنجاح!</b>", reply_markup=admin_security_menu(lang))
-        except Exception as e:
-            return await edit_message_smart(query.message, f"❌ <b>خطأ التحديث:</b>\n<code>{e}</code>", reply_markup=admin_security_menu(lang))
+        except Exception:
+            return await edit_message_smart(query.message, "❌ <b>تعذر استكمال التحديث في الوقت الحالي.</b>", reply_markup=admin_security_menu(lang))
 
     elif data == "adm_cookie_guide":
         await query.answer()
