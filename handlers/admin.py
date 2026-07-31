@@ -82,28 +82,23 @@ async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: 
         logger.debug(f"تخطي تحديث الرسالة: {e}")
 
 def build_admin_stats_text(lang: str = "ar") -> str:
-    if db is None: return "⚠️ <b>تنبيه:</b> قاعدة البيانات غير متصلة حالياً."
-    analytics = load_full_analytics_sync()
-    bot_bytes = format_size(analytics.get('bot_bytes', 0), lang)
+    if db is None: return "⚠️ قاعدة البيانات غير متصلة."
+    stats = load_full_analytics_sync()
+    bot_bytes = format_size(stats.get('bot_bytes', 0), lang)
     
     return (
-        f"📊 <b>إحصائيات النظام المباشرة</b>\n\n"
-        f"👥 <b>نشاط وتفاعل المستخدمين</b>\n"
-        f"إجمالي المستخدمين المسجلين: <code>{analytics.get('total_users', 0)}</code>\n"
-        f"المستخدمون النشطون (48 ساعة): <code>{analytics.get('active_48h', 0)}</code> بنسبة <code>{analytics.get('active_rate', 0.0)}%</code>\n"
-        f"المستخدمون غير النشطين: <code>{analytics.get('inactive_users', 0)}</code> بنسبة <code>{analytics.get('inactive_rate', 0.0)}%</code>\n\n"
-        f"🤖 <b>أداء بوت تيليجرام</b>\n"
-        f"إجمالي طلبات الميديا: <code>{analytics.get('bot_requests', 0)}</code>\n"
-        f"التحميلات الناجحة: <code>{analytics.get('bot_success', 0)}</code> بنسبة <code>{analytics.get('bot_success_rate', 100.0)}%</code>\n"
-        f"التحميلات الفاشلة: <code>{analytics.get('bot_failed', 0)}</code> بنسبة <code>{analytics.get('bot_fail_rate', 0.0)}%</code>\n"
-        f"حجم البيانات المستهلكة: <code>{bot_bytes}</code>\n"
-        f"الحملات الإذاعية المكتملة: <code>{analytics.get('broadcasts', 0)}</code>\n\n"
-        f"🌐 <b>أداء تطبيق الويب</b>\n"
-        f"زيارات وطلبات البحث: <code>{analytics.get('web_requests', 0)}</code>\n"
-        f"التحميلات المباشرة: <code>{analytics.get('web_downloads', 0)}</code> بنسبة تحويل <code>{analytics.get('web_conv_rate', 0.0)}%</code>\n\n"
-        f"💰 <b>تحليلات نظام الإعلانات</b>\n"
-        f"نقرات وجلسات الإعلان: <code>{analytics.get('adsterra_clicks', 0)}</code>\n"
-        f"عمليات فك القفل المكتملة: <code>{analytics.get('adsterra_verified', 0)}</code> بنسبة تحويل <code>{analytics.get('ad_conv_rate', 0.0)}%</code>"
+        f"📊 <b>إحصائيات البوت والشاملة:</b>\n\n"
+        f"👥 إجمالي المستخدمين: <code>{stats.get('total_users', 0)}</code>\n"
+        f"⚡ النشطين (48 ساعة): <code>{stats.get('active_48h', 0)}</code>\n\n"
+        f"📥 إجمالي الطلبات: <code>{stats.get('bot_requests', 0)}</code>\n"
+        f"✅ الطلبات الناجحة: <code>{stats.get('bot_success', 0)}</code>\n"
+        f"❌ الطلبات الفاشلة: <code>{stats.get('bot_failed', 0)}</code>\n"
+        f"💾 البيانات المرسلة: <code>{bot_bytes}</code>\n"
+        f"📢 عدد الإذاعات: <code>{stats.get('broadcasts', 0)}</code>\n\n"
+        f"🌐 طلبات الموقع: <code>{stats.get('web_requests', 0)}</code>\n"
+        f"🚀 تحميلات الموقع: <code>{stats.get('web_downloads', 0)}</code>\n\n"
+        f"💰 نقرات الإعلانات: <code>{stats.get('adsterra_clicks', 0)}</code>\n"
+        f"🔓 التنزيلات المفكوكة: <code>{stats.get('adsterra_verified', 0)}</code>"
     )
 
 def build_admin_users_text(limit: int, lang: str = "ar") -> str:
