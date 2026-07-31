@@ -20,10 +20,14 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or not update.message:
+        return
+        
     uid = update.effective_user.id
     register_user_sync(update.effective_user)
     lang = context.user_data.get("lang", "ar")
 
+    # 1. فحص وضع الصيانة عند استخدام أمر /start
     maintenance = get_setting("maintenance", "0")
     if maintenance == "1" and not is_admin(uid):
         return await update.message.reply_text(_t("msg_maintenance", lang), parse_mode="HTML")
@@ -81,10 +85,13 @@ async def render_search_page(message, context: ContextTypes.DEFAULT_TYPE, search
     await edit_message_smart(message, results_text, InlineKeyboardMarkup(btn_rows))
 
 async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from handlers.admin import handle_broadcast_media
+    if not update.effective_user or not update.message:
+        return
+
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
+    # 1. تحديث ملف الكوكيز عند إرساله بواسطة الأدمن
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
             from core.config import COOKIES_FILE
@@ -92,17 +99,24 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             await new_file.download_to_drive(COOKIES_FILE)
             return await update.message.reply_text("✅ تم استلام وتحديث ملف الكوكيز بنجاح.")
 
-    if uid in BANNED_USERS_CACHE: return
+    # 2. فحص قائمة المحظورين
+    if uid in BANNED_USERS_CACHE: 
+        return
 
+    # 3. فحص وضع الصيانة الشامل لأي رسالة قادمة من المستخدم
     maintenance = get_setting("maintenance", "0")
     if maintenance == "1" and not is_admin(uid):
         return await update.message.reply_text(_t("msg_maintenance", lang), parse_mode="HTML")
 
+    # 4. معالجة وضع الإذاعة للمدراء
     if getattr(update, "message", None):
         if is_admin(uid) and context.user_data.get("bc_active"):
+            from handlers.admin import handle_broadcast_media
             return await handle_broadcast_media(update, context)
             
-    if not update.message or not update.message.text: return
+    if not update.message.text: 
+        return
+
     register_user_sync(update.effective_user)
     text = update.message.text.strip()
     
