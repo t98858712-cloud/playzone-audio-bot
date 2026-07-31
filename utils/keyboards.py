@@ -40,6 +40,8 @@ def build_playzone_links_keyboard(bot_username: str = BOT_USERNAME) -> InlineKey
         [InlineKeyboardButton("🧵 Threads", url=THREADS_PLAYZONE), InlineKeyboardButton("🤖 Telegram Bot", url=tg_url)],
     ])
 
+# ==================== لوحات التحكم الإدارية ====================
+
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 الإحصائيات الشاملة", callback_data="adm_stats")],
