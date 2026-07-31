@@ -148,45 +148,17 @@ def load_full_analytics_sync() -> dict:
         doc = db.collection('settings').document('stats').get()
         stats = doc.to_dict() if doc.exists else {}
         
-        total_users = len(all_user_ids())
-        active_48h = len(get_active_users_48h())
-        inactive_users = max(0, total_users - active_48h)
-        
-        active_rate = round((active_48h / total_users * 100), 1) if total_users > 0 else 0.0
-        inactive_rate = round((inactive_users / total_users * 100), 1) if total_users > 0 else 0.0
-        
-        bot_req = stats.get('requests', 0)
-        bot_succ = stats.get('success', 0)
-        bot_fail = stats.get('failed', 0)
-        bot_success_rate = round((bot_succ / bot_req * 100), 1) if bot_req > 0 else 100.0
-        bot_fail_rate = round((bot_fail / bot_req * 100), 1) if bot_req > 0 else 0.0
-        
-        web_req = stats.get('web_requests', 0)
-        web_dl = stats.get('web_downloads', 0)
-        web_conv_rate = round((web_dl / web_req * 100), 1) if web_req > 0 else 0.0
-        
-        ad_clicks = stats.get('adsterra_clicks', 0)
-        ad_ver = stats.get('adsterra_verified', 0)
-        ad_conv_rate = round((ad_ver / ad_clicks * 100), 1) if ad_clicks > 0 else 0.0
-        
         return {
-            "total_users": total_users,
-            "active_48h": active_48h,
-            "inactive_users": inactive_users,
-            "active_rate": active_rate,
-            "inactive_rate": inactive_rate,
-            "bot_requests": bot_req,
-            "bot_success": bot_succ,
-            "bot_failed": bot_fail,
-            "bot_success_rate": bot_success_rate,
-            "bot_fail_rate": bot_fail_rate,
+            "total_users": len(all_user_ids()),
+            "active_48h": len(get_active_users_48h()),
+            "bot_requests": stats.get('requests', 0),
+            "bot_success": stats.get('success', 0),
+            "bot_failed": stats.get('failed', 0),
             "bot_bytes": stats.get('bytes', 0),
-            "web_requests": web_req,
-            "web_downloads": web_dl,
-            "web_conv_rate": web_conv_rate,
-            "adsterra_clicks": ad_clicks,
-            "adsterra_verified": ad_ver,
-            "ad_conv_rate": ad_conv_rate,
+            "web_requests": stats.get('web_requests', 0),
+            "web_downloads": stats.get('web_downloads', 0),
+            "adsterra_clicks": stats.get('adsterra_clicks', 0),
+            "adsterra_verified": stats.get('adsterra_verified', 0),
             "broadcasts": stats.get('broadcasts', 0)
         }
     except Exception as e:
@@ -260,33 +232,26 @@ def export_firebase_backup_json() -> str:
 
 def generate_analytics_txt_report() -> str:
     from utils.helpers import format_size
-    analytics = load_full_analytics_sync()
-    bot_bytes = format_size(analytics.get('bot_bytes', 0))
+    stats = load_full_analytics_sync()
+    bot_bytes = format_size(stats.get('bot_bytes', 0))
     now_str = time.strftime('%Y-%m-%d %H:%M:%S GMT')
     
-    return f"""تقرير تحليلات البيانات والمخزون في Firebase
+    return f"""📊 تقرير إحصائيات النظام الشاملة
 
-تاريخ التقرير: {now_str}
+📅 التاريخ: {now_str}
 
-1. إحصائيات مستخدمين القاعدة
-إجمالي المستخدمين المسجلين: {analytics.get('total_users', 0)}
-المستخدمون النشطون (48 ساعة): {analytics.get('active_48h', 0)} بنسبة {analytics.get('active_rate', 0.0)}%
-المستخدمون غير النشطين: {analytics.get('inactive_users', 0)} بنسبة {analytics.get('inactive_rate', 0.0)}%
+👥 إجمالي المستخدمين: {stats.get('total_users', 0)}
+⚡ النشطون (48 ساعة): {stats.get('active_48h', 0)}
 
-2. كفاءة وأداء البوت
-إجمالي طلبات الوسائط: {analytics.get('bot_requests', 0)}
-التنزيلات الناجحة: {analytics.get('bot_success', 0)} بنسبة {analytics.get('bot_success_rate', 100.0)}%
-التنزيلات الفاشلة: {analytics.get('bot_failed', 0)} بنسبة {analytics.get('bot_fail_rate', 0.0)}%
-إجمالي البيانات المرسلة: {bot_bytes}
-الحملات الإذاعية المكتملة: {analytics.get('broadcasts', 0)}
+📥 إجمالي الطلبات: {stats.get('bot_requests', 0)}
+✅ الطلبات الناجحة: {stats.get('bot_success', 0)}
+❌ الطلبات الفاشلة: {stats.get('bot_failed', 0)}
+💾 البيانات المرسلة: {bot_bytes}
+📢 عدد الإذاعات: {stats.get('broadcasts', 0)}
 
-3. أداء منصة وتطبيق الويب
-إجمالي زيارات وعمليات البحث: {analytics.get('web_requests', 0)}
-التنزيلات المباشرة: {analytics.get('web_downloads', 0)}
-معدل تحويل الزيارات لتنزيلات: {analytics.get('web_conv_rate', 0.0)}%
+🌐 طلبات البحث للموقع: {stats.get('web_requests', 0)}
+🚀 تنزيلات الموقع: {stats.get('web_downloads', 0)}
 
-4. تحويل وجلسات الإعلانات
-نقرات وجلسات الإعلان: {analytics.get('adsterra_clicks', 0)}
-عمليات فك القفل المكتملة: {analytics.get('adsterra_verified', 0)}
-معدل كفاءة التحويل: {analytics.get('ad_conv_rate', 0.0)}%
+💰 نقرات الإشعارات: {stats.get('adsterra_clicks', 0)}
+🔓 التحققات المكتملة: {stats.get('adsterra_verified', 0)}
 """
