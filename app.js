@@ -328,6 +328,7 @@ function clearActiveSessionState() {
     localStorage.removeItem('pz_ad_opened_pending');
 }
 
+// 📌 تعديل هكـذا لفك قفل التحميل فقط دون البدء التلقائي
 function checkAndAutoContinueDownload() {
     const isAdPending = localStorage.getItem('pz_ad_opened_pending');
     if (isAdPending === 'true' && currentUrl) {
@@ -335,21 +336,12 @@ function checkAndAutoContinueDownload() {
         
         const adGateEl = document.getElementById('adGate');
         const dlOptionsEl = document.getElementById('dlOptions');
-        const progressBox = document.getElementById('progressBox');
         
         if (adGateEl) adGateEl.classList.add('hidden');
         if (dlOptionsEl) dlOptionsEl.classList.remove('hidden');
         saveCurrentSessionState();
 
-        if (progressBox && progressBox.classList.contains('hidden')) {
-            showToast("تم فتح الإعلان بنجاح وجاري بدء التحميل تلقائياً... 🚀", "success");
-            setTimeout(() => {
-                const btn = document.getElementById('startDownloadBtnEl');
-                if (btn && !btn.disabled) {
-                    btn.click();
-                }
-            }, 400);
-        }
+        showToast("تم فك قفل التحميل بنجاح! 🔓 اختر الصيغة والدقة ثم اضغط بدء التحميل", "success");
     }
 }
 
@@ -606,7 +598,7 @@ window.startAdVerificationCheck = function() {
         document.getElementById('dlOptions').classList.remove('hidden');
         
         saveCurrentSessionState();
-        showToast("تم التحقق بنجاح وتفعيل الرابط 🔓", "success");
+        showToast("تم فك القفل بنجاح! حدد خياراتك واضغط بدء التحميل 🔓", "success");
     }, 10000);
 };
 
