@@ -80,7 +80,7 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     maint_btn = InlineKeyboardButton("🔴 إيقاف وضع الصيانة" if maint == "1" else "🟢 تفعيل وضع الصيانة", callback_data="adm_toggle_maint")
     
     adsterra_status = get_setting("adsterra_status", "1")
-    adsterra_btn = InlineKeyboardButton("🔴 إيقاف Adsterra" if adsterra_status == "1" else "🟢 تفعيل Adsterra", callback_data="adm_toggle_adsterra")
+    adsterra_btn = InlineKeyboardButton("🔴 إيقاف إعلانات Adsterra" if adsterra_status == "1" else "🟢 تفعيل إعلانات Adsterra", callback_data="adm_toggle_adsterra")
     
     return InlineKeyboardMarkup([
         [maint_btn], 
@@ -88,7 +88,7 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🔄 تحديث محرك yt-dlp", callback_data="adm_update_dlp"), 
          InlineKeyboardButton("🍪 إرشادات الكوكيز", callback_data="adm_cookie_guide")],
         [InlineKeyboardButton("🗜️ تحسين القاعدة", callback_data="adm_vacuum_db"), 
-         InlineKeyboardButton("🧹 تنظيف التخزين", callback_data="adm_clean")],
+         InlineKeyboardButton("🧹 تنظيف التخزين المؤقت", callback_data="adm_clean")],
         [InlineKeyboardButton("🔙 رجوع للقائمة الرئيسية", callback_data="adm_main_back")]
     ])
 
