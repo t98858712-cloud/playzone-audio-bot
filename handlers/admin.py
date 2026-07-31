@@ -12,7 +12,7 @@ from database.connection import db, firebase_init_error
 from database.operations import (
     all_user_ids, get_active_users_48h, stat_inc_sync, load_full_analytics_sync, 
     get_latest_users, get_setting, get_all_users_data, optimize_db, 
-    set_setting, register_user_sync, ban_user_db, unban_user_db,
+    set_setting, register_user_sync, ban_user_db, unban_user_db, get_banned_users_list,
     export_users_csv, export_firebase_backup_json, generate_analytics_txt_report
 )
 from utils.helpers import is_admin, _force_cleanup_all_sync, format_size, esc
@@ -101,6 +101,22 @@ def build_admin_stats_text(lang: str = "ar") -> str:
         f"🔓 التنزيلات المفكوكة: <code>{stats.get('adsterra_verified', 0)}</code>"
     )
 
+def build_banned_list_view():
+    banned = get_banned_users_list()
+    if not banned:
+        return "🟢 <b>لا يوجد مستخدمين محظورين حالياً.</b>", InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع لإدارة المستخدمين", callback_data="adm_users_menu")]])
+    
+    text = "🚫 <b>قائمة المستخدمين المحظورين:</b>\n\n"
+    buttons = []
+    for u in banned[:15]:
+        name = esc(u.get('first_name', 'بدون اسم'))
+        uname = f"(@{u.get('username')})" if u.get('username') else ""
+        text += f"• <code>{u['id']}</code> | {name} {uname}\n"
+        buttons.append([InlineKeyboardButton(f"🟢 فك حظر {u['id']}", callback_data=f"adm_user_action:unban:{u['id']}")])
+    
+    buttons.append([InlineKeyboardButton("🔙 رجوع لإدارة المستخدمين", callback_data="adm_users_menu")])
+    return text, InlineKeyboardMarkup(buttons)
+
 def build_admin_users_text(limit: int, lang: str = "ar") -> str:
     if db is None: return "⚠️ قاعدة البيانات غير متصلة."
     users = get_latest_users(limit)
@@ -151,6 +167,11 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return await edit_message_smart(query.message, "👥 <b>قسم إدارة المستخدمين والتصدير:</b>", reply_markup=admin_users_menu(lang))
         
+    elif data == "adm_banned_list":
+        await query.answer()
+        banned_text, banned_kb = build_banned_list_view()
+        return await edit_message_smart(query.message, banned_text, reply_markup=banned_kb)
+
     elif data == "adm_user_info_prompt":
         context.user_data["awaiting_user_id"] = True
         await query.answer()
