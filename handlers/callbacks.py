@@ -43,7 +43,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_admin(uid): return await query.answer("⛔ هذا الزر مخصص للمدراء فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
 
-    # فحص وضع الصيانة على الضغط على الأزرار
+    # حظر الاستخدام أثناء وضع الصيانة
     maintenance = get_setting("maintenance", "0")
     if maintenance == "1" and not is_admin(uid):
         return await query.answer(_t("msg_maintenance", lang), show_alert=True)
