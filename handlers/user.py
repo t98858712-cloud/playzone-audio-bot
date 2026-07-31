@@ -14,6 +14,7 @@ from utils.helpers import (
 from utils.keyboards import user_main_keyboard, build_playzone_links_keyboard, build_preview_keyboard
 from services.downloader import search_youtube, extract_metadata, EXECUTOR
 from core.security import BANNED_USERS_CACHE, ANTI_SPAM_CACHE, ACTIVE_USERS
+from core.config import BOT_USERNAME
 from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
@@ -34,13 +35,8 @@ async def toggle_lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["lang"] = new_lang
     await update.message.reply_text(_t("msg_lang_changed", new_lang), reply_markup=user_main_keyboard(new_lang))
 
-# استيراد متغير اسم البوت من الإعدادات في أعلى الملف
-from core.config import BOT_USERNAME
-
 async def show_playzone_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "ar")
-    
-    # تمرير المتغير الحكومي المستورد BOT_USERNAME إلى الكيبورد
     await update.message.reply_text(
         _t("msg_links", lang), 
         reply_markup=build_playzone_links_keyboard(BOT_USERNAME), 
@@ -83,18 +79,21 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
+    # تحديث الكوكيز تلقائياً عبر إرسال ملف cookies.txt للمدراء
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
             from core.config import COOKIES_FILE
             new_file = await context.bot.get_file(update.message.document.file_id)
             await new_file.download_to_drive(COOKIES_FILE)
-            return await update.message.reply_text("✅ تم استلام وتحديث ملف الكوكيز (cookies.txt) بنجاح.")
+            return await update.message.reply_text("✅ تم استلام وتحديث ملف الكوكيز بنجاح.")
 
     if uid in BANNED_USERS_CACHE: return
+
+    # فحص وضع الصيانة للمستخدمين العاديين
     maintenance = get_setting("maintenance", "0")
-    
     if maintenance == "1" and not is_admin(uid):
         return await update.message.reply_text(_t("msg_maintenance", lang), parse_mode="HTML")
+
     if getattr(update, "message", None):
         if is_admin(uid) and context.user_data.get("bc_active"):
             return await handle_broadcast_media(update, context)
@@ -121,7 +120,7 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
         if len(reqs) > 12:
             ban_user_db(uid)
             BANNED_USERS_CACHE.add(uid)
-            await alert_admins_live(context.bot, f"🚨 <b>نظام الحماية:</b> تم حظر المستخدم <code>{uid}</code> مؤقتاً بسبب السبام.")
+            await alert_admins_live(context.bot, f"🚨 تم حظر المستخدم <code>{uid}</code> تلقائياً بسبب الكثرة المفرطة للطلبات.")
             return await update.message.reply_text(_t("msg_spam_blocked", lang), parse_mode="HTML")
             
     if text in [_t("btn_links", "ar"), _t("btn_links", "en"), "/links", "\\links"]:
@@ -149,7 +148,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
             return
         except Exception as e:
             logger.warning(f"فشل البحث: {e}")
-            await alert_admins_live(context.bot, f"🚨 <b>خطأ في محرك البحث:</b>\n\n<code>{e}</code>")
             return await status.edit_text(_t("msg_link_error", lang))
 
     status = await update.message.reply_text(_t("msg_check_link", lang))
