@@ -60,7 +60,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = f"https://www.youtube.com/watch?v={video_id}"
         
         if context.user_data.get("loading_preview"):
-            return await query.answer("⏳ جاري فحص الرابط، يرجى الانتظار...", show_alert=True)
+            return await query.answer("⏳ جاري فحص خيارات الرابط، يرجى الانتظار...", show_alert=True)
         
         context.user_data["loading_preview"] = True
         await query.answer()
@@ -170,8 +170,8 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 ad_direct_url = ADSTERRA_LINK
                 
-                btn_watch = "📺 مشاهدة إعلان" if lang == "ar" else "📺 Watch Ad"
-                btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Ad Completion"
+                btn_watch = "📺 مشاهدة الإعلان" if lang == "ar" else "📺 Watch Ad"
+                btn_verify = "🔄 التحقق من اكتمال المشاهدة" if lang == "ar" else "🔄 Verify Completion"
                 
                 ad_keyboard = InlineKeyboardMarkup([
                     [InlineKeyboardButton(btn_watch, url=ad_direct_url)],
