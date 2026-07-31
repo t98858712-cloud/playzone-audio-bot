@@ -239,19 +239,30 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         elif d['status'] == 'finished':
             try:
                 with get_db() as conn:
-                    conn.execute("UPDATE progress SET status='converting', timestamp=? WHERE job_id=?", (time.time(), job_id))
+                    conn.execute("UPDATE progress SET status='converting', timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
                     conn.commit()
             except Exception:
                 pass
 
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
+    
+    # 📌 التمييز الصريح بين طلب الصوت والفيديو بحسب اختيار المستخدم
     if mode == 'audio':
-        opts.update({'format': 'bestaudio/best', 'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}]})
+        opts.update({
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192'
+            }]
+        })
     else:
         max_fs = "49M"
+        target_res = res if res and res != 'best' else '720'
         opts.update({
-            'format': f"bestvideo[vcodec^=avc1][height<={res if res!='best' else '1080'}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/best",
-            'merge_output_format': 'mp4', 'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
+            'format': f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/bestvideo[height<={target_res}]+bestaudio/best",
+            'merge_output_format': 'mp4',
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
         })
     
     try:
@@ -277,8 +288,10 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
 async def start_download(request: Request):
     data = await request.json()
     url = data.get("url", "")
-    mode = data.get("mode", "video")
-    resolution = data.get("resolution", "720")
+    
+    # 📌 استلام النمط ودقة الفيديو المعينين من القائمة المنسدلة بالموقع بشكل صريح
+    mode = str(data.get("mode", "video")).lower().strip()
+    resolution = str(data.get("resolution", "720")).lower().strip()
     click_id = data.get("click_id", "")
 
     with get_db() as conn:
@@ -389,7 +402,6 @@ async def send_to_telegram(request: Request):
             ]
         }
         
-        # إضافة parse_mode: HTML لكي يتعرف التليجرام على رابط الوقت الأزرق
         data_payload = {
             'chat_id': chat_id,
             'caption': caption,
