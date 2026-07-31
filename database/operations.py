@@ -11,7 +11,7 @@ from firebase_admin import firestore
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def load_banned_users():
-    if db is None:
+    if db is None: 
         return set()
     try:
         docs = db.collection('banned_users').stream()
@@ -28,7 +28,7 @@ def load_banned_users():
         return set()
 
 def ban_user_db(uid):
-    if db is None:
+    if db is None: 
         return
     try:
         db.collection('banned_users').document(str(uid)).set({'banned_at': int(time.time())})
@@ -38,7 +38,7 @@ def ban_user_db(uid):
         logger.error(f"Error banning user: {e}")
 
 def unban_user_db(uid):
-    if db is None:
+    if db is None: 
         return
     try:
         db.collection('banned_users').document(str(uid)).delete()
@@ -48,7 +48,7 @@ def unban_user_db(uid):
         logger.error(f"Error unbanning user: {e}")
 
 def set_setting(key, value):
-    if db is None:
+    if db is None: 
         return
     try:
         db.collection('settings').document('config').set({key: str(value)}, merge=True)
@@ -56,7 +56,7 @@ def set_setting(key, value):
         logger.error(f"Error setting config {key}: {e}")
 
 def get_setting(key, default="0"):
-    if db is None:
+    if db is None: 
         return default
     try:
         doc = db.collection('settings').document('config').get()
@@ -67,7 +67,7 @@ def get_setting(key, default="0"):
     return default
 
 def register_user_sync(user):
-    if not user or db is None:
+    if not user or db is None: 
         return
     now = int(time.time())
     try:
@@ -93,7 +93,7 @@ def register_user_sync(user):
         logger.error(f"Error registering user {user.id}: {e}")
 
 def all_user_ids() -> list:
-    if db is None:
+    if db is None: 
         return []
     try:
         docs = db.collection('users').select(['id']).stream()
@@ -103,7 +103,7 @@ def all_user_ids() -> list:
         return []
 
 def get_active_users_48h() -> list:
-    if db is None:
+    if db is None: 
         return []
     threshold = int(time.time()) - (48 * 3600)
     try:
@@ -114,7 +114,7 @@ def get_active_users_48h() -> list:
         return []
 
 def get_latest_users(limit: int = 10) -> list:
-    if db is None:
+    if db is None: 
         return []
     try:
         docs = db.collection('users').order_by('last_seen', direction=firestore.Query.DESCENDING).limit(limit).stream()
@@ -124,7 +124,7 @@ def get_latest_users(limit: int = 10) -> list:
         return []
 
 def get_all_users_data() -> list:
-    if db is None:
+    if db is None: 
         return []
     try:
         docs = db.collection('users').stream()
@@ -134,7 +134,7 @@ def get_all_users_data() -> list:
         return []
 
 def stat_inc_sync(key: str, value: int = 1):
-    if db is None:
+    if db is None: 
         return
     try:
         db.collection('settings').document('stats').set({key: Increment(value)}, merge=True)
@@ -142,7 +142,7 @@ def stat_inc_sync(key: str, value: int = 1):
         logger.error(f"Error incrementing stat {key}: {e}")
 
 def load_full_analytics_sync() -> dict:
-    if db is None:
+    if db is None: 
         return {}
     try:
         doc = db.collection('settings').document('stats').get()
@@ -176,7 +176,7 @@ def load_full_analytics_sync() -> dict:
         return {}
 
 def verify_user_ad_completion(user_id: int):
-    if db is None:
+    if db is None: 
         return
     try:
         db.collection('users').document(str(user_id)).update({'last_ad_completion': int(time.time())})
@@ -185,7 +185,7 @@ def verify_user_ad_completion(user_id: int):
         logger.error(f"Error updating ad completion for {user_id}: {e}")
 
 def check_ad_verified_status(user_id: int) -> bool:
-    if db is None:
+    if db is None: 
         return False
     try:
         doc = db.collection('users').document(str(user_id)).get()
@@ -217,7 +217,7 @@ def export_users_csv() -> str:
     return output.getvalue()
 
 def export_firebase_backup_json() -> str:
-    if db is None:
+    if db is None: 
         return "{}"
     try:
         backup = {
@@ -279,6 +279,6 @@ Monetization Network  : Adsterra Ad Engine Exclusive
 • Verified Ad Unlocks    : {analytics.get('adsterra_verified', 0)}
 
 ================================================================
-                  END OF DIAGNOSTIC REPORT
+                   END OF DIAGNOSTIC REPORT
 ================================================================
 """
