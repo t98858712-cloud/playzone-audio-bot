@@ -9,6 +9,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import yt_dlp
 
+# استدعاء دالة زيادة الإحصائيات من الموديل
+try:
+    from database.operations import stat_inc_sync
+except ImportError:
+    def stat_inc_sync(key: str, value: int = 1): pass
+
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = "MusicPlayZoneBot"
 
@@ -36,7 +42,6 @@ DB_PATH = "playzone_core.db"
 
 @contextmanager
 def get_db():
-    """ إدارة حصرية ومغلقة لاتصالات SQLite مع نمط WAL للحماية من التعليق """
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL;")  
     conn.row_factory = sqlite3.Row
@@ -67,7 +72,6 @@ init_db()
 DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
 
 def cleanup_cron():
-    """ تنظيف دوري صامت للملفات والسجلات القديمة """
     while True:
         try:
             now = time.time()
@@ -85,7 +89,7 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- مسارات تقديم الملفات الثابتة ---
+# --- مسارات الخدمة والأنشطة ---
 
 @app.get("/", response_class=HTMLResponse)
 def home():
@@ -108,8 +112,6 @@ def get_js():
     if js_path.exists():
         return FileResponse("app.js", media_type="application/javascript")
     raise HTTPException(status_code=404, detail="File not found")
-
-# --- باقي Endpoints الخادم ---
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
@@ -134,6 +136,7 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
 
 @app.post("/api/search")
 async def api_search(request: Request):
+    stat_inc_sync("web_requests", 1)
     try:
         data = await request.json()
         query = data.get("query", "")
@@ -161,8 +164,8 @@ async def api_search(request: Request):
                 })
             if len(valid_videos) == 15: break 
         return {"success": True, "entries": valid_videos}
-    except Exception as e: 
-        return {"success": False, "error": str(e)}
+    except Exception: 
+        return {"success": False, "error": "تعذر العثور على نتائج للبحث."}
 
 @app.post("/api/preview")
 async def get_preview(request: Request):
@@ -173,10 +176,11 @@ async def get_preview(request: Request):
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return {"success": True, "title": info.get("title", "بدون عنوان"), "thumb": info.get("thumbnail", "")}
-    except Exception as e: return {"success": False, "error": str(e)}
+    except Exception: return {"success": False, "error": "تعذر قراءة بيانات هذا الرابط."}
 
 @app.get("/api/generate_ad_session")
 def generate_ad_session():
+    stat_inc_sync("adsterra_clicks", 1)
     click_id = uuid.uuid4().hex[:12]
     with get_db() as conn:
         conn.execute("INSERT INTO ads (click_id, status, created_at) VALUES (?, ?, ?)", (click_id, "pending", time.time()))
@@ -259,8 +263,9 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             with get_db() as conn:
                 conn.execute("UPDATE progress SET status='completed', data=? WHERE job_id=?", (json.dumps(payload), job_id))
                 conn.commit()
-    except Exception as e:
-        payload = {"status": "error", "error": str(e)}
+            stat_inc_sync("web_downloads", 1)
+    except Exception:
+        payload = {"status": "error", "error": "حدث خطأ أثناء معالجة التحميل."}
         with get_db() as conn:
             conn.execute("UPDATE progress SET status='error', data=? WHERE job_id=?", (json.dumps(payload), job_id))
             conn.commit()
@@ -276,9 +281,9 @@ async def start_download(request: Request):
     with get_db() as conn:
         cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (click_id,))
         row = cursor.fetchone()
-        if not row: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
+        if not row: return {"success": False, "error": "جلسة التحميل غير صالحة."}
         if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
-            return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
+            return {"success": False, "error": "يرجى فتح رابط الإعلان للتحقق أولاً."}
             
     job_id = uuid.uuid4().hex[:8]
     with get_db() as conn:
@@ -350,20 +355,19 @@ async def send_to_telegram(request: Request):
             file_path = WEB_DIR / filename
 
         if not file_path or not file_path.exists():
-            return {"success": False, "error": "الملف غير موجود على السيرفر."}
+            return {"success": False, "error": "الملف غير متوفر على السيرفر."}
 
         if not TELEGRAM_TOKEN:
-            return {"success": False, "error": "البوت غير مفعل بالخلفية."}
+            return {"success": False, "error": "خدمة البوت غير متصلة حالياً."}
 
         if file_path.stat().st_size / (1024 * 1024) > 49.5:
             if temp_file_created: file_path.unlink(missing_ok=True)
-            return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
+            return {"success": False, "error": "يتجاوز حجم الملف الحد المسموح (50MB)."}
 
         api_method = "sendAudio" if is_audio else "sendVideo"
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(duration) if duration else 0
         
-        # --- تعديل صيغة الوقت القابل للضغط باللون الأزرق ---
         time_str = f"{dur // 60:02d}:{dur % 60:02d}"
         if dur > 0:
             caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>'
@@ -380,7 +384,6 @@ async def send_to_telegram(request: Request):
             ]
         }
         
-        # إضافة parse_mode: HTML لكي يتعرف التليجرام على رابط الوقت الأزرق
         data_payload = {
             'chat_id': chat_id,
             'caption': caption,
@@ -418,9 +421,9 @@ async def send_to_telegram(request: Request):
 
         if response.status_code == 200 and res_data.get("ok"): 
             return {"success": True}
-        return {"success": False, "error": res_data.get("description", "تأكد من بدء البوت مع الحساب أولاً.")}
+        return {"success": False, "error": "يرجى بدء المحادثة مع البوت أولاً لتفعيل الإرسال."}
         
-    except Exception as e: 
+    except Exception: 
         if temp_file_created and file_path and file_path.exists():
             file_path.unlink(missing_ok=True)
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "تعذر إرسال الملف، حاول مجدداً لاحقاً."}
