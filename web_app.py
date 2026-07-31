@@ -1,4 +1,12 @@
-import os, sys, uuid, time, requests, json, subprocess, sqlite3, threading
+import os
+import sys
+import uuid
+import time
+import json
+import sqlite3
+import threading
+import subprocess
+import requests
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
@@ -9,22 +17,23 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import yt_dlp
 
-try:
-    from database.operations import stat_inc_sync
-except ImportError:
-    def stat_inc_sync(key: str, value: int = 1): pass
-
+# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-BOT_USERNAME = "MusicPlayZoneBot"
+BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
+ADSTERRA_LINK = os.getenv(
+    "ADSTERRA_LINK",
+    "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
+)
 
-try:
-    from core.config import BASE_DOWNLOAD_DIR, ADSTERRA_LINK
-except ImportError:
-    BASE_DOWNLOAD_DIR = Path("./downloads")
-    ADSTERRA_LINK = "https://www.effectivecpmnetwork.com/jgv39bh2p?key=8ffb7ed8cb605d90c6d07e1f7a698646"
+BASE_DOWNLOAD_DIR = Path("./downloads")
+WEB_DIR = BASE_DOWNLOAD_DIR / "web_library"
+WEB_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="PlayZone Enterprise Dashboard")
+DB_PATH = "playzone_core.db"
 
+app = FastAPI(title="PlayZone Enterprise Backend")
+
+# السماح بالاتصالات من أي مصدر (CORS) لضمان العمل على السيرفرات والتطبيقات
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,17 +42,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-WEB_DIR = BASE_DOWNLOAD_DIR / "web_library"
-WEB_DIR.mkdir(parents=True, exist_ok=True)
+# تقديم الملفات المحملة إما عبر /files أو Endpoint التنزيل المباشر
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-DB_PATH = "playzone_core.db"
-
+# --- إدارة قاعدة البيانات (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
-    """ إدارة حصرية ومغلقة لاتصالات SQLite مع نمط WAL للحماية من التعليق """
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
-    conn.execute("PRAGMA journal_mode=WAL;")  
+    conn.execute("PRAGMA journal_mode=WAL;")
     conn.row_factory = sqlite3.Row
     try:
         yield conn
@@ -69,10 +75,10 @@ def init_db():
 
 init_db()
 
-DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10) 
+DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10)
 
+# تنظيف دوري للملفات القديمة وسجلات قاعدة البيانات المهملة
 def cleanup_cron():
-    """ تنظيف دوري صامت للملفات والسجلات القديمة """
     while True:
         try:
             now = time.time()
@@ -90,56 +96,71 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- مسارات تقديم الملفات الثابتة ---
-
-@app.get("/", response_class=HTMLResponse)
-def home():
-    index_path = Path("index.html")
-    if not index_path.exists():
-        return HTMLResponse(content="<h2>الملف index.html غير موجود</h2>", status_code=404)
-    with open(index_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
-
-@app.get("/styles.css")
-def get_css():
-    css_path = Path("styles.css")
-    if css_path.exists():
-        return FileResponse("styles.css", media_type="text/css")
-    raise HTTPException(status_code=404, detail="File not found")
-
-@app.get("/app.js")
-def get_js():
-    js_path = Path("app.js")
-    if js_path.exists():
-        return FileResponse("app.js", media_type="application/javascript")
-    raise HTTPException(status_code=404, detail="File not found")
-
-# --- باقي Endpoints الخادم ---
-
+# --- خيارات yt-dlp المحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
-        "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
-        "retries": 15, "fragment_retries": 15, "socket_timeout": 30, "cachedir": False,
-        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
-        "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv"], "player_skip": ["web", "mweb"]}},
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "playlist_items": "1",
+        "retries": 15,
+        "fragment_retries": 15,
+        "socket_timeout": 30,
+        "cachedir": False,
+        "concurrent_fragment_downloads": 5,
+        "no_check_certificate": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
+            }
+        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
-    try:
-        cookie_path = Path("cookies.txt")
-        if cookie_path.exists() and cookie_path.stat().st_size > 0:
-            opts["cookiefile"] = str(cookie_path)
-    except Exception:
-        pass
-    if outtmpl_path: opts["outtmpl"] = str(outtmpl_path)
-    if progress_hook: opts["progress_hooks"] = [progress_hook]
+    cookie_path = Path("cookies.txt")
+    if cookie_path.exists() and cookie_path.stat().st_size > 0:
+        opts["cookiefile"] = str(cookie_path)
+    if outtmpl_path:
+        opts["outtmpl"] = str(outtmpl_path)
+    if progress_hook:
+        opts["progress_hooks"] = [progress_hook]
     return opts
+
+# --- المسارات والـ API Endpoints ---
+
+@app.get("/")
+def home():
+    index_path = Path("index.html")
+    if not index_path.exists():
+        return HTMLResponse(content="<h2>PlayZone Backend Active</h2>", status_code=200)
+    with open(index_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read().replace("{BOT_USERNAME}", BOT_USERNAME))
+
+@app.get("/styles.css")
+def get_css():
+    if Path("styles.css").exists():
+        return FileResponse("styles.css", media_type="text/css")
+    raise HTTPException(status_code=404, detail="File not found")
+
+@app.get("/app.js")
+def get_js():
+    if Path("app.js").exists():
+        return FileResponse("app.js", media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="File not found")
+
+@app.get("/api/download_file/{filename}")
+def download_file_direct(filename: str):
+    file_path = WEB_DIR / filename
+    if file_path.exists() and file_path.is_file():
+        media_type = "audio/mpeg" if filename.endswith(".mp3") else "video/mp4"
+        return FileResponse(file_path, filename=filename, media_type=media_type)
+    raise HTTPException(status_code=404, detail="الملف غير موجود")
 
 @app.post("/api/search")
 async def api_search(request: Request):
-    stat_inc_sync("web_requests", 1)
     try:
         data = await request.json()
         query = data.get("query", "")
@@ -158,16 +179,20 @@ async def api_search(request: Request):
             video_id = entry.get("id")
             title = entry.get("title")
             if video_id and title:
-                thumb_url = entry.get("thumbnail") or (entry.get("thumbnails")[0].get("url") if entry.get("thumbnails") else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
+                thumb_url = entry.get("thumbnail") or (
+                    entry.get("thumbnails")[0].get("url") if entry.get("thumbnails")
+                    else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+                )
                 valid_videos.append({
-                    "id": video_id, "title": title,
+                    "id": video_id,
+                    "title": title,
                     "duration": entry.get("duration") or 0,
                     "uploader": entry.get("uploader") or entry.get("channel") or "غير معروف",
                     "thumbnail": thumb_url
                 })
-            if len(valid_videos) == 15: break 
+            if len(valid_videos) == 15: break
         return {"success": True, "entries": valid_videos}
-    except Exception as e: 
+    except Exception as e:
         return {"success": False, "error": str(e)}
 
 @app.post("/api/preview")
@@ -178,19 +203,24 @@ async def get_preview(request: Request):
         opts = get_hardened_ydl_options()
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            return {"success": True, "title": info.get("title", "بدون عنوان"), "thumb": info.get("thumbnail", "")}
-    except Exception as e: return {"success": False, "error": str(e)}
+            return {
+                "success": True,
+                "title": info.get("title", "بدون عنوان"),
+                "thumb": info.get("thumbnail", ""),
+                "uploader": info.get("uploader", "غير معروف"),
+                "duration": info.get("duration", 0)
+            }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 @app.get("/api/generate_ad_session")
 def generate_ad_session():
-    stat_inc_sync("adsterra_clicks", 1)
     click_id = uuid.uuid4().hex[:12]
     with get_db() as conn:
         conn.execute("INSERT INTO ads (click_id, status, created_at) VALUES (?, ?, ?)", (click_id, "pending", time.time()))
         conn.commit()
-    AD_LINK = ADSTERRA_LINK
-    separator = "&" if "?" in AD_LINK else "?"
-    return {"click_id": click_id, "ad_link": f"{AD_LINK}{separator}clickid={click_id}"}
+    separator = "&" if "?" in ADSTERRA_LINK else "?"
+    return {"click_id": click_id, "ad_link": f"{ADSTERRA_LINK}{separator}clickid={click_id}"}
 
 @app.get("/api/ad_callback")
 def ad_callback(clickid: str):
@@ -218,7 +248,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     def hook(d):
         if d['status'] == 'downloading':
             now = time.time()
-            if now - last_update[0] < 1.0:
+            if now - last_update[0] < 0.5:
                 return
             last_update[0] = now
 
@@ -226,8 +256,10 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             downloaded = d.get('downloaded_bytes', 0)
             speed = d.get('speed', 0)
             payload = {
-                "status": "downloading", "percent": round((downloaded / total) * 100, 1),
-                "total_mb": f"{total / 1048576:.1f} MB", "dl_mb": f"{downloaded / 1048576:.1f} MB",
+                "status": "downloading",
+                "percent": round((downloaded / total) * 100, 1) if total > 0 else 0,
+                "total_mb": f"{total / 1048576:.1f} MB",
+                "dl_mb": f"{downloaded / 1048576:.1f} MB",
                 "spd_mb": f"{speed / 1048576:.1f} MB/s" if speed else "0 MB/s"
             }
             try:
@@ -238,15 +270,15 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 pass
         elif d['status'] == 'finished':
             try:
+                payload = {"status": "converting", "percent": 99.0, "spd_mb": "معالجة..."}
                 with get_db() as conn:
-                    conn.execute("UPDATE progress SET status='converting', timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
+                    conn.execute("UPDATE progress SET status='converting', data=?, timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
                     conn.commit()
             except Exception:
                 pass
 
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     
-    # 📌 التمييز الصريح بين طلب الصوت والفيديو بحسب اختيار المستخدم
     if mode == 'audio':
         opts.update({
             'format': 'bestaudio/best',
@@ -270,14 +302,17 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             info = ydl.extract_info(url, download=True)
             filename = f"{job_id}.mp3" if mode == 'audio' else f"{job_id}.mp4"
             payload = {
-                "status": "completed", "url": f"/files/{filename}", "title": info.get('title', 'مقطع'),
-                "thumb": info.get('thumbnail', ''), "uploader": info.get('uploader', 'غير معروف'),
-                "duration": info.get('duration', 0), "is_audio": mode == 'audio'
+                "status": "completed",
+                "url": f"/files/{filename}",
+                "title": info.get('title', 'مقطع'),
+                "thumb": info.get('thumbnail', ''),
+                "uploader": info.get('uploader', 'غير معروف'),
+                "duration": info.get('duration', 0),
+                "is_audio": mode == 'audio'
             }
             with get_db() as conn:
                 conn.execute("UPDATE progress SET status='completed', data=? WHERE job_id=?", (json.dumps(payload), job_id))
                 conn.commit()
-            stat_inc_sync("web_downloads", 1)
     except Exception as e:
         payload = {"status": "error", "error": str(e)}
         with get_db() as conn:
@@ -288,11 +323,12 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
 async def start_download(request: Request):
     data = await request.json()
     url = data.get("url", "")
-    
-    # 📌 استلام النمط ودقة الفيديو المعينين من القائمة المنسدلة بالموقع بشكل صريح
     mode = str(data.get("mode", "video")).lower().strip()
     resolution = str(data.get("resolution", "720")).lower().strip()
     click_id = data.get("click_id", "")
+
+    if not url:
+        return {"success": False, "error": "يرجى إدخال رابط صحيح."}
 
     with get_db() as conn:
         cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (click_id,))
@@ -300,8 +336,7 @@ async def start_download(request: Request):
         if not row: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
         if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
             return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
-            
-    stat_inc_sync("adsterra_verified", 1)
+
     job_id = uuid.uuid4().hex[:8]
     with get_db() as conn:
         conn.execute("INSERT INTO progress (job_id, status, data, timestamp) VALUES (?, ?, ?, ?)", (job_id, "starting", "{}", time.time()))
@@ -317,7 +352,8 @@ def get_progress(job_id: str):
         row = cursor.fetchone()
         if not row: return {"status": "waiting"}
         status = row["status"]
-        if status in ["starting", "converting"]: return {"status": status}
+        if status == "starting": return {"status": "starting", "percent": 0}
+        if status == "converting": return {"status": "converting", "percent": 99}
         return json.loads(row["data"])
 
 @app.post("/api/send_telegram")
@@ -375,7 +411,7 @@ async def send_to_telegram(request: Request):
             return {"success": False, "error": "الملف غير موجود على السيرفر."}
 
         if not TELEGRAM_TOKEN:
-            return {"success": False, "error": "البوت غير مفعل بالخلفية."}
+            return {"success": False, "error": "توكن البوت غير مفعل بالخلفية."}
 
         if file_path.stat().st_size / (1024 * 1024) > 49.5:
             if temp_file_created: file_path.unlink(missing_ok=True)
@@ -385,7 +421,6 @@ async def send_to_telegram(request: Request):
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(duration) if duration else 0
         
-        # --- تعديل صيغة الوقت القابل للضغط باللون الأزرق ---
         time_str = f"{dur // 60:02d}:{dur % 60:02d}"
         if dur > 0:
             caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>'
@@ -439,9 +474,13 @@ async def send_to_telegram(request: Request):
 
         if response.status_code == 200 and res_data.get("ok"): 
             return {"success": True}
-        return {"success": False, "error": res_data.get("description", "تأكد من بدء البوت مع الحساب أولاً.")}
+        return {"success": False, "error": res_data.get("description", "تأكد من بدء المحادثة مع البوت أولاً.")}
         
     except Exception as e: 
         if temp_file_created and file_path and file_path.exists():
             file_path.unlink(missing_ok=True)
         return {"success": False, "error": str(e)}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("web_app:app", host="0.0.0.0", port=8000, reload=True)
