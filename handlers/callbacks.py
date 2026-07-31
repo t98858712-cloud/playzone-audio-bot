@@ -13,7 +13,7 @@ from telegram.error import TimedOut, NetworkError, BadRequest
 
 from core.config import BASE_DOWNLOAD_DIR, DOWNLOAD_SEMAPHORE, EXECUTOR, MAX_TELEGRAM_SIZE, BOT_USERNAME, ADSTERRA_LINK
 from core.security import ACTIVE_USERS
-from database.operations import stat_inc_sync
+from database.operations import stat_inc_sync, get_setting
 from locales.language import _t
 
 from utils.helpers import (
@@ -42,6 +42,11 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("adm_"):
         if not is_admin(uid): return await query.answer("⛔ هذا الزر مخصص للمدراء فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
+
+    # فحص وضع الصيانة على الضغط على الأزرار
+    maintenance = get_setting("maintenance", "0")
+    if maintenance == "1" and not is_admin(uid):
+        return await query.answer(_t("msg_maintenance", lang), show_alert=True)
         
     if data == "cancel_search":
         await query.answer(_t("msg_cancel_done", lang))
@@ -132,7 +137,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parts = data.split(":")
             resolution, request_id = parts[1], parts[2]
 
-        from database.operations import check_ad_verified_status, get_setting
+        from database.operations import check_ad_verified_status
         adsterra_status = get_setting("adsterra_status", "1")
         
         if is_admin(uid) or adsterra_status == "0" or check_ad_verified_status(uid):
