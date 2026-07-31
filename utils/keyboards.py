@@ -42,12 +42,12 @@ def build_playzone_links_keyboard(bot_username: str = BOT_USERNAME) -> InlineKey
 
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 Dashboard الإحصائيات الحية", callback_data="adm_stats"),
-         InlineKeyboardButton("📢 الإذاعة والتواصل", callback_data="adm_bc_menu")],
+        [InlineKeyboardButton("📊 Dashboard الإحصائيات الشاملة", callback_data="adm_stats")],
         [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="adm_users_menu"), 
-         InlineKeyboardButton("🛡️ الحماية و Adsterra", callback_data="adm_sec_menu")],
-        [InlineKeyboardButton("📁 حالة المخدم والسيرفر", callback_data="adm_server"),
-         InlineKeyboardButton("✖️ إغلاق", callback_data="adm_close")]
+         InlineKeyboardButton("📢 الإذاعة والتواصل", callback_data="adm_bc_menu")],
+        [InlineKeyboardButton("🛡️ الحماية و Adsterra", callback_data="adm_sec_menu"), 
+         InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server")],
+        [InlineKeyboardButton("✖️ إغلاق لوحة التحكم", callback_data="adm_close")]
     ])
 
 def admin_broadcast_menu(lang: str = "ar") -> InlineKeyboardMarkup:
