@@ -148,27 +148,45 @@ def load_full_analytics_sync() -> dict:
         doc = db.collection('settings').document('stats').get()
         stats = doc.to_dict() if doc.exists else {}
         
-        all_users = len(all_user_ids())
+        total_users = len(all_user_ids())
         active_48h = len(get_active_users_48h())
+        inactive_users = max(0, total_users - active_48h)
+        
+        active_rate = round((active_48h / total_users * 100), 1) if total_users > 0 else 0.0
+        inactive_rate = round((inactive_users / total_users * 100), 1) if total_users > 0 else 0.0
         
         bot_req = stats.get('requests', 0)
         bot_succ = stats.get('success', 0)
         bot_fail = stats.get('failed', 0)
+        bot_success_rate = round((bot_succ / bot_req * 100), 1) if bot_req > 0 else 100.0
+        bot_fail_rate = round((bot_fail / bot_req * 100), 1) if bot_req > 0 else 0.0
         
-        success_rate = (bot_succ / bot_req * 100) if bot_req > 0 else 100.0
+        web_req = stats.get('web_requests', 0)
+        web_dl = stats.get('web_downloads', 0)
+        web_conv_rate = round((web_dl / web_req * 100), 1) if web_req > 0 else 0.0
+        
+        ad_clicks = stats.get('adsterra_clicks', 0)
+        ad_ver = stats.get('adsterra_verified', 0)
+        ad_conv_rate = round((ad_ver / ad_clicks * 100), 1) if ad_clicks > 0 else 0.0
         
         return {
-            "total_users": all_users,
+            "total_users": total_users,
             "active_48h": active_48h,
+            "inactive_users": inactive_users,
+            "active_rate": active_rate,
+            "inactive_rate": inactive_rate,
             "bot_requests": bot_req,
             "bot_success": bot_succ,
             "bot_failed": bot_fail,
-            "bot_success_rate": round(success_rate, 1),
+            "bot_success_rate": bot_success_rate,
+            "bot_fail_rate": bot_fail_rate,
             "bot_bytes": stats.get('bytes', 0),
-            "web_requests": stats.get('web_requests', 0),
-            "web_downloads": stats.get('web_downloads', 0),
-            "adsterra_clicks": stats.get('adsterra_clicks', 0),
-            "adsterra_verified": stats.get('adsterra_verified', 0),
+            "web_requests": web_req,
+            "web_downloads": web_dl,
+            "web_conv_rate": web_conv_rate,
+            "adsterra_clicks": ad_clicks,
+            "adsterra_verified": ad_ver,
+            "ad_conv_rate": ad_conv_rate,
             "broadcasts": stats.get('broadcasts', 0)
         }
     except Exception as e:
@@ -223,7 +241,7 @@ def export_firebase_backup_json() -> str:
         backup = {
             "metadata": {
                 "exported_at": int(time.time()),
-                "system": "PlayZone Enterprise Database"
+                "system": "Firebase Firestore"
             },
             "users": [], 
             "banned_users": [], 
@@ -246,39 +264,29 @@ def generate_analytics_txt_report() -> str:
     bot_bytes = format_size(analytics.get('bot_bytes', 0))
     now_str = time.strftime('%Y-%m-%d %H:%M:%S GMT')
     
-    return f"""================================================================
-            PLAYZONE ENTERPRISE - EXECUTIVE ANALYTICS REPORT
-================================================================
-Report Generated Date : {now_str}
-Database Cluster Engine: Firebase Firestore WAL
-Monetization Network  : Adsterra Ad Engine Exclusive
-================================================================
+    return f"""تقرير تحليلات البيانات والمخزون في Firebase
 
-1. USER RETENTION METRICS:
-----------------------------------------------------------------
-• Total Registered Base  : {analytics.get('total_users', 0)} users
-• Active Users (48 Hours): {analytics.get('active_48h', 0)} users
+تاريخ التقرير: {now_str}
 
-2. BOT ENGINE PERFORMANCE:
-----------------------------------------------------------------
-• Total Media Requests   : {analytics.get('bot_requests', 0)}
-• Successful Downloads   : {analytics.get('bot_success', 0)}
-• Failed Requests        : {analytics.get('bot_failed', 0)}
-• Engine Success Rate    : {analytics.get('bot_success_rate', 100.0)}%
-• Bandwidth Delivered    : {bot_bytes}
-• Broadcast Campaigns    : {analytics.get('broadcasts', 0)}
+1. إحصائيات مستخدمين القاعدة
+• إجمالي المستخدمين المسجلين: {analytics.get('total_users', 0)}
+• المستخدمون النشطون (48 ساعة): {analytics.get('active_48h', 0)} بنسبة {analytics.get('active_rate', 0.0)}%
+• المستخدمون غير النشطين: {analytics.get('inactive_users', 0)} بنسبة {analytics.get('inactive_rate', 0.0)}%
 
-3. WEB APP PERFORMANCE:
-----------------------------------------------------------------
-• Web Visits & Searches  : {analytics.get('web_requests', 0)}
-• Web Direct Downloads   : {analytics.get('web_downloads', 0)}
+2. كفاءة وأداء البوت
+• إجمالي طلبات الوسائط: {analytics.get('bot_requests', 0)}
+• التنزيلات الناجحة: {analytics.get('bot_success', 0)} بنسبة {analytics.get('bot_success_rate', 100.0)}%
+• التنزيلات الفاشلة: {analytics.get('bot_failed', 0)} بنسبة {analytics.get('bot_fail_rate', 0.0)}%
+• إجمالي البيانات المرسلة: {bot_bytes}
+• الحملات الإذاعية المكتملة: {analytics.get('broadcasts', 0)}
 
-4. ADSTERRA MONETIZATION ANALYTICS:
-----------------------------------------------------------------
-• Ad Session Clicks      : {analytics.get('adsterra_clicks', 0)}
-• Verified Ad Unlocks    : {analytics.get('adsterra_verified', 0)}
+3. أداء منصة وتطبيق الويب
+• إجمالي زيارات وعمليات البحث: {analytics.get('web_requests', 0)}
+• التنزيلات المباشرة: {analytics.get('web_downloads', 0)}
+• معدل تحويل الزيارات لتنزيلات: {analytics.get('web_conv_rate', 0.0)}%
 
-================================================================
-                   END OF DIAGNOSTIC REPORT
-================================================================
+4. تحويل وجلسات الإعلانات
+• نقرات وجلسات الإعلان: {analytics.get('adsterra_clicks', 0)}
+• عمليات فك القفل المكتملة: {analytics.get('adsterra_verified', 0)}
+• معدل كفاءة التحويل: {analytics.get('ad_conv_rate', 0.0)}%
 """
