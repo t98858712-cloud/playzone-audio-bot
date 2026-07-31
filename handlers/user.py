@@ -20,8 +20,14 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
     register_user_sync(update.effective_user)
     lang = context.user_data.get("lang", "ar")
+
+    maintenance = get_setting("maintenance", "0")
+    if maintenance == "1" and not is_admin(uid):
+        return await update.message.reply_text(_t("msg_maintenance", lang), parse_mode="HTML")
+
     await update.message.reply_text(
         _t("msg_start", lang, first_name=esc(update.effective_user.first_name or "")), 
         reply_markup=user_main_keyboard(lang), 
@@ -79,7 +85,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
     uid = update.effective_user.id
     lang = context.user_data.get("lang", "ar")
     
-    # تحديث ملف الكوكيز عند إرساله بواسطة الأدمن
     if getattr(update.message, "document", None) and is_admin(uid):
         if update.message.document.file_name == "cookies.txt":
             from core.config import COOKIES_FILE
@@ -89,7 +94,6 @@ async def handle_incoming_text(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if uid in BANNED_USERS_CACHE: return
 
-    # تفعيل وضع الصيانة
     maintenance = get_setting("maintenance", "0")
     if maintenance == "1" and not is_admin(uid):
         return await update.message.reply_text(_t("msg_maintenance", lang), parse_mode="HTML")
