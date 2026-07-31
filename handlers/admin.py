@@ -41,7 +41,7 @@ async def process_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         if u_doc.exists:
             u = u_doc.to_dict()
             is_banned = uid in BANNED_USERS_CACHE
-            status = "🔴 محظور (Banned)" if is_banned else "🟢 نشط (Active)"
+            status = "🔴 محظور" if is_banned else "🟢 نشط"
             
             toggle_action = "unban" if is_banned else "ban"
             btn_text = "🟢 فك الحظر عن المستخدم" if is_banned else "🚫 حظر المستخدم"
@@ -55,7 +55,7 @@ async def process_user_info(update: Update, context: ContextTypes.DEFAULT_TYPE, 
                 f"👤 <b>بطاقة معلومات المستخدم:</b>\n\n"
                 f"• المعرف (ID): <code>{u.get('id', uid)}</code>\n"
                 f"• الاسم: {esc(u.get('first_name'))} {esc(u.get('last_name'))}\n"
-                f"• اليوزر: @{u.get('username', 'لا يوجد')}\n"
+                f"• المعرف: @{u.get('username', 'لا يوجد')}\n"
                 f"• الحالة: {status}\n"
                 f"• آخر ظهور: <code>{last_seen_formatted}</code>"
             )
@@ -81,42 +81,29 @@ async def edit_message_smart(message, text: str, reply_markup=None, parse_mode: 
     except Exception as e:
         logger.debug(f"تخطي تحديث الرسالة: {e}")
 
-def make_ascii_bar(val1: int, val2: int, length: int = 8) -> str:
-    total = val1 + val2
-    if total == 0: return "░" * length
-    fill = int((val1 / total) * length)
-    return "█" * fill + "░" * (length - fill)
-
 def build_admin_stats_text(lang: str = "ar") -> str:
-    if db is None: return f"⚠️ <b>خطأ في الاتصال بقاعدة البيانات:</b>\n<code>{firebase_init_error}</code>"
+    if db is None: return "⚠️ <b>تنبيه:</b> قاعدة البيانات غير متصلة حالياً."
     analytics = load_full_analytics_sync()
     bot_bytes = format_size(analytics.get('bot_bytes', 0), lang)
     
-    bot_dl = analytics.get('bot_success', 0)
-    web_dl = analytics.get('web_downloads', 0)
-    dist_bar = make_ascii_bar(bot_dl, web_dl, 10)
-    
     return (
-        f"📊 <b>PlayZone Live Dashboard</b>\n"
-        f"═══════════════════════\n\n"
-        f"👥 <b>إحصائيات المستخدمين:</b>\n"
-        f" ├ إجمالي المنضمين: <code>{analytics.get('total_users', 0)}</code>\n"
-        f" └ النشطين (آخر 48 ساعة): <code>{analytics.get('active_48h', 0)}</code>\n\n"
-        f"🤖 <b>أداء بوت تيليجرام:</b>\n"
-        f" ├ طلبات البحث والمعاينة: <code>{analytics.get('bot_requests', 0)}</code>\n"
-        f" ├ التحميلات الناجحة: <code>{analytics.get('bot_success', 0)}</code>\n"
-        f" ├ نسبة النجاح: <code>{analytics.get('bot_success_rate', 100.0)}%</code>\n"
-        f" └ البيانات المرسلة: <code>{bot_bytes}</code>\n\n"
-        f"🌐 <b>أداء الموقع (Web App):</b>\n"
-        f" ├ طلبات وزيارات البحث: <code>{analytics.get('web_requests', 0)}</code>\n"
-        f" └ التحميلات المباشرة: <code>{analytics.get('web_downloads', 0)}</code>\n\n"
-        f"📈 <b>مقارنة التحميلات [بوت : موقع]:</b>\n"
-        f" <code>[{dist_bar}]</code>\n"
-        f" (البوت: {bot_dl} | الموقع: {web_dl})\n\n"
-        f"💰 <b>أداء إعلانات Adsterra:</b>\n"
-        f" ├ إجمالي النقرات والجلسات: <code>{analytics.get('adsterra_clicks', 0)}</code>\n"
-        f" └ التحققات الناجحة: <code>{analytics.get('adsterra_verified', 0)}</code>\n"
-        f"═══════════════════════"
+        f"📊 <b>إحصائيات النظام المباشرة</b>\n\n"
+        f"👥 <b>نشاط وتفاعل المستخدمين</b>\n"
+        f"• إجمالي المستخدمين المسجلين: <code>{analytics.get('total_users', 0)}</code>\n"
+        f"• المستخدمون النشطون (48 ساعة): <code>{analytics.get('active_48h', 0)}</code> بنسبة <code>{analytics.get('active_rate', 0.0)}%</code>\n"
+        f"• المستخدمون غير النشطين: <code>{analytics.get('inactive_users', 0)}</code> بنسبة <code>{analytics.get('inactive_rate', 0.0)}%</code>\n\n"
+        f"🤖 <b>أداء بوت تيليجرام</b>\n"
+        f"• إجمالي طلبات الميديا: <code>{analytics.get('bot_requests', 0)}</code>\n"
+        f"• التحميلات الناجحة: <code>{analytics.get('bot_success', 0)}</code> بنسبة <code>{analytics.get('bot_success_rate', 100.0)}%</code>\n"
+        f"• التحميلات الفاشلة: <code>{analytics.get('bot_failed', 0)}</code> بنسبة <code>{analytics.get('bot_fail_rate', 0.0)}%</code>\n"
+        f"• حجم البيانات المستهلكة: <code>{bot_bytes}</code>\n"
+        f"• الحملات الإذاعية المكتملة: <code>{analytics.get('broadcasts', 0)}</code>\n\n"
+        f"🌐 <b>أداء تطبيق الويب</b>\n"
+        f"• زيارات وطلبات البحث: <code>{analytics.get('web_requests', 0)}</code>\n"
+        f"• التحميلات المباشرة: <code>{analytics.get('web_downloads', 0)}</code> بنسبة تحويل <code>{analytics.get('web_conv_rate', 0.0)}%</code>\n\n"
+        f"💰 <b>تحليلات نظام الإعلانات</b>\n"
+        f"• نقرات وجلسات الإعلان: <code>{analytics.get('adsterra_clicks', 0)}</code>\n"
+        f"• عمليات فك القفل المكتملة: <code>{analytics.get('adsterra_verified', 0)}</code> بنسبة تحويل <code>{analytics.get('ad_conv_rate', 0.0)}%</code>"
     )
 
 def build_admin_users_text(limit: int, lang: str = "ar") -> str:
@@ -187,7 +174,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "adm_export_menu":
         await query.answer()
-        return await edit_message_smart(query.message, "📂 <b>قائمة تصدير البيانات الشاملة:</b>\nاختر الصيغة المطلوبة:", reply_markup=admin_export_menu(lang))
+        return await edit_message_smart(query.message, "📂 <b>قائمة تصدير بيانات قاعدة البيانات:</b>\nاختر الصيغة المطلوبة للتحميل:", reply_markup=admin_export_menu(lang))
 
     elif data == "adm_export_csv":
         await query.answer("جاري استخراج ملف CSV... 📊")
@@ -197,7 +184,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_document(
             chat_id=query.message.chat_id, 
             document=file_bytes, 
-            caption="📊 <b>سجل المستخدمين الكامل (صيغة CSV Excel)</b>",
+            caption="📊 <b>سجل المستخدمين من Firebase (CSV Excel)</b>",
             parse_mode="HTML"
         )
         return
@@ -210,7 +197,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_document(
             chat_id=query.message.chat_id, 
             document=file_bytes, 
-            caption="📦 <b>نسخة احتياطية كاملة لقاعدة البيانات (صيغة JSON)</b>",
+            caption="📦 <b>نسخة احتياطية من Firebase (JSON)</b>",
             parse_mode="HTML"
         )
         return
@@ -223,14 +210,14 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_document(
             chat_id=query.message.chat_id, 
             document=file_bytes, 
-            caption="📝 <b>تقرير الأداء التشخيصي الشامل (صيغة TXT)</b>",
+            caption="📝 <b>تقرير بيانات وتصنيفات القاعدة (TXT)</b>",
             parse_mode="HTML"
         )
         return
 
     elif data == "adm_sec_menu":
         await query.answer()
-        return await edit_message_smart(query.message, "🛡️ <b>قسم الصيانة وإعلانات Adsterra:</b>", reply_markup=admin_security_menu(lang))
+        return await edit_message_smart(query.message, "🛡️ <b>قسم الصيانة والإعلانات:</b>", reply_markup=admin_security_menu(lang))
 
     elif data == "adm_toggle_maint":
         current = get_setting("maintenance", "0")
@@ -245,7 +232,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         current = get_setting("adsterra_status", "1")
         new_val = "0" if current == "1" else "1"
         set_setting("adsterra_status", new_val)
-        await query.answer("✅ تم تحديث حالة Adsterra")
+        await query.answer("✅ تم تحديث حالة الإعلانات")
         try:
             return await query.message.edit_reply_markup(reply_markup=admin_security_menu(lang))
         except BadRequest: pass
@@ -254,7 +241,7 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("جاري تحديث محرك التحميل... ⏳")
         try:
             subprocess.run(["pip", "install", "-U", "yt-dlp"], check=True)
-            return await edit_message_smart(query.message, "✅ <b>تم تحديث محرك (yt-dlp) بنجاح!</b>", reply_markup=admin_security_menu(lang))
+            return await edit_message_smart(query.message, "✅ <b>تم تحديث محرك التحميل بنجاح!</b>", reply_markup=admin_security_menu(lang))
         except Exception:
             return await edit_message_smart(query.message, "❌ <b>تعذر استكمال التحديث في الوقت الحالي.</b>", reply_markup=admin_security_menu(lang))
 
