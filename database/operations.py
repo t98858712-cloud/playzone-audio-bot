@@ -269,24 +269,24 @@ def generate_analytics_txt_report() -> str:
 تاريخ التقرير: {now_str}
 
 1. إحصائيات مستخدمين القاعدة
-• إجمالي المستخدمين المسجلين: {analytics.get('total_users', 0)}
-• المستخدمون النشطون (48 ساعة): {analytics.get('active_48h', 0)} بنسبة {analytics.get('active_rate', 0.0)}%
-• المستخدمون غير النشطين: {analytics.get('inactive_users', 0)} بنسبة {analytics.get('inactive_rate', 0.0)}%
+إجمالي المستخدمين المسجلين: {analytics.get('total_users', 0)}
+المستخدمون النشطون (48 ساعة): {analytics.get('active_48h', 0)} بنسبة {analytics.get('active_rate', 0.0)}%
+المستخدمون غير النشطين: {analytics.get('inactive_users', 0)} بنسبة {analytics.get('inactive_rate', 0.0)}%
 
 2. كفاءة وأداء البوت
-• إجمالي طلبات الوسائط: {analytics.get('bot_requests', 0)}
-• التنزيلات الناجحة: {analytics.get('bot_success', 0)} بنسبة {analytics.get('bot_success_rate', 100.0)}%
-• التنزيلات الفاشلة: {analytics.get('bot_failed', 0)} بنسبة {analytics.get('bot_fail_rate', 0.0)}%
-• إجمالي البيانات المرسلة: {bot_bytes}
-• الحملات الإذاعية المكتملة: {analytics.get('broadcasts', 0)}
+إجمالي طلبات الوسائط: {analytics.get('bot_requests', 0)}
+التنزيلات الناجحة: {analytics.get('bot_success', 0)} بنسبة {analytics.get('bot_success_rate', 100.0)}%
+التنزيلات الفاشلة: {analytics.get('bot_failed', 0)} بنسبة {analytics.get('bot_fail_rate', 0.0)}%
+إجمالي البيانات المرسلة: {bot_bytes}
+الحملات الإذاعية المكتملة: {analytics.get('broadcasts', 0)}
 
 3. أداء منصة وتطبيق الويب
-• إجمالي زيارات وعمليات البحث: {analytics.get('web_requests', 0)}
-• التنزيلات المباشرة: {analytics.get('web_downloads', 0)}
-• معدل تحويل الزيارات لتنزيلات: {analytics.get('web_conv_rate', 0.0)}%
+إجمالي زيارات وعمليات البحث: {analytics.get('web_requests', 0)}
+التنزيلات المباشرة: {analytics.get('web_downloads', 0)}
+معدل تحويل الزيارات لتنزيلات: {analytics.get('web_conv_rate', 0.0)}%
 
 4. تحويل وجلسات الإعلانات
-• نقرات وجلسات الإعلان: {analytics.get('adsterra_clicks', 0)}
-• عمليات فك القفل المكتملة: {analytics.get('adsterra_verified', 0)}
-• معدل كفاءة التحويل: {analytics.get('ad_conv_rate', 0.0)}%
+نقرات وجلسات الإعلان: {analytics.get('adsterra_clicks', 0)}
+عمليات فك القفل المكتملة: {analytics.get('adsterra_verified', 0)}
+معدل كفاءة التحويل: {analytics.get('ad_conv_rate', 0.0)}%
 """
