@@ -42,10 +42,10 @@ def build_playzone_links_keyboard(bot_username: str = BOT_USERNAME) -> InlineKey
 
 def admin_main_keyboard(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 Dashboard الإحصائيات الشاملة", callback_data="adm_stats")],
-        [InlineKeyboardButton("👥 إدارة المستخدمين", callback_data="adm_users_menu"), 
+        [InlineKeyboardButton("📊 الإحصائيات الشاملة", callback_data="adm_stats")],
+        [InlineKeyboardButton("👥 إدارة المستخدمين والتصدير", callback_data="adm_users_menu"), 
          InlineKeyboardButton("📢 الإذاعة والتواصل", callback_data="adm_bc_menu")],
-        [InlineKeyboardButton("🛡️ الحماية و Adsterra", callback_data="adm_sec_menu"), 
+        [InlineKeyboardButton("🛡️ الحمايات والإعلانات", callback_data="adm_sec_menu"), 
          InlineKeyboardButton("📁 حالة السيرفر", callback_data="adm_server")],
         [InlineKeyboardButton("✖️ إغلاق لوحة التحكم", callback_data="adm_close")]
     ])
@@ -61,7 +61,7 @@ def admin_users_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📋 أحدث المنضمين", callback_data="adm_users"), 
          InlineKeyboardButton("🔎 استعلام / حظر (ID)", callback_data="adm_user_info_prompt")],
-        [InlineKeyboardButton("📂 تصدير البيانات (3 صيغ: CSV/JSON/TXT)", callback_data="adm_export_menu")],
+        [InlineKeyboardButton("📂 تصدير بيانات القاعدة (CSV/JSON/TXT)", callback_data="adm_export_menu")],
         [InlineKeyboardButton("🔙 رجوع للقائمة الرئيسية", callback_data="adm_main_back")]
     ])
 
@@ -78,12 +78,12 @@ def admin_security_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     maint_btn = InlineKeyboardButton("🔴 إيقاف وضع الصيانة" if maint == "1" else "🟢 تفعيل وضع الصيانة", callback_data="adm_toggle_maint")
     
     adsterra_status = get_setting("adsterra_status", "1")
-    adsterra_btn = InlineKeyboardButton("🔴 إيقاف إعلانات Adsterra" if adsterra_status == "1" else "🟢 تفعيل إعلانات Adsterra", callback_data="adm_toggle_adsterra")
+    adsterra_btn = InlineKeyboardButton("🔴 إيقاف نظام الإعلانات" if adsterra_status == "1" else "🟢 تفعيل نظام الإعلانات", callback_data="adm_toggle_adsterra")
     
     return InlineKeyboardMarkup([
         [maint_btn], 
         [adsterra_btn], 
-        [InlineKeyboardButton("🔄 تحديث محرك yt-dlp", callback_data="adm_update_dlp"), 
+        [InlineKeyboardButton("🔄 تحديث محرك التحميل", callback_data="adm_update_dlp"), 
          InlineKeyboardButton("🍪 إرشادات الكوكيز", callback_data="adm_cookie_guide")],
         [InlineKeyboardButton("🗜️ تحسين القاعدة", callback_data="adm_vacuum_db"), 
          InlineKeyboardButton("🧹 تنظيف التخزين المؤقت", callback_data="adm_clean")],
