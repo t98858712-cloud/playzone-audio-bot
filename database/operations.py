@@ -10,8 +10,6 @@ from firebase_admin import firestore
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# ==================== إدارة كاش الحظر والحماية ====================
-
 def load_banned_users():
     if db is None: 
         return set()
@@ -24,7 +22,6 @@ def load_banned_users():
                 BANNED_USERS_CACHE.add(int(doc.id))
             except ValueError:
                 BANNED_USERS_CACHE.add(doc.id)
-        logger.info(f"🔥 [Firebase] تم شحن كاش الحظر بنجاح بـ {len(BANNED_USERS_CACHE)} مستخدم.")
         return BANNED_USERS_CACHE
     except Exception as e:
         logger.error(f"Error loading banned users: {e}")
@@ -50,8 +47,6 @@ def unban_user_db(uid):
     except Exception as e:
         logger.error(f"Error unbanning user: {e}")
 
-# ==================== الإعدادات الديناميكية بالسيرفر ====================
-
 def set_setting(key, value):
     if db is None: 
         return
@@ -70,8 +65,6 @@ def get_setting(key, default="0"):
     except Exception as e:
         logger.error(f"Error getting setting {key}: {e}")
     return default
-
-# ==================== سجلات ونشاط المستخدمين ====================
 
 def register_user_sync(user):
     if not user or db is None: 
@@ -139,8 +132,6 @@ def get_all_users_data() -> list:
     except Exception as e:
         logger.error(f"Error getting all users data: {e}")
         return []
-
-# ==================== الإحصائيات الحية الشاملة ====================
 
 def stat_inc_sync(key: str, value: int = 1):
     if db is None: 
@@ -226,8 +217,6 @@ def check_ad_verified_status(user_id: int) -> bool:
 
 def optimize_db():
     pass
-
-# ==================== تصدير البيانات (3 صيغ) ====================
 
 def export_users_csv() -> str:
     users = get_all_users_data()
