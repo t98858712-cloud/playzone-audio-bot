@@ -137,6 +137,63 @@ def build_server_status_text(lang: str = "ar") -> str:
         f"⚙️ مسار التخزين: <code>{BASE_DOWNLOAD_DIR}</code>"
     )
 
+async def handle_broadcast_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if not is_admin(uid):
+        return
+        
+    target = context.user_data.pop("bc_target", "all")
+    context.user_data.pop("bc_active", None)
+    
+    if target == "active":
+        user_ids = get_active_users_48h()
+    else:
+        user_ids = all_user_ids()
+        
+    if not user_ids:
+        return await update.message.reply_text("❌ لا يوجد مستخدمين في هذه الشريحة لإرسال الإذاعة لهم.")
+        
+    status_msg = await update.message.reply_text(
+        f"⏳ <b>جاري بدء الإذاعة...</b>\nالعدد المستهدف: <code>{len(user_ids)}</code> مستخدم", 
+        parse_mode="HTML"
+    )
+    
+    success_count = 0
+    failed_count = 0
+    
+    for user_id in user_ids:
+        try:
+            await context.bot.copy_message(
+                chat_id=user_id,
+                from_chat_id=update.effective_chat.id,
+                message_id=update.message.message_id
+            )
+            success_count += 1
+            await asyncio.sleep(0.04)
+        except RetryAfter as e:
+            await asyncio.sleep(e.retry_after)
+            try:
+                await context.bot.copy_message(
+                    chat_id=user_id,
+                    from_chat_id=update.effective_chat.id,
+                    message_id=update.message.message_id
+                )
+                success_count += 1
+            except Exception:
+                failed_count += 1
+        except Exception:
+            failed_count += 1
+
+    stat_inc_sync("broadcasts", 1)
+    
+    report_text = (
+        f"📢 <b>تم اكتمال الحملة الإذاعية بنجاح!</b>\n\n"
+        f"🟢 تم الإرسال بنجاح: <code>{success_count}</code>\n"
+        f"🔴 فشل الإرسال (حظر/حساب مغلق): <code>{failed_count}</code>"
+    )
+    
+    await status_msg.edit_text(report_text, parse_mode="HTML")
+
 async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     lang = context.user_data.get("lang", "ar")
