@@ -50,7 +50,7 @@ app.add_middleware(
 # تقديم الملفات المحملة إما عبر /files أو Endpoint التنزيل المباشر
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- إدارة قاعدة البيانات (SQLite - WAL Mode) ---
+# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -76,7 +76,7 @@ def init_db():
                 status TEXT,
                 created_at REAL
             )""")
-        # 📌 جدول تسجيل زوار الموقع والجلسات الحية
+        # 📌 جدول تسجيل زوار الموقع والجلسات الحية محلياً
         conn.execute("""
             CREATE TABLE IF NOT EXISTS web_live_sessions (
                 session_id TEXT PRIMARY KEY,
@@ -173,17 +173,20 @@ def download_file_direct(filename: str):
         return FileResponse(file_path, filename=filename, media_type=media_type)
     raise HTTPException(status_code=404, detail="الملف غير موجود")
 
-# 📡 استقبال نبضات حضور زوار الموقع لتسجيل الحضور وتحديث الأونلاين
+# 📡 استقبال نبضات حضور زوار الموقع لتسجيل الحضور في SQLite و Firebase Firestore
 @app.post("/api/ping_session")
 async def ping_session(request: Request):
     try:
         data = await request.json()
         tg_id = str(data.get("tg_id", "")).strip() or "زائر مجهول"
         device = str(data.get("device", "غير معروف"))
-        
         client_ip = request.client.host if request.client else "unknown"
-        session_id = f"{tg_id}_{client_ip}" if tg_id != "زائر مجهول" else f"anon_{client_ip}"
         
+        clean_ip = client_ip.replace('.', '_').replace(':', '_')
+        session_id = f"{tg_id}_{clean_ip}" if tg_id != "زائر مجهول" else f"anon_{clean_ip}"
+        now_ts = time.time()
+
+        # 1️⃣ الحفظ في قاعدة البيانات المحلية SQLite
         with get_db() as conn:
             conn.execute("""
                 INSERT INTO web_live_sessions (session_id, tg_id, device, last_ping)
@@ -192,53 +195,92 @@ async def ping_session(request: Request):
                     tg_id=excluded.tg_id,
                     device=excluded.device,
                     last_ping=excluded.last_ping
-            """, (session_id, tg_id, device, time.time()))
+            """, (session_id, tg_id, device, now_ts))
             conn.commit()
+
+        # 2️⃣ التحديث المباشر في Firebase Firestore
+        try:
+            from database.connection import db
+            if db is not None:
+                db.collection('web_visitors').document(session_id).set({
+                    'session_id': session_id,
+                    'tg_id': tg_id,
+                    'device': device,
+                    'ip': client_ip,
+                    'last_ping': now_ts
+                }, merge=True)
+        except Exception:
+            pass
+
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# 📊 دالة توليد تقرير رادار الزوار لاستخدامه في لوحة أدمن البوت
+# 📊 دالة توليد تقرير رادار الزوار المتكامل من Firebase
 def get_web_visitors_report() -> str:
     now = time.time()
     online_threshold = now - 120  # نعتبر الزائر أونلاين إذا ظهر خلال آخر دقيقتين
-    
-    with get_db() as conn:
-        online_count = conn.execute(
-            "SELECT COUNT(*) FROM web_live_sessions WHERE last_ping >= ?", (online_threshold,)
-        ).fetchone()[0]
-        
-        cursor = conn.execute(
-            "SELECT tg_id, device, last_ping FROM web_live_sessions ORDER BY last_ping DESC LIMIT 15"
-        )
-        rows = cursor.fetchall()
-        
-    if not rows:
-        return "🌐 <b>لا يوجد زوار في الموقع حالياً.</b>"
-        
-    text = f"🌐 <b>رادار زوار الموقع الإلكتروني المتكامل</b>\n\n"
-    text += f"🟢 <b>المتواجدون الآن (أونلاين):</b> {online_count} زائر\n\n"
-    text += "📋 <b>أحدث الزوار ومعلوماتهم والتوقيتات:</b>\n\n"
-    
+    rows = []
+    online_count = 0
+
     try:
         from database.connection import db
+        from firebase_admin import firestore
         from utils.helpers import esc
     except ImportError:
         db = None
+        firestore = None
         def esc(s): return str(s) if s else ""
 
+    # 1️⃣ القراءة المباشرة من مجموعات Firebase Firestore
+    if db is not None and firestore is not None:
+        try:
+            docs = db.collection('web_visitors').order_by('last_ping', direction=firestore.Query.DESCENDING).limit(15).stream()
+            for doc in docs:
+                d = doc.to_dict()
+                rows.append(d)
+                if float(d.get('last_ping', 0)) >= online_threshold:
+                    online_count += 1
+        except Exception:
+            rows = []
+
+    # 2️⃣ الاحتياطي: القراءة من SQLite في حال تعذر القراءة من Firebase
+    if not rows:
+        with get_db() as conn:
+            online_count = conn.execute(
+                "SELECT COUNT(*) FROM web_live_sessions WHERE last_ping >= ?", (online_threshold,)
+            ).fetchone()[0]
+            
+            cursor = conn.execute(
+                "SELECT tg_id, device, last_ping FROM web_live_sessions ORDER BY last_ping DESC LIMIT 15"
+            )
+            for r in cursor.fetchall():
+                rows.append({
+                    'tg_id': r['tg_id'],
+                    'device': r['device'],
+                    'last_ping': r['last_ping']
+                })
+
+    if not rows:
+        return "🌐 <b>لا يوجد زوار في الموقع حالياً.</b>"
+
+    text = f"🌐 <b>رادار زوار الموقع الإلكتروني المتكامل (Firebase)</b>\n\n"
+    text += f"🟢 <b>المتواجدون الآن (أونلاين):</b> {online_count} زائر\n\n"
+    text += "📋 <b>أحدث الزوار ومعلوماتهم والتوقيتات:</b>\n\n"
+
     for r in rows:
-        tg_id_str = str(r['tg_id']).strip()
-        is_online = r['last_ping'] >= online_threshold
+        tg_id_str = str(r.get('tg_id', '')).strip()
+        last_ping = float(r.get('last_ping', 0))
+        is_online = last_ping >= online_threshold
         status_str = "🟢 أونلاين" if is_online else "🔴 غير متواجد"
         
-        # تنسيق التاريخ والوقت كاملاً (السنة-الشهر-اليوم والوقت)
-        exact_time = time.strftime('%Y-%m-%d %I:%M %p', time.localtime(r['last_ping']))
-        device_str = r['device'] or "متصفح ويب 🌐"
+        exact_time = time.strftime('%Y-%m-%d %I:%M %p', time.localtime(last_ping))
+        device_str = r.get('device') or "متصفح ويب 🌐"
         
         user_header = "👤 <b>زائر مجهول</b>"
         id_line = ""
 
+        # المطابقة الفورية مع سجل حسابات المستخدمين في Firebase Firestore
         if tg_id_str != "زائر مجهول" and tg_id_str.isdigit() and db is not None:
             try:
                 u_doc = db.collection('users').document(tg_id_str).get()
@@ -263,7 +305,7 @@ def get_web_visitors_report() -> str:
             id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
 
         text += f"• {user_header}{id_line}\n  └ {device_str} | {status_str}\n  └ 🕒 <code>{exact_time}</code>\n\n"
-        
+
     return text
 
 @app.get("/api/admin/web_visitors")
@@ -614,6 +656,6 @@ async def send_to_telegram(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    # يستمع للبوت المخصص ديناميكياً من Railway لمنع أخطاء التوصيل
+    # استقبال البوت المخصص ديناميكياً من Railway لمنع أخطاء التوصيل والشبكة
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("web_app:app", host="0.0.0.0", port=port)
