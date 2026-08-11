@@ -17,6 +17,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import yt_dlp
 
+try:
+    from database.operations import stat_inc_sync
+except ImportError:
+    def stat_inc_sync(key: str, value: int = 1): pass
+
 # --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
@@ -71,6 +76,14 @@ def init_db():
                 status TEXT,
                 created_at REAL
             )""")
+        # 📌 جدول تسجيل زوار الموقع والجلسات الحية
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS web_live_sessions (
+                session_id TEXT PRIMARY KEY,
+                tg_id TEXT,
+                device TEXT,
+                last_ping REAL
+            )""")
         conn.commit()
 
 init_db()
@@ -89,6 +102,7 @@ def cleanup_cron():
             with get_db() as conn:
                 conn.execute("DELETE FROM progress WHERE ? - timestamp > 86400", (now,))
                 conn.execute("DELETE FROM ads WHERE ? - created_at > 3600", (now,))
+                conn.execute("DELETE FROM web_live_sessions WHERE ? - last_ping > 86400", (now,))
                 conn.commit()
         except Exception:
             pass
@@ -159,8 +173,72 @@ def download_file_direct(filename: str):
         return FileResponse(file_path, filename=filename, media_type=media_type)
     raise HTTPException(status_code=404, detail="الملف غير موجود")
 
+# 📡 استقبال نبضات حضور زوار الموقع لتسجيل الحضور وتحديث الأونلاين
+@app.post("/api/ping_session")
+async def ping_session(request: Request):
+    try:
+        data = await request.json()
+        tg_id = str(data.get("tg_id", "")).strip() or "زائر مجهول"
+        device = str(data.get("device", "غير معروف"))
+        
+        client_ip = request.client.host if request.client else "unknown"
+        session_id = f"{tg_id}_{client_ip}" if tg_id != "زائر مجهول" else f"anon_{client_ip}"
+        
+        with get_db() as conn:
+            conn.execute("""
+                INSERT INTO web_live_sessions (session_id, tg_id, device, last_ping)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    tg_id=excluded.tg_id,
+                    device=excluded.device,
+                    last_ping=excluded.last_ping
+            """, (session_id, tg_id, device, time.time()))
+            conn.commit()
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+# 📊 دالة توليد تقرير رادار الزوار لاستخدامه في لوحة أدمن البوت
+def get_web_visitors_report() -> str:
+    now = time.time()
+    online_threshold = now - 120  # نعتبر الزائر أونلاين إذا ظهر خلال آخر دقيقتين
+    
+    with get_db() as conn:
+        online_count = conn.execute(
+            "SELECT COUNT(*) FROM web_live_sessions WHERE last_ping >= ?", (online_threshold,)
+        ).fetchone()[0]
+        
+        cursor = conn.execute(
+            "SELECT tg_id, device, last_ping FROM web_live_sessions ORDER BY last_ping DESC LIMIT 15"
+        )
+        rows = cursor.fetchall()
+        
+    if not rows:
+        return "🌐 <b>لا يوجد زوار في الموقع حالياً.</b>"
+        
+    text = f"🌐 <b>رادار زوار الموقع الإلكتروني</b>\n\n"
+    text += f"🟢 <b>المتواجدون الآن (أونلاين):</b> {online_count} زائر\n"
+    text += f"━━━━━━━━━━━━━━━━━━━\n\n"
+    text += "📋 <b>أحدث الزوار والنشاطات:</b>\n\n"
+    
+    for r in rows:
+        is_online = r['last_ping'] >= online_threshold
+        status_icon = "🟢 أونلاين" if is_online else "🕒 " + time.strftime('%I:%M %p', time.localtime(r['last_ping']))
+        
+        tg_user = f"<code>{r['tg_id']}</code>" if r['tg_id'] != "زائر مجهول" else "👤 زائر مجهول"
+        device_str = r['device'] or "متصفح ويب 🌐"
+        
+        text += f"• {tg_user}\n  └ {device_str} | {status_icon}\n\n"
+        
+    return text
+
+@app.get("/api/admin/web_visitors")
+def api_admin_web_visitors():
+    return {"report": get_web_visitors_report()}
+
 @app.post("/api/search")
 async def api_search(request: Request):
+    stat_inc_sync("web_requests", 1)
     try:
         data = await request.json()
         query = data.get("query", "")
@@ -215,6 +293,7 @@ async def get_preview(request: Request):
 
 @app.get("/api/generate_ad_session")
 def generate_ad_session():
+    stat_inc_sync("adsterra_clicks", 1)
     click_id = uuid.uuid4().hex[:12]
     with get_db() as conn:
         conn.execute("INSERT INTO ads (click_id, status, created_at) VALUES (?, ?, ?)", (click_id, "pending", time.time()))
@@ -278,8 +357,13 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 pass
 
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
+    max_fs = "49M"
     
-    if mode == 'audio':
+    if mode == 'raw_audio':
+        opts.update({
+            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio"
+        })
+    elif mode == 'audio':
         opts.update({
             'format': 'bestaudio/best',
             'postprocessors': [{
@@ -288,8 +372,18 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 'preferredquality': '192'
             }]
         })
+    elif mode == 'raw_video':
+        opts.update({
+            'format': (
+                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
+                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"best"
+            ),
+            'merge_output_format': 'mp4',
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
+        })
     else:
-        max_fs = "49M"
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/bestvideo[height<={target_res}]+bestaudio/best",
@@ -300,7 +394,8 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            filename = f"{job_id}.mp3" if mode == 'audio' else f"{job_id}.mp4"
+            ext = info.get('ext', 'mp3' if 'audio' in mode else 'mp4')
+            filename = f"{job_id}.{ext}"
             payload = {
                 "status": "completed",
                 "url": f"/files/{filename}",
@@ -308,11 +403,12 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 "thumb": info.get('thumbnail', ''),
                 "uploader": info.get('uploader', 'غير معروف'),
                 "duration": info.get('duration', 0),
-                "is_audio": mode == 'audio'
+                "is_audio": mode in ['audio', 'raw_audio']
             }
             with get_db() as conn:
                 conn.execute("UPDATE progress SET status='completed', data=? WHERE job_id=?", (json.dumps(payload), job_id))
                 conn.commit()
+            stat_inc_sync("web_downloads", 1)
     except Exception as e:
         payload = {"status": "error", "error": str(e)}
         with get_db() as conn:
@@ -337,6 +433,7 @@ async def start_download(request: Request):
         if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
             return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
 
+    stat_inc_sync("adsterra_verified", 1)
     job_id = uuid.uuid4().hex[:8]
     with get_db() as conn:
         conn.execute("INSERT INTO progress (job_id, status, data, timestamp) VALUES (?, ?, ?, ?)", (job_id, "starting", "{}", time.time()))
