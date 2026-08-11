@@ -61,10 +61,12 @@ def admin_broadcast_menu(lang: str = "ar") -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🔙 رجوع للقائمة الرئيسية", callback_data="adm_main_back")]
     ])
 
+# 📌 تم إضافة زر "زوار الموقع (أونلاين)" هنا
 def admin_users_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📋 أحدث المنضمين", callback_data="adm_users"), 
-         InlineKeyboardButton("🔎 استعلام / حظر (ID)", callback_data="adm_user_info_prompt")],
+         InlineKeyboardButton("🌐 زوار الموقع (أونلاين)", callback_data="adm_web_users")],
+        [InlineKeyboardButton("🔎 استعلام / حظر (ID)", callback_data="adm_user_info_prompt")],
         [InlineKeyboardButton("🚫 قائمة المحظورين", callback_data="adm_banned_list")],
         [InlineKeyboardButton("📂 تصدير بيانات القاعدة (CSV/JSON/TXT)", callback_data="adm_export_menu")],
         [InlineKeyboardButton("🔙 رجوع للقائمة الرئيسية", callback_data="adm_main_back")]
