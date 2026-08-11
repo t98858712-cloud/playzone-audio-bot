@@ -226,7 +226,7 @@ async def ping_session(request: Request):
 # 📊 دالة توليد تقرير رادار الزوار بدون تكرار والأحدث بالترتيب الأول
 def get_web_visitors_report() -> str:
     now = time.time()
-    online_threshold = now - 120  # اعتبار الزائر أونلاين إذا ظهر خلال آخر دقيقتين
+    online_threshold = now - 120
     rows = []
     online_count = 0
     seen_users = set()
@@ -240,7 +240,6 @@ def get_web_visitors_report() -> str:
         firestore = None
         def esc(s): return str(s) if s else ""
 
-    # 1️⃣ القراءة المباشرة من مجموعات Firebase Firestore مرتبة تصاعدياً بحسب أحدث نشاط
     if db is not None and firestore is not None:
         try:
             docs = db.collection('web_visitors').order_by('last_ping', direction=firestore.Query.DESCENDING).limit(30).stream()
@@ -249,7 +248,6 @@ def get_web_visitors_report() -> str:
                 tg_key = str(d.get('tg_id', '')).strip()
                 v_key = tg_key if tg_key != "زائر مجهول" else d.get('session_id')
                 
-                # تصفية أي تكرار لضمان ظهور كل مستخدم مرة واحدة بأحدث توقيت
                 if v_key in seen_users:
                     continue
                 seen_users.add(v_key)
@@ -262,7 +260,6 @@ def get_web_visitors_report() -> str:
         except Exception:
             rows = []
 
-    # 2️⃣ الاحتياطي: القراءة من SQLite في حال تعذر القراءة من Firebase
     if not rows:
         with get_db() as conn:
             cursor = conn.execute(
@@ -295,7 +292,7 @@ def get_web_visitors_report() -> str:
     text += f"🟢 <b>المتواجدون الآن (أونلاين):</b> {online_count} زائر\n\n"
     text += "📋 <b>أحدث الزوار ومعلوماتهم والتوقيتات:</b>\n\n"
 
-    local_tz = timezone(timedelta(hours=3))  # ضبط التوقيت المباشر لـ GMT+3
+    local_tz = timezone(timedelta(hours=3))
 
     for r in rows:
         tg_id_str = str(r.get('tg_id', '')).strip()
@@ -310,7 +307,6 @@ def get_web_visitors_report() -> str:
         user_header = "👤 <b>زائر مجهول</b>"
         id_line = ""
 
-        # المطابقة الفورية مع سجل حسابات المستخدمين في Firebase Firestore
         if tg_id_str != "زائر مجهول" and tg_id_str.isdigit() and db is not None:
             try:
                 u_doc = db.collection('users').document(tg_id_str).get()
@@ -320,9 +316,10 @@ def get_web_visitors_report() -> str:
                     last_name = esc(u.get('last_name', ''))
                     full_name = f"{first_name} {last_name}".strip() or "مستخدم"
                     username = u.get('username')
-                    uname_str = f" (@{esc(username)})" if username and username != "لا يوجد" else ""
+                    uname_str = f" (@{esc(username)})" if username and username != "لا يوجد" and username != "" else ""
                     
-                    user_header = f"👤 <b>{full_name}</b>{uname_str}"
+                    # الاسم والـ ID قابلان للنسخ
+                    user_header = f"👤 <code>{full_name}</code>{uname_str}"
                     id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
                 else:
                     user_header = "👤 <b>مستخدم</b>"
