@@ -216,19 +216,53 @@ def get_web_visitors_report() -> str:
     if not rows:
         return "🌐 <b>لا يوجد زوار في الموقع حالياً.</b>"
         
-    text = f"🌐 <b>رادار زوار الموقع الإلكتروني</b>\n\n"
-    text += f"🟢 <b>المتواجدون الآن (أونلاين):</b> {online_count} زائر\n"
-    text += f"━━━━━━━━━━━━━━━━━━━\n\n"
-    text += "📋 <b>أحدث الزوار والنشاطات:</b>\n\n"
+    text = f"🌐 <b>رادار زوار الموقع الإلكتروني المتكامل</b>\n\n"
+    text += f"🟢 <b>المتواجدون الآن (أونلاين):</b> {online_count} زائر\n\n"
+    text += "📋 <b>أحدث الزوار ومعلوماتهم والتوقيتات:</b>\n\n"
     
+    try:
+        from database.connection import db
+        from utils.helpers import esc
+    except ImportError:
+        db = None
+        def esc(s): return str(s) if s else ""
+
     for r in rows:
+        tg_id_str = str(r['tg_id']).strip()
         is_online = r['last_ping'] >= online_threshold
-        status_icon = "🟢 أونلاين" if is_online else "🕒 " + time.strftime('%I:%M %p', time.localtime(r['last_ping']))
+        status_str = "🟢 أونلاين" if is_online else "🔴 غير متواجد"
         
-        tg_user = f"<code>{r['tg_id']}</code>" if r['tg_id'] != "زائر مجهول" else "👤 زائر مجهول"
+        # تنسيق التاريخ والوقت كاملاً (السنة-الشهر-اليوم والوقت)
+        exact_time = time.strftime('%Y-%m-%d %I:%M %p', time.localtime(r['last_ping']))
         device_str = r['device'] or "متصفح ويب 🌐"
         
-        text += f"• {tg_user}\n  └ {device_str} | {status_icon}\n\n"
+        user_header = "👤 <b>زائر مجهول</b>"
+        id_line = ""
+
+        if tg_id_str != "زائر مجهول" and tg_id_str.isdigit() and db is not None:
+            try:
+                u_doc = db.collection('users').document(tg_id_str).get()
+                if u_doc.exists:
+                    u = u_doc.to_dict()
+                    first_name = esc(u.get('first_name', ''))
+                    last_name = esc(u.get('last_name', ''))
+                    full_name = f"{first_name} {last_name}".strip() or "مستخدم"
+                    username = u.get('username')
+                    uname_str = f" (@{esc(username)})" if username and username != "لا يوجد" else ""
+                    
+                    user_header = f"👤 <b>{full_name}</b>{uname_str}"
+                    id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
+                else:
+                    user_header = "👤 <b>مستخدم</b>"
+                    id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
+            except Exception:
+                user_header = "👤 <b>مستخدم</b>"
+                id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
+        elif tg_id_str != "زائر مجهول" and tg_id_str.isdigit():
+            user_header = "👤 <b>مستخدم</b>"
+            id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
+
+        text += f"• {user_header}{id_line}\n  └ {device_str} | {status_str}\n  └ 🕒 <code>{exact_time}</code>\n\n"
         
     return text
 
