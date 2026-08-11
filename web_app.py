@@ -49,7 +49,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- إدارة قاعدة البيانات (SQLite - WAL Mode) ---
+# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -455,7 +455,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     
     if mode == 'raw_audio':
         opts.update({
-            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio"
+            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
         })
     elif mode == 'audio':
         opts.update({
@@ -472,7 +472,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
                 f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best"
+                f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
             'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
@@ -480,7 +480,12 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
-            'format': f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/bestvideo[height<={target_res}]+bestaudio/best",
+            'format': (
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[height<={target_res}]+bestaudio/"
+                f"bestvideo+bestaudio/best"
+            ),
             'merge_output_format': 'mp4',
             'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
         })
