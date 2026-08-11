@@ -15,7 +15,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
     deferredPrompt = e;
 });
 
-// 📱 دالة تحديد نوع جهاز زائر الموقع
+// 📱 تحديد نوع جهاز زائر الموقع
 function getDeviceType() {
     const ua = navigator.userAgent;
     if (/Android/i.test(ua)) return "أندرويد 📱";
@@ -25,7 +25,7 @@ function getDeviceType() {
     return "متصفح ويب 🌐";
 }
 
-// 📡 دالة إرسال إشارة الحضور لتسجيل الزائر والأونلاين
+// 📡 إرسال إشارة الحضور لتسجيل الزائر الحقيقي
 async function sendSessionPing() {
     const tgId = localStorage.getItem('pz_tg_id') || "";
     try {
@@ -372,7 +372,6 @@ function checkAndAutoContinueDownload() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    // 🌐 إرسال إشارة الحضور الأولى وتفعيل إشارة الأونلاين كل 45 ثانية
     sendSessionPing();
     setInterval(sendSessionPing, 45000);
 
@@ -614,13 +613,14 @@ window.openAdAndVerify = function(event) {
     startAdVerificationCheck();
 };
 
+// 📌 التحكم التلقائي بقائمة الدقة بناءً على الأنماط الأربعة
 window.toggleRes = function() {
     const mode = document.getElementById('mode').value;
     const resSelect = document.getElementById('resolution');
-    if (mode === 'audio' || mode === 'raw_audio' || mode === 'raw_video') {
-        resSelect.classList.add('hidden');
-    } else {
+    if (mode === 'video') {
         resSelect.classList.remove('hidden');
+    } else {
+        resSelect.classList.add('hidden');
     }
 };
 
