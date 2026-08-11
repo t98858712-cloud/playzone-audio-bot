@@ -16,7 +16,7 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     has_cookies = cookie_file_is_usable(COOKIES_FILE)
     
-    # 📌 التكييف الذكي للعميل: السماح بـ web/mweb عند وجود كوكيز لمنع رفض الجلسة وحظر الكوكيز
+    # 📌 التكييف الذكي للكوكيز: السماح بعملاء الويب عند تفعيل الكوكيز لمنع رفض الجلسة
     yt_client_args = {
         "player_client": ["tv", "web", "mweb", "android", "ios"] if has_cookies else ["android", "ios", "tv"]
     }
@@ -36,6 +36,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
+    from core.config import LOCAL_API_URL
     max_fs = "50M" if not LOCAL_API_URL else "2000M"
 
     # 1️⃣ 🎵 الصوت الأصلي الخام: سحب الصوت المباشر بتشفير Opus/m4a بدون إعادة ترميز لأعلى جودة وأقل حجم
@@ -59,6 +60,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
 
     # 4️⃣ 📹 الفيديو المخصص بدقة محددة
     else:
+        # 🌟 الاستراتيجية الذكية للدقة الحقيقية:
+        # 1. نحاول أولاً سحب جودة H.264 (avc1) المتوافقة كلياً مع التليجرام بالدقة المطلوبة لتجنب استهلاك السيرفر.
+        # 2. إذا لم تتوفر، نسحب أفضل جودة فيديو متاحة بالدقة المطلوبة (حتى لو كانت VP9/AV1) لضمان الدقة الحقيقية.
+        # 3. ندمج الفيديو مع الصوت ونخرجهما داخل حاوية mp4 القياسية.
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
@@ -73,6 +78,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             )
             
         opts["merge_output_format"] = "mp4"
+        # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
     if has_cookies:
@@ -109,7 +115,6 @@ def search_youtube(query: str, limit: int = 30):
     }
     if has_cookies:
         opts["cookiefile"] = str(COOKIES_FILE)
-        
     combined_entries = []
     seen_ids = set()
     try:
@@ -177,7 +182,6 @@ async def youtube_health_monitor(app: Application):
             if not has_cookies:
                 await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
                 continue
-                
             opts = {
                 "quiet": True, 
                 "extract_flat": True, 
