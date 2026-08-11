@@ -39,7 +39,6 @@ DB_PATH = "playzone_core.db"
 
 app = FastAPI(title="PlayZone Enterprise Backend")
 
-# السماح بالاتصالات من أي مصدر (CORS) لضمان العمل على السيرفرات والتطبيقات
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -48,7 +47,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# تقديم الملفات المحملة إما عبر /files أو Endpoint التنزيل المباشر
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
 # --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
@@ -77,7 +75,6 @@ def init_db():
                 status TEXT,
                 created_at REAL
             )""")
-        # 📌 جدول تسجيل زوار الموقع والجلسات الحية محلياً
         conn.execute("""
             CREATE TABLE IF NOT EXISTS web_live_sessions (
                 session_id TEXT PRIMARY KEY,
@@ -91,7 +88,6 @@ init_db()
 
 DOWNLOAD_POOL = ThreadPoolExecutor(max_workers=10)
 
-# تنظيف دوري للملفات القديمة وسجلات قاعدة البيانات المهملة
 def cleanup_cron():
     while True:
         try:
@@ -169,12 +165,17 @@ def get_js():
 @app.get("/api/download_file/{filename}")
 def download_file_direct(filename: str):
     file_path = WEB_DIR / filename
+    if not file_path.exists():
+        job_prefix = filename.split('.')[0]
+        matching = [f for f in WEB_DIR.glob(f"{job_prefix}.*") if not f.name.endswith(".part")]
+        if matching:
+            file_path = matching[0]
+            
     if file_path.exists() and file_path.is_file():
-        media_type = "audio/mpeg" if filename.endswith(".mp3") else "video/mp4"
-        return FileResponse(file_path, filename=filename, media_type=media_type)
+        media_type = "audio/mpeg" if file_path.name.endswith(".mp3") else "video/mp4"
+        return FileResponse(file_path, filename=file_path.name, media_type=media_type)
     raise HTTPException(status_code=404, detail="الملف غير موجود")
 
-# 📡 استقبال نبضات حضور زوار الموقع وتصعيد المستخدم للأعلى بدون تكرار
 @app.post("/api/ping_session")
 async def ping_session(request: Request):
     try:
@@ -182,18 +183,11 @@ async def ping_session(request: Request):
         tg_id = str(data.get("tg_id", "")).strip() or "زائر مجهول"
         device = str(data.get("device", "غير معروف"))
         client_ip = request.client.host if request.client else "unknown"
-        
         clean_ip = client_ip.replace('.', '_').replace(':', '_')
         
-        # 🔑 مفتاح فريد لكل مستخدم يمنع التكرار ويضمن تحديث نفس السجل وتصعيده للأعلى
-        if tg_id != "زائر مجهول" and tg_id.isdigit():
-            doc_id = f"usr_{tg_id}"
-        else:
-            doc_id = f"anon_{clean_ip}"
-            
+        doc_id = f"usr_{tg_id}" if (tg_id != "زائر مجهول" and tg_id.isdigit()) else f"anon_{clean_ip}"
         now_ts = time.time()
 
-        # 1️⃣ الحفظ وتحديث التوقيت في SQLite
         with get_db() as conn:
             conn.execute("""
                 INSERT INTO web_live_sessions (session_id, tg_id, device, last_ping)
@@ -205,7 +199,6 @@ async def ping_session(request: Request):
             """, (doc_id, tg_id, device, now_ts))
             conn.commit()
 
-        # 2️⃣ التحديث الفوري المباشر في Firebase Firestore (تحديث السجل نفسه)
         try:
             from database.connection import db
             if db is not None:
@@ -223,7 +216,6 @@ async def ping_session(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# 📊 دالة توليد تقرير رادار الزوار بدون تكرار والأحدث بالترتيب الأول
 def get_web_visitors_report() -> str:
     now = time.time()
     online_threshold = now - 120
@@ -318,7 +310,6 @@ def get_web_visitors_report() -> str:
                     username = u.get('username')
                     uname_str = f" (@{esc(username)})" if username and username != "لا يوجد" and username != "" else ""
                     
-                    # الاسم والـ ID قابلان للنسخ
                     user_header = f"👤 <code>{full_name}</code>{uname_str}"
                     id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
                 else:
@@ -497,8 +488,15 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            ext = info.get('ext', 'mp3' if 'audio' in mode else 'mp4')
-            filename = f"{job_id}.{ext}"
+            
+            # 🔍 المطابقة الفورية وتحديد اسم الملف الفعلي على القرص
+            matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
+            if matching_files:
+                filename = matching_files[0].name
+            else:
+                ext = 'mp3' if 'audio' in mode else 'mp4'
+                filename = f"{job_id}.{ext}"
+
             payload = {
                 "status": "completed",
                 "url": f"/files/{filename}",
@@ -607,6 +605,13 @@ async def send_to_telegram(request: Request):
             filename = file_url.split("/")[-1]
             file_path = WEB_DIR / filename
 
+        # 🔍 التحرّي المباشر عن اسم وحقيقة الملف المحفوظ على القرص
+        if (not file_path or not file_path.exists()) and file_url:
+            job_prefix = file_url.split("/")[-1].split(".")[0]
+            matching_files = [f for f in WEB_DIR.glob(f"{job_prefix}.*") if not f.name.endswith(".part")]
+            if matching_files:
+                file_path = matching_files[0]
+
         if not file_path or not file_path.exists():
             return {"success": False, "error": "الملف غير موجود على السيرفر."}
 
@@ -683,6 +688,5 @@ async def send_to_telegram(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    # استقبال البوت المخصص ديناميكياً من Railway لمنع أخطاء التوصيل والشبكة
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("web_app:app", host="0.0.0.0", port=port)
