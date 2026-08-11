@@ -11,6 +11,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from contextlib import contextmanager
+from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -173,7 +174,7 @@ def download_file_direct(filename: str):
         return FileResponse(file_path, filename=filename, media_type=media_type)
     raise HTTPException(status_code=404, detail="الملف غير موجود")
 
-# 📡 استقبال نبضات حضور زوار الموقع لتسجيل الحضور في SQLite و Firebase Firestore
+# 📡 استقبال نبضات حضور زوار الموقع وتصعيد المستخدم للأعلى بدون تكرار
 @app.post("/api/ping_session")
 async def ping_session(request: Request):
     try:
@@ -183,10 +184,16 @@ async def ping_session(request: Request):
         client_ip = request.client.host if request.client else "unknown"
         
         clean_ip = client_ip.replace('.', '_').replace(':', '_')
-        session_id = f"{tg_id}_{clean_ip}" if tg_id != "زائر مجهول" else f"anon_{clean_ip}"
+        
+        # 🔑 مفتاح فريد لكل مستخدم يمنع التكرار ويضمن تحديث نفس السجل وتصعيده للأعلى
+        if tg_id != "زائر مجهول" and tg_id.isdigit():
+            doc_id = f"usr_{tg_id}"
+        else:
+            doc_id = f"anon_{clean_ip}"
+            
         now_ts = time.time()
 
-        # 1️⃣ الحفظ في قاعدة البيانات المحلية SQLite
+        # 1️⃣ الحفظ وتحديث التوقيت في SQLite
         with get_db() as conn:
             conn.execute("""
                 INSERT INTO web_live_sessions (session_id, tg_id, device, last_ping)
@@ -195,15 +202,15 @@ async def ping_session(request: Request):
                     tg_id=excluded.tg_id,
                     device=excluded.device,
                     last_ping=excluded.last_ping
-            """, (session_id, tg_id, device, now_ts))
+            """, (doc_id, tg_id, device, now_ts))
             conn.commit()
 
-        # 2️⃣ التحديث المباشر في Firebase Firestore
+        # 2️⃣ التحديث الفوري المباشر في Firebase Firestore (تحديث السجل نفسه)
         try:
             from database.connection import db
             if db is not None:
-                db.collection('web_visitors').document(session_id).set({
-                    'session_id': session_id,
+                db.collection('web_visitors').document(doc_id).set({
+                    'session_id': doc_id,
                     'tg_id': tg_id,
                     'device': device,
                     'ip': client_ip,
@@ -216,12 +223,13 @@ async def ping_session(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# 📊 دالة توليد تقرير رادار الزوار المتكامل من Firebase
+# 📊 دالة توليد تقرير رادار الزوار بدون تكرار والأحدث بالترتيب الأول
 def get_web_visitors_report() -> str:
     now = time.time()
-    online_threshold = now - 120  # نعتبر الزائر أونلاين إذا ظهر خلال آخر دقيقتين
+    online_threshold = now - 120  # اعتبار الزائر أونلاين إذا ظهر خلال آخر دقيقتين
     rows = []
     online_count = 0
+    seen_users = set()
 
     try:
         from database.connection import db
@@ -232,34 +240,53 @@ def get_web_visitors_report() -> str:
         firestore = None
         def esc(s): return str(s) if s else ""
 
-    # 1️⃣ القراءة المباشرة من مجموعات Firebase Firestore
+    # 1️⃣ القراءة المباشرة من مجموعات Firebase Firestore مرتبة تصاعدياً بحسب أحدث نشاط
     if db is not None and firestore is not None:
         try:
-            docs = db.collection('web_visitors').order_by('last_ping', direction=firestore.Query.DESCENDING).limit(15).stream()
+            docs = db.collection('web_visitors').order_by('last_ping', direction=firestore.Query.DESCENDING).limit(30).stream()
             for doc in docs:
                 d = doc.to_dict()
+                tg_key = str(d.get('tg_id', '')).strip()
+                v_key = tg_key if tg_key != "زائر مجهول" else d.get('session_id')
+                
+                # تصفية أي تكرار لضمان ظهور كل مستخدم مرة واحدة بأحدث توقيت
+                if v_key in seen_users:
+                    continue
+                seen_users.add(v_key)
+                
                 rows.append(d)
                 if float(d.get('last_ping', 0)) >= online_threshold:
                     online_count += 1
+                if len(rows) >= 15:
+                    break
         except Exception:
             rows = []
 
     # 2️⃣ الاحتياطي: القراءة من SQLite في حال تعذر القراءة من Firebase
     if not rows:
         with get_db() as conn:
-            online_count = conn.execute(
-                "SELECT COUNT(*) FROM web_live_sessions WHERE last_ping >= ?", (online_threshold,)
-            ).fetchone()[0]
-            
             cursor = conn.execute(
-                "SELECT tg_id, device, last_ping FROM web_live_sessions ORDER BY last_ping DESC LIMIT 15"
+                "SELECT session_id, tg_id, device, last_ping FROM web_live_sessions ORDER BY last_ping DESC LIMIT 30"
             )
             for r in cursor.fetchall():
+                tg_key = str(r['tg_id']).strip()
+                v_key = tg_key if tg_key != "زائر مجهول" else r['session_id']
+                
+                if v_key in seen_users:
+                    continue
+                seen_users.add(v_key)
+                
+                lp = float(r['last_ping'])
+                if lp >= online_threshold:
+                    online_count += 1
+                    
                 rows.append({
                     'tg_id': r['tg_id'],
                     'device': r['device'],
-                    'last_ping': r['last_ping']
+                    'last_ping': lp
                 })
+                if len(rows) >= 15:
+                    break
 
     if not rows:
         return "🌐 <b>لا يوجد زوار في الموقع حالياً.</b>"
@@ -268,13 +295,16 @@ def get_web_visitors_report() -> str:
     text += f"🟢 <b>المتواجدون الآن (أونلاين):</b> {online_count} زائر\n\n"
     text += "📋 <b>أحدث الزوار ومعلوماتهم والتوقيتات:</b>\n\n"
 
+    local_tz = timezone(timedelta(hours=3))  # ضبط التوقيت المباشر لـ GMT+3
+
     for r in rows:
         tg_id_str = str(r.get('tg_id', '')).strip()
         last_ping = float(r.get('last_ping', 0))
         is_online = last_ping >= online_threshold
         status_str = "🟢 أونلاين" if is_online else "🔴 غير متواجد"
         
-        exact_time = time.strftime('%Y-%m-%d %I:%M %p', time.localtime(last_ping))
+        dt = datetime.fromtimestamp(last_ping, tz=timezone.utc).astimezone(local_tz)
+        exact_time = dt.strftime('%Y-%m-%d %I:%M %p')
         device_str = r.get('device') or "متصفح ويب 🌐"
         
         user_header = "👤 <b>زائر مجهول</b>"
