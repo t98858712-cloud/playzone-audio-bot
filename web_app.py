@@ -49,7 +49,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
+# --- إدارة قاعدة البيانات (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -107,7 +107,7 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- خيارات yt-dlp المحصنة ---
+# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -489,12 +489,11 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
             
-            # 🔍 المطابقة الفورية وتحديد اسم الملف الفعلي على القرص
             matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
             if matching_files:
                 filename = matching_files[0].name
             else:
-                ext = 'mp3' if 'audio' in mode else 'mp4'
+                ext = 'mp3' if mode == 'audio' else 'mp4'
                 filename = f"{job_id}.{ext}"
 
             payload = {
@@ -605,7 +604,6 @@ async def send_to_telegram(request: Request):
             filename = file_url.split("/")[-1]
             file_path = WEB_DIR / filename
 
-        # 🔍 التحرّي المباشر عن اسم وحقيقة الملف المحفوظ على القرص
         if (not file_path or not file_path.exists()) and file_url:
             job_prefix = file_url.split("/")[-1].split(".")[0]
             matching_files = [f for f in WEB_DIR.glob(f"{job_prefix}.*") if not f.name.endswith(".part")]
