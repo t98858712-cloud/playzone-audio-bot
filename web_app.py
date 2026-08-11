@@ -580,4 +580,6 @@ async def send_to_telegram(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("web_app:app", host="0.0.0.0", port=8000, reload=True)
+    # يستمع للبوت المخصص ديناميكياً من Railway لمنع أخطاء التوصيل
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("web_app:app", host="0.0.0.0", port=port)
