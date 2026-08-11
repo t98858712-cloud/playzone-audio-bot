@@ -15,6 +15,31 @@ window.addEventListener('beforeinstallprompt', (e) => {
     deferredPrompt = e;
 });
 
+// 📱 دالة تحديد نوع جهاز زائر الموقع
+function getDeviceType() {
+    const ua = navigator.userAgent;
+    if (/Android/i.test(ua)) return "أندرويد 📱";
+    if (/iPhone|iPad|iPod/i.test(ua)) return "آيفون 🍏";
+    if (/Windows/i.test(ua)) return "ويندوز 💻";
+    if (/Macintosh/i.test(ua)) return "ماك 💻";
+    return "متصفح ويب 🌐";
+}
+
+// 📡 دالة إرسال إشارة الحضور لتسجيل الزائر والأونلاين
+async function sendSessionPing() {
+    const tgId = localStorage.getItem('pz_tg_id') || "";
+    try {
+        await fetch(`${BACKEND_URL}/api/ping_session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tg_id: tgId,
+                device: getDeviceType()
+            })
+        });
+    } catch(e) {}
+}
+
 function setupDynamicManifest() {
     const logoUrl = "https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6smycajsa/playzone-logo-dark.png";
     const manifestData = {
@@ -347,6 +372,10 @@ function checkAndAutoContinueDownload() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+    // 🌐 إرسال إشارة الحضور الأولى وتفعيل إشارة الأونلاين كل 45 ثانية
+    sendSessionPing();
+    setInterval(sendSessionPing, 45000);
+
     setupDynamicManifest();
     initTypewriter();
     checkStandaloneAndHideBar();
@@ -585,7 +614,6 @@ window.openAdAndVerify = function(event) {
     startAdVerificationCheck();
 };
 
-// 📌 إخفاء خيار الدقة عند تحديد الأنماط التي لا تحتاج تحديد دقة (MP3 والصوت الأصلي والفيديو الأصلي)
 window.toggleRes = function() {
     const mode = document.getElementById('mode').value;
     const resSelect = document.getElementById('resolution');
