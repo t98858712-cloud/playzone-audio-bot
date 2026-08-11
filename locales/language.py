@@ -74,7 +74,7 @@ LANG_DICT = {
         "btn_guide": "📘 User Guide",
         "btn_links": "🔗 PlayZone Links",
         "btn_add_group": "➕ Add Bot to Group",
-        "btn_audio": "🎵 Download Audio (MP3)",
+        "btn_audio": "🎵 Download Audio",
         "btn_video": "🎬 Download Video",
         "btn_raw_audio": "🎵 Original Audio",
         "btn_raw_video": "🎬 Original Video",
