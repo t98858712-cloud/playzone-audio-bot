@@ -4,6 +4,7 @@ import shutil
 import logging
 import asyncio
 import subprocess
+from datetime import datetime, timezone, timedelta
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.error import RetryAfter, BadRequest
@@ -117,14 +118,44 @@ def build_banned_list_view():
     buttons.append([InlineKeyboardButton("🔙 رجوع لإدارة المستخدمين", callback_data="adm_users_menu")])
     return text, InlineKeyboardMarkup(buttons)
 
-def build_admin_users_text(limit: int, lang: str = "ar") -> str:
+# 📋 دالة عرض أحدث المنضمين والنشطين منسقة بالكامل بدون تكرار وبتوقيت GMT+3
+def build_admin_users_text(limit: int = 15, lang: str = "ar") -> str:
     if db is None: return "⚠️ قاعدة البيانات غير متصلة."
     users = get_latest_users(limit)
-    if not users: return "📋 لا يوجد مستخدمين بعد."
-    text = "📋 <b>أحدث المنضمين للنظام:</b>\n\n"
+    if not users: return "📋 <b>لا يوجد مستخدمين في النظام حالياً.</b>"
+    
+    text = "📋 <b>أحدث المنضمين للنظام والتنشيط:</b>\n\n"
+    
+    local_tz = timezone(timedelta(hours=3))  # ضبط التوقيت لـ GMT+3
+    seen_ids = set()
+    
     for u in users:
-        name = esc(f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()) or "بدون اسم"
-        text += f"• <code>{u.get('id', '0')}</code> | {name}\n"
+        uid = str(u.get('id', '0')).strip()
+        
+        # تصفية التكرار
+        if uid in seen_ids or uid == '0':
+            continue
+        seen_ids.add(uid)
+        
+        first_name = esc(u.get('first_name', ''))
+        last_name = esc(u.get('last_name', ''))
+        full_name = f"{first_name} {last_name}".strip() or "مستخدم"
+        
+        username = u.get('username')
+        uname_str = f" (@{esc(username)})" if username and username != "لا يوجد" and username != "" else ""
+        
+        # تحويل التوقيت إلى GMT+3
+        time_ts = u.get('last_seen') or u.get('first_seen') or time.time()
+        try:
+            dt = datetime.fromtimestamp(float(time_ts), tz=timezone.utc).astimezone(local_tz)
+            exact_time = dt.strftime('%Y-%m-%d %I:%M %p')
+        except Exception:
+            exact_time = "غير محدد"
+        
+        text += f"• 👤 <b>{full_name}</b>{uname_str}\n"
+        text += f"  └ 🆔 <code>{uid}</code>\n"
+        text += f"  └ 🕒 <code>{exact_time}</code>\n\n"
+        
     return text
 
 def build_server_status_text(lang: str = "ar") -> str:
@@ -224,7 +255,6 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return await edit_message_smart(query.message, "👥 <b>قسم إدارة المستخدمين والتصدير:</b>", reply_markup=admin_users_menu(lang))
 
-    # 📌 التعديل الجديد: جلب وعرض تقرير زوار الموقع الحيين مباشرة داخل أدمن البوت
     elif data == "adm_web_users":
         await query.answer("جاري جلب قائمة الزوار... 🌐")
         try:
@@ -351,9 +381,16 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         return await edit_message_smart(query.message, build_admin_stats_text(lang), reply_markup=admin_main_keyboard(lang))
         
+    # 📋 تحديث زر عرض أحدث المنضمين مع زر التحديث ورجوع لإدارة المستخدمين
     elif data == "adm_users":
-        await query.answer()
-        return await edit_message_smart(query.message, build_admin_users_text(10, lang), reply_markup=admin_users_menu(lang))
+        await query.answer("جاري جلب أحدث المنضمين... 📋")
+        users_text = build_admin_users_text(15, lang)
+        
+        refresh_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 تحديث القائمة", callback_data="adm_users")],
+            [InlineKeyboardButton("🔙 رجوع لإدارة المستخدمين", callback_data="adm_users_menu")]
+        ])
+        return await edit_message_smart(query.message, users_text, reply_markup=refresh_kb)
         
     elif data == "adm_server":
         await query.answer()
