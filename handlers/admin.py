@@ -126,13 +126,13 @@ def build_admin_users_text(limit: int = 15, lang: str = "ar") -> str:
     
     text = "📋 <b>أحدث المنضمين للنظام والتنشيط:</b>\n\n"
     
-    local_tz = timezone(timedelta(hours=3))  # ضبط التوقيت لـ GMT+3
+    local_tz = timezone(timedelta(hours=3))  # توقيت GMT+3
     seen_ids = set()
     
     for u in users:
         uid = str(u.get('id', '0')).strip()
         
-        # تصفية التكرار
+        # منع التكرار
         if uid in seen_ids or uid == '0':
             continue
         seen_ids.add(uid)
@@ -152,7 +152,8 @@ def build_admin_users_text(limit: int = 15, lang: str = "ar") -> str:
         except Exception:
             exact_time = "غير محدد"
         
-        text += f"• 👤 <b>{full_name}</b>{uname_str}\n"
+        # الاسم والـ ID قابلان للنسخ
+        text += f"• 👤 <code>{full_name}</code>{uname_str}\n"
         text += f"  └ 🆔 <code>{uid}</code>\n"
         text += f"  └ 🕒 <code>{exact_time}</code>\n\n"
         
