@@ -14,52 +14,28 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
-    has_cookies = cookie_file_is_usable(COOKIES_FILE)
-    
-    # 📌 التكييف الذكي للكوكيز: السماح بعملاء الويب عند تفعيل الكوكيز لمنع رفض الجلسة
-    yt_client_args = {
-        "player_client": ["tv", "web", "mweb", "android", "ios"] if has_cookies else ["android", "ios", "tv"]
-    }
-    if not has_cookies:
-        yt_client_args["player_skip"] = ["web", "mweb"]
-
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {
-            "youtube": yt_client_args
+            "youtube": {
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
+            }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
     
-    from core.config import LOCAL_API_URL
-    max_fs = "50M" if not LOCAL_API_URL else "2000M"
-
-    # 1️⃣ 🎵 الصوت الأصلي الخام: سحب الصوت المباشر بتشفير Opus/m4a بدون إعادة ترميز لأعلى جودة وأقل حجم
-    if mode == "raw_audio":
-        opts["format"] = f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio"
-    
-    # 2️⃣ 🔊 الصوت العادي: جلب أفضل ملف صوتي معالج
-    elif mode == "audio":
+    if mode == "audio":
         opts["format"] = "bestaudio/best"
-
-    # 3️⃣ 🎬 الفيديو الأصلي الخام: إعطاء الأولوية لترميز AV1 ثم VP9 لسحب أعلى دقة أصلية بأقل حجم ممكن
-    elif mode == "raw_video":
-        opts["format"] = (
-            f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
-            f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
-            f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-            f"best"
-        )
-        opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
-
-    # 4️⃣ 📹 الفيديو المخصص بدقة محددة
     else:
+        from core.config import LOCAL_API_URL
+        max_fs = "50M" if not LOCAL_API_URL else "2000M"
+        
         # 🌟 الاستراتيجية الذكية للدقة الحقيقية:
         # 1. نحاول أولاً سحب جودة H.264 (avc1) المتوافقة كلياً مع التليجرام بالدقة المطلوبة لتجنب استهلاك السيرفر.
         # 2. إذا لم تتوفر، نسحب أفضل جودة فيديو متاحة بالدقة المطلوبة (حتى لو كانت VP9/AV1) لضمان الدقة الحقيقية.
@@ -81,7 +57,9 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
-    if has_cookies:
+    from core.config import COOKIES_FILE
+    from utils.helpers import cookie_file_is_usable
+    if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
@@ -97,23 +75,19 @@ def extract_metadata(url: str):
         return ydl.extract_info(url, download=False)
 
 def search_youtube(query: str, limit: int = 30):
-    has_cookies = cookie_file_is_usable(COOKIES_FILE)
-    yt_client_args = {
-        "player_client": ["tv", "web", "mweb", "android", "ios"] if has_cookies else ["android", "ios", "tv"]
-    }
-    if not has_cookies:
-        yt_client_args["player_skip"] = ["web", "mweb"]
-
     opts = {
         "quiet": True, 
         "extract_flat": True, 
         "no_warnings": True, 
         "ignoreerrors": True,
         "extractor_args": {
-            "youtube": yt_client_args
+            "youtube": {
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
+            }
         }
     }
-    if has_cookies:
+    if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
     combined_entries = []
     seen_ids = set()
@@ -178,8 +152,7 @@ async def youtube_health_monitor(app: Application):
     while True:
         await asyncio.sleep(6 * 3600)
         try:
-            has_cookies = cookie_file_is_usable(COOKIES_FILE)
-            if not has_cookies:
+            if not cookie_file_is_usable(COOKIES_FILE):
                 await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
                 continue
             opts = {
@@ -188,7 +161,8 @@ async def youtube_health_monitor(app: Application):
                 "cookiefile": str(COOKIES_FILE),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["tv", "web", "mweb"]
+                        "player_client": ["android", "ios", "tv"],
+                        "player_skip": ["web", "mweb"]
                     }
                 }
             }
