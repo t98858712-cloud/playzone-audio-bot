@@ -13,7 +13,11 @@ def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
 
 def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(_t("btn_audio", lang), callback_data=f"aud:{request_id}")],
+        [InlineKeyboardButton(_t("btn_audio", lang) + " (MP3)", callback_data=f"aud:{request_id}")],
+        [
+            InlineKeyboardButton("🎵 الصوت الأصلي", callback_data=f"raw_aud:{request_id}"),
+            InlineKeyboardButton("🎬 الفيديو الأصلي", callback_data=f"raw_vid:{request_id}")
+        ],
         [InlineKeyboardButton(_t("btn_video", lang), callback_data=f"vid:{request_id}")],
         [InlineKeyboardButton(_t("btn_cancel", lang), callback_data=f"cancel:{request_id}")],
     ])
