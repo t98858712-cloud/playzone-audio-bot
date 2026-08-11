@@ -223,7 +223,22 @@ async def handle_admin_callbacks(query, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_users_menu":
         await query.answer()
         return await edit_message_smart(query.message, "👥 <b>قسم إدارة المستخدمين والتصدير:</b>", reply_markup=admin_users_menu(lang))
-        
+
+    # 📌 التعديل الجديد: جلب وعرض تقرير زوار الموقع الحيين مباشرة داخل أدمن البوت
+    elif data == "adm_web_users":
+        await query.answer("جاري جلب قائمة الزوار... 🌐")
+        try:
+            from web_app import get_web_visitors_report
+            report_text = get_web_visitors_report()
+        except Exception as e:
+            report_text = f"❌ تعذر جلب تقرير الزوار: {e}"
+            
+        refresh_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 تحديث البيانات", callback_data="adm_web_users")],
+            [InlineKeyboardButton("🔙 رجوع لإدارة المستخدمين", callback_data="adm_users_menu")]
+        ])
+        return await edit_message_smart(query.message, report_text, reply_markup=refresh_kb)
+
     elif data == "adm_banned_list":
         await query.answer()
         banned_text, banned_kb = build_banned_list_view()
