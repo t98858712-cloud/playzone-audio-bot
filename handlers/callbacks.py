@@ -127,10 +127,14 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer(_t("msg_select_res", lang))
         return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id, lang))
 
-    if data.startswith("aud:") or data.startswith("res:") or data.startswith("v_ad:"):
+    if data.startswith("aud:") or data.startswith("raw_aud:") or data.startswith("raw_vid:") or data.startswith("res:") or data.startswith("v_ad:"):
         if data.startswith("v_ad:"):
             parts = data.split(":")
             mode, resolution, request_id = parts[1], parts[2], parts[3]
+        elif data.startswith("raw_aud:"):
+            mode, resolution, request_id = "raw_audio", "best", data.split(":")[1]
+        elif data.startswith("raw_vid:"):
+            mode, resolution, request_id = "raw_video", "best", data.split(":")[1]
         elif data.startswith("aud:"):
             mode, resolution, request_id = "audio", "720", data.split(":")[1]
         else:
@@ -145,7 +149,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if data.startswith("v_ad:"):
                 await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
             else:
-                if mode == "audio": await query.answer(_t("msg_prep_audio", lang))
+                if mode in ["audio", "raw_audio"]: await query.answer(_t("msg_prep_audio", lang))
                 else: await query.answer(_t("msg_prep_video", lang))
 
             request = ensure_pending_requests(context).pop(request_id, None)
@@ -214,7 +218,8 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
             
-            info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, mode, job_dir, progress_data, resolution))
+            dl_mode = "audio" if mode == "raw_audio" else ("video" if mode == "raw_video" else mode)
+            info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, dl_mode, job_dir, progress_data, resolution))
             
             files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
             if not files: raise RuntimeError("لم يتم العثور على الملف النهائي")
@@ -253,7 +258,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             media_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(_t("btn_share", lang), url=share_link)]])
 
             with open(target_file, "rb") as f:
-                if mode == "audio":
+                if mode in ["audio", "raw_audio"]:
                     t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
                     try:
                         await context.bot.send_audio(
