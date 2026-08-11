@@ -318,6 +318,7 @@ function restoreSessionState() {
             if (adGateEl) adGateEl.classList.remove('hidden');
             if (dlOptionsEl) dlOptionsEl.classList.add('hidden');
         }
+        toggleRes();
     } catch(e) {
         localStorage.removeItem('pz_active_download_state');
     }
@@ -328,7 +329,6 @@ function clearActiveSessionState() {
     localStorage.removeItem('pz_ad_opened_pending');
 }
 
-// 📌 تعديل هكـذا لفك قفل التحميل فقط دون البدء التلقائي
 function checkAndAutoContinueDownload() {
     const isAdPending = localStorage.getItem('pz_ad_opened_pending');
     if (isAdPending === 'true' && currentUrl) {
@@ -339,6 +339,7 @@ function checkAndAutoContinueDownload() {
         
         if (adGateEl) adGateEl.classList.add('hidden');
         if (dlOptionsEl) dlOptionsEl.classList.remove('hidden');
+        toggleRes();
         saveCurrentSessionState();
 
         showToast("تم فك قفل التحميل بنجاح! 🔓 اختر الصيغة والدقة ثم اضغط بدء التحميل", "success");
@@ -584,7 +585,16 @@ window.openAdAndVerify = function(event) {
     startAdVerificationCheck();
 };
 
-window.toggleRes = function() { document.getElementById('resolution').style.display = document.getElementById('mode').value === 'audio' ? 'none' : 'block'; };
+// 📌 إخفاء خيار الدقة عند تحديد الأنماط التي لا تحتاج تحديد دقة (MP3 والصوت الأصلي والفيديو الأصلي)
+window.toggleRes = function() {
+    const mode = document.getElementById('mode').value;
+    const resSelect = document.getElementById('resolution');
+    if (mode === 'audio' || mode === 'raw_audio' || mode === 'raw_video') {
+        resSelect.classList.add('hidden');
+    } else {
+        resSelect.classList.remove('hidden');
+    }
+};
 
 window.startAdVerificationCheck = function() {
     showToast("جاري فحص الاتصال وتأكيد الجلسة... ⏳", "success");
@@ -596,7 +606,7 @@ window.startAdVerificationCheck = function() {
     adFallbackTimeout = setTimeout(() => {
         document.getElementById('adGate').classList.add('hidden');
         document.getElementById('dlOptions').classList.remove('hidden');
-        
+        toggleRes();
         saveCurrentSessionState();
         showToast("تم فك القفل بنجاح! حدد خياراتك واضغط بدء التحميل 🔓", "success");
     }, 10000);
@@ -772,7 +782,7 @@ window.applyFilters = function(withHaptic = false) {
         const actualIndex = myLibrary.findIndex(i => i.id === item.id);
         const durationStr = formatTime(item.duration || 0);
         const favClass = item.favorite ? 'fas fa-heart text-red-400' : 'far fa-heart';
-        const typeTag = item.is_audio ? '<span class="bg-accent/10 text-accentLight text-[9px] px-2 py-0.5 rounded-md font-bold">MP3</span>' : '<span class="bg-fuchsia-500/10 text-fuchsia-400 text-[9px] px-2 py-0.5 rounded-md font-bold">MP4</span>';
+        const typeTag = item.is_audio ? '<span class="bg-accent/10 text-accentLight text-[9px] px-2 py-0.5 rounded-md font-bold">صوت</span>' : '<span class="bg-fuchsia-500/10 text-fuchsia-400 text-[9px] px-2 py-0.5 rounded-md font-bold">فيديو</span>';
         container.innerHTML += `
             <div class="lib-card bg-panel/60 backdrop-blur-sm rounded-2xl p-3.5 border border-panelBorder/40 flex gap-3 items-center relative group w-full">
                 <div class="relative w-20 h-12 rounded-xl overflow-hidden border border-panelBorder/40 flex-shrink-0 cursor-pointer shadow-lg" onclick="playMediaTrack(${actualIndex})">
