@@ -27,7 +27,7 @@ from utils.helpers import (
 from utils.keyboards import build_preview_keyboard, build_resolution_keyboard
 
 from services.downloader import (
-    download_thumbnail_safely, execute_download, run_progress_updates, extract_metadata
+    download_thumbnail_safely, execute_download, run_progress_updates, extract_metadata, ensure_compatible_video
 )
 from services.media import convert_to_mp3_local
 
@@ -267,6 +267,9 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
                 target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
+            elif mode in ["video", "raw_video"]:
+                progress_data["text"] = "⚡ جاري تحسين التوافق..."
+                target_file = await loop.run_in_executor(EXECUTOR, lambda: ensure_compatible_video(raw_downloaded_file))
             else:
                 target_file = raw_downloaded_file
 
