@@ -2,8 +2,6 @@ import uuid
 import shutil
 import logging
 import asyncio
-import subprocess
-import json
 import urllib.request
 import yt_dlp
 from pathlib import Path
@@ -14,58 +12,6 @@ from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progres
 from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
-
-def ensure_compatible_video(input_file: Path) -> Path:
-    """
-    فحص ترميز الفيديو والصوت وإصلاحهما تلقائياً لمنع تجمد الصورة أو انقطاع الصوت
-    """
-    try:
-        if not input_file.exists() or input_file.suffix.lower() not in [".mp4", ".mkv", ".webm", ".mov"]:
-            return input_file
-
-        cmd_probe = [
-            'ffprobe', '-v', 'error',
-            '-show_entries', 'stream=codec_type,codec_name',
-            '-of', 'json', str(input_file)
-        ]
-        res = subprocess.run(cmd_probe, capture_output=True, text=True, timeout=10)
-        data = json.loads(res.stdout)
-        streams = data.get('streams', [])
-        
-        v_codec = ""
-        a_codec = ""
-        for s in streams:
-            if s.get('codec_type') == 'video' and not v_codec:
-                v_codec = s.get('codec_name', '').lower()
-            elif s.get('codec_type') == 'audio' and not a_codec:
-                a_codec = s.get('codec_name', '').lower()
-        
-        # إذا كان الفيديو H.264 والصوت AAC فهو متوافق 100% دون الحاجة لمعالجة
-        if v_codec in ['h264', 'avc', 'avc1'] and a_codec in ['aac', 'mp4a']:
-            return input_file
-        
-        # إصلاح الفيديو السريع إذا كان الترميز VP9/AV1 أو الصوت Opus
-        output_file = input_file.parent / f"fixed_{uuid.uuid4().hex[:6]}.mp4"
-        v_args = ['-c:v', 'copy'] if v_codec in ['h264', 'avc', 'avc1'] else ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p']
-        a_args = ['-c:a', 'copy'] if a_codec in ['aac', 'mp4a'] else ['-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-ar', '44100']
-        
-        cmd_convert = [
-            'ffmpeg', '-y',
-            '-i', str(input_file),
-            *v_args,
-            *a_args,
-            '-movflags', '+faststart',
-            str(output_file)
-        ]
-        
-        conv_res = subprocess.run(cmd_convert, capture_output=True, timeout=90)
-        if conv_res.returncode == 0 and output_file.exists() and output_file.stat().st_size > 0:
-            input_file.unlink(missing_ok=True)
-            output_file.rename(input_file.with_suffix('.mp4'))
-            return input_file.with_suffix('.mp4')
-    except Exception as e:
-        logger.error(f"Error in ensure_compatible_video: {e}")
-    return input_file
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
@@ -94,11 +40,11 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     from core.config import LOCAL_API_URL
     max_fs = "50M" if not LOCAL_API_URL else "2000M"
 
-    # 1️⃣ صوت أصلي
+    # 1️⃣ صوت أصلي (خام كما هو من المنصة دون أي تغيير)
     if mode == "raw_audio":
         opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
 
-    # 2️⃣ صوت مفلتر (MP3)
+    # 2️⃣ صوت مفلتر (MP3 قياسي)
     elif mode == "audio":
         opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
         opts["postprocessors"] = [{
@@ -107,33 +53,45 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             "preferredquality": "192"
         }]
 
-    # 3️⃣ فيديو أصلي
+    # 3️⃣ فيديو أصلي (خام مع ضمان دمج مسار الصوت وتشغيله)
     elif mode == "raw_video":
         opts["format"] = (
-            f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a][filesize<?{max_fs}]/"
             f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
             f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
             f"best[vcodec!=none][acodec!=none][filesize<?{max_fs}]/"
             f"bestvideo+bestaudio/best"
         )
         opts["merge_output_format"] = "mp4"
+        opts["postprocessor_args"] = {
+            "Merger": [
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-movflags", "+faststart"
+            ]
+        }
 
-    # 4️⃣ فيديو مفلتر
+    # 4️⃣ فيديو مفلتر (حسب الدقة مع معالجة الريلز العمودي وتشغيل الصوت والصورة معاً)
     else:
         target_res = resolution if resolution and resolution != "best" else "720"
         opts["format"] = (
-            f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a][filesize<?{max_fs}]/"
-            f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a][filesize<?{max_fs}]/"
             f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
             f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
             f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
             f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
             f"best[vcodec!=none][acodec!=none][height<={target_res}][filesize<?{max_fs}]/"
             f"best[vcodec!=none][acodec!=none][width<={target_res}][filesize<?{max_fs}]/"
+            f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
             f"best[vcodec!=none][acodec!=none][filesize<?{max_fs}]/"
             f"bestvideo+bestaudio/best"
         )
         opts["merge_output_format"] = "mp4"
+        opts["postprocessor_args"] = {
+            "Merger": [
+                "-c:v", "copy",
+                "-c:a", "aac", 
+                "-movflags", "+faststart"
+            ]
+        }
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
