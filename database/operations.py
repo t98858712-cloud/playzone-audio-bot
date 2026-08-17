@@ -1,0 +1,307 @@
+import time
+import logging
+import json
+import csv
+import io
+from google.cloud.firestore_v1 import Increment
+from google.cloud.firestore_v1.base_query import FieldFilter
+from database.connection import db
+from firebase_admin import firestore
+
+logger = logging.getLogger("PlayZoneEnterpriseBot")
+
+def load_banned_users():
+    if db is None: 
+        return set()
+    try:
+        docs = db.collection('banned_users').stream()
+        from core.security import BANNED_USERS_CACHE
+        BANNED_USERS_CACHE.clear()
+        for doc in docs:
+            try:
+                BANNED_USERS_CACHE.add(int(doc.id))
+            except ValueError:
+                BANNED_USERS_CACHE.add(doc.id)
+        return BANNED_USERS_CACHE
+    except Exception as e:
+        logger.error(f"Error loading banned users: {e}")
+        return set()
+
+def ban_user_db(uid):
+    if db is None: 
+        return
+    try:
+        db.collection('banned_users').document(str(uid)).set({'banned_at': int(time.time())})
+        from core.security import BANNED_USERS_CACHE
+        BANNED_USERS_CACHE.add(int(uid))
+    except Exception as e:
+        logger.error(f"Error banning user: {e}")
+
+def unban_user_db(uid):
+    if db is None: 
+        return
+    try:
+        db.collection('banned_users').document(str(uid)).delete()
+        from core.security import BANNED_USERS_CACHE
+        BANNED_USERS_CACHE.discard(int(uid))
+    except Exception as e:
+        logger.error(f"Error unbanning user: {e}")
+
+def get_banned_users_list() -> list:
+    if db is None: 
+        return []
+    try:
+        docs = db.collection('banned_users').stream()
+        banned_list = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            uid = doc.id
+            user_doc = db.collection('users').document(uid).get()
+            user_info = user_doc.to_dict() if user_doc.exists else {}
+            banned_list.append({
+                "id": uid,
+                "banned_at": data.get("banned_at", 0),
+                "first_name": user_info.get("first_name", "بدون اسم"),
+                "username": user_info.get("username", "")
+            })
+        return banned_list
+    except Exception as e:
+        logger.error(f"Error getting banned users list: {e}")
+        return []
+
+def set_setting(key, value):
+    if db is None: 
+        return
+    try:
+        db.collection('settings').document('config').set({key: str(value)}, merge=True)
+    except Exception as e:
+        logger.error(f"Error setting config {key}: {e}")
+
+def get_setting(key, default="0"):
+    if db is None: 
+        return default
+    try:
+        doc = db.collection('settings').document('config').get()
+        if doc.exists:
+            return doc.to_dict().get(key, default)
+    except Exception as e:
+        logger.error(f"Error getting setting {key}: {e}")
+    return default
+
+def register_user_sync(user):
+    if not user or db is None: 
+        return
+    now = int(time.time())
+    try:
+        doc_ref = db.collection('users').document(str(user.id))
+        doc = doc_ref.get()
+        if not doc.exists:
+            doc_ref.set({
+                'id': user.id,
+                'username': user.username or "",
+                'first_name': user.first_name or "",
+                'last_name': user.last_name or "",
+                'first_seen': now,
+                'last_seen': now
+            })
+        else:
+            doc_ref.update({
+                'username': user.username or "",
+                'first_name': user.first_name or "",
+                'last_name': user.last_name or "",
+                'last_seen': now
+            })
+    except Exception as e:
+        logger.error(f"Error registering user {user.id}: {e}")
+
+def all_user_ids() -> list:
+    if db is None: 
+        return []
+    try:
+        docs = db.collection('users').select(['id']).stream()
+        return [int(doc.id) for doc in docs]
+    except Exception as e:
+        logger.error(f"Error getting all user ids: {e}")
+        return []
+
+def get_active_users_48h() -> list:
+    if db is None: 
+        return []
+    threshold = int(time.time()) - (48 * 3600)
+    try:
+        docs = db.collection('users').where(filter=FieldFilter('last_seen', '>=', threshold)).select(['id']).stream()
+        return [int(doc.id) for doc in docs]
+    except Exception as e:
+        logger.error(f"Error getting active users: {e}")
+        return []
+
+def get_latest_users(limit: int = 10) -> list:
+    if db is None: 
+        return []
+    try:
+        docs = db.collection('users').order_by('last_seen', direction=firestore.Query.DESCENDING).limit(limit).stream()
+        return [doc.to_dict() for doc in docs]
+    except Exception as e:
+        logger.error(f"Error getting latest users: {e}")
+        return []
+
+def get_all_users_data() -> list:
+    if db is None: 
+        return []
+    try:
+        docs = db.collection('users').stream()
+        return [doc.to_dict() for doc in docs]
+    except Exception as e:
+        logger.error(f"Error getting all users data: {e}")
+        return []
+
+def stat_inc_sync(key: str, value: int = 1):
+    if db is None: 
+        return
+    try:
+        db.collection('settings').document('stats').set({key: Increment(value)}, merge=True)
+    except Exception as e:
+        logger.error(f"Error incrementing stat {key}: {e}")
+
+def load_full_analytics_sync() -> dict:
+    if db is None: 
+        return {}
+    try:
+        doc = db.collection('settings').document('stats').get()
+        stats = doc.to_dict() if doc.exists else {}
+        
+        total_users = len(all_user_ids())
+        active_48h = len(get_active_users_48h())
+        inactive_users = max(0, total_users - active_48h)
+        
+        active_rate = round((active_48h / total_users * 100), 1) if total_users > 0 else 0.0
+        inactive_rate = round((inactive_users / total_users * 100), 1) if total_users > 0 else 0.0
+        
+        bot_req = stats.get('requests', 0)
+        bot_succ = stats.get('success', 0)
+        bot_fail = stats.get('failed', 0)
+        bot_success_rate = round((bot_succ / bot_req * 100), 1) if bot_req > 0 else 100.0
+        bot_fail_rate = round((bot_fail / bot_req * 100), 1) if bot_req > 0 else 0.0
+        
+        web_req = stats.get('web_requests', 0)
+        web_dl = stats.get('web_downloads', 0)
+        web_conv_rate = round((web_dl / web_req * 100), 1) if web_req > 0 else 0.0
+        
+        ad_clicks = stats.get('adsterra_clicks', 0)
+        ad_ver = stats.get('adsterra_verified', 0)
+        ad_conv_rate = round((ad_ver / ad_clicks * 100), 1) if ad_clicks > 0 else 0.0
+        
+        return {
+            "total_users": total_users,
+            "active_48h": active_48h,
+            "inactive_users": inactive_users,
+            "active_rate": active_rate,
+            "inactive_rate": inactive_rate,
+            "bot_requests": bot_req,
+            "bot_success": bot_succ,
+            "bot_failed": bot_fail,
+            "bot_success_rate": bot_success_rate,
+            "bot_fail_rate": bot_fail_rate,
+            "bot_bytes": stats.get('bytes', 0),
+            "web_requests": web_req,
+            "web_downloads": web_dl,
+            "web_conv_rate": web_conv_rate,
+            "adsterra_clicks": ad_clicks,
+            "adsterra_verified": ad_ver,
+            "ad_conv_rate": ad_conv_rate,
+            "broadcasts": stats.get('broadcasts', 0)
+        }
+    except Exception as e:
+        logger.error(f"Error loading analytics: {e}")
+        return {}
+
+def verify_user_ad_completion(user_id: int):
+    if db is None: 
+        return
+    try:
+        db.collection('users').document(str(user_id)).update({'last_ad_completion': int(time.time())})
+        stat_inc_sync("adsterra_verified", 1)
+    except Exception as e:
+        logger.error(f"Error updating ad completion for {user_id}: {e}")
+
+def check_ad_verified_status(user_id: int) -> bool:
+    if db is None: 
+        return False
+    try:
+        doc = db.collection('users').document(str(user_id)).get()
+        if doc.exists:
+            last_ad = doc.to_dict().get('last_ad_completion', 0)
+            if int(time.time()) - last_ad < 15:
+                return True
+    except Exception as e:
+        logger.error(f"Error checking ad status for {user_id}: {e}")
+    return False
+
+def optimize_db():
+    pass
+
+def export_users_csv() -> str:
+    users = get_all_users_data()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["User ID", "Username", "First Name", "Last Name", "First Seen", "Last Seen"])
+    for u in users:
+        writer.writerow([
+            u.get('id',''), 
+            u.get('username',''), 
+            u.get('first_name',''), 
+            u.get('last_name',''), 
+            u.get('first_seen',''), 
+            u.get('last_seen','')
+        ])
+    return output.getvalue()
+
+def export_firebase_backup_json() -> str:
+    if db is None: 
+        return "{}"
+    try:
+        backup = {
+            "metadata": {
+                "exported_at": int(time.time()),
+                "system": "Firebase Firestore"
+            },
+            "users": [], 
+            "banned_users": [], 
+            "settings": []
+        }
+        for doc in db.collection('users').stream():
+            backup["users"].append(doc.to_dict())
+        for doc in db.collection('banned_users').stream():
+            backup["banned_users"].append({"id": doc.id, **(doc.to_dict() or {})})
+        for doc in db.collection('settings').stream():
+            backup["settings"].append({"document_id": doc.id, **(doc.to_dict() or {})})
+        return json.dumps(backup, indent=4, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Failed to export JSON backup: {e}")
+        return "{}"
+
+def generate_analytics_txt_report() -> str:
+    from utils.helpers import format_size
+    stats = load_full_analytics_sync()
+    bot_bytes = format_size(stats.get('bot_bytes', 0))
+    now_str = time.strftime('%Y-%m-%d %H:%M:%S GMT')
+    
+    return f"""📊 تقرير إحصائيات النظام الشاملة
+
+📅 التاريخ: {now_str}
+
+👥 إجمالي المستخدمين: {stats.get('total_users', 0)}
+⚡ النشطون (48 ساعة): {stats.get('active_48h', 0)}
+
+📥 إجمالي الطلبات: {stats.get('bot_requests', 0)}
+✅ الطلبات الناجحة: {stats.get('bot_success', 0)}
+❌ الطلبات الفاشلة: {stats.get('bot_failed', 0)}
+💾 البيانات المرسلة: {bot_bytes}
+📢 عدد الإذاعات: {stats.get('broadcasts', 0)}
+
+🌐 طلبات الموقع: {stats.get('web_requests', 0)}
+🚀 تنزيلات الموقع: {stats.get('web_downloads', 0)}
+
+💰 نقرات الإعلانات: {stats.get('adsterra_clicks', 0)}
+🔓 التنزيلات المفكوكة: {stats.get('adsterra_verified', 0)}
+"""
