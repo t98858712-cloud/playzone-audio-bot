@@ -453,10 +453,12 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     max_fs = "49M"
     
+    # 1️⃣ صوت أصلي (خام من المنصة 100%)
     if mode == 'raw_audio':
         opts.update({
-            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
+            'format': f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
         })
+    # 2️⃣ صوت مفلتر (MP3)
     elif mode == 'audio':
         opts.update({
             'format': 'bestaudio/best',
@@ -466,28 +468,33 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 'preferredquality': '192'
             }]
         })
+    # 3️⃣ فيديو أصلي (خام بدون إعادة تشفير)
     elif mode == 'raw_video':
         opts.update({
-            'format': (
-                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
-                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo+bestaudio/best"
-            ),
+            'format': f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/bestvideo+bestaudio/best",
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
+            'postprocessor_args': {'ffmpeg': ['-c', 'copy']}
         })
+    # 4️⃣ فيديو مفلتر (حسب الدقة مع معالجة الريلز العمودي)
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[height<={target_res}]+bestaudio/"
+                f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
+            'postprocessor_args': {
+                'ffmpeg': [
+                    '-c:a', 'aac', 
+                    '-b:a', '192k', 
+                    '-movflags', '+faststart'
+                ]
+            }
         })
     
     try:
@@ -658,7 +665,7 @@ async def send_to_telegram(request: Request):
             data_payload.update({'supports_streaming': True, 'duration': dur})
             try:
                 cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
-                res = subprocess.run(cmd, capture_output=True, text=True)
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
                 probe_data = json.loads(res.stdout)
                 data_payload.update({'width': probe_data['streams'][0]['width'], 'height': probe_data['streams'][0]['height']})
             except Exception:
