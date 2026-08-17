@@ -105,53 +105,6 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-def ensure_compatible_video_web(input_file: Path) -> Path:
-    try:
-        if not input_file.exists() or input_file.suffix.lower() not in [".mp4", ".mkv", ".webm", ".mov"]:
-            return input_file
-
-        cmd_probe = [
-            'ffprobe', '-v', 'error',
-            '-show_entries', 'stream=codec_type,codec_name',
-            '-of', 'json', str(input_file)
-        ]
-        res = subprocess.run(cmd_probe, capture_output=True, text=True, timeout=10)
-        data = json.loads(res.stdout)
-        streams = data.get('streams', [])
-        
-        v_codec = ""
-        a_codec = ""
-        for s in streams:
-            if s.get('codec_type') == 'video' and not v_codec:
-                v_codec = s.get('codec_name', '').lower()
-            elif s.get('codec_type') == 'audio' and not a_codec:
-                a_codec = s.get('codec_name', '').lower()
-        
-        if v_codec in ['h264', 'avc', 'avc1'] and a_codec in ['aac', 'mp4a']:
-            return input_file
-        
-        output_file = input_file.parent / f"fixed_{uuid.uuid4().hex[:6]}.mp4"
-        v_args = ['-c:v', 'copy'] if v_codec in ['h264', 'avc', 'avc1'] else ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p']
-        a_args = ['-c:a', 'copy'] if a_codec in ['aac', 'mp4a'] else ['-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-ar', '44100']
-        
-        cmd_convert = [
-            'ffmpeg', '-y',
-            '-i', str(input_file),
-            *v_args,
-            *a_args,
-            '-movflags', '+faststart',
-            str(output_file)
-        ]
-        
-        conv_res = subprocess.run(cmd_convert, capture_output=True, timeout=90)
-        if conv_res.returncode == 0 and output_file.exists() and output_file.stat().st_size > 0:
-            input_file.unlink(missing_ok=True)
-            output_file.rename(input_file.with_suffix('.mp4'))
-            return input_file.with_suffix('.mp4')
-    except Exception:
-        pass
-    return input_file
-
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -511,30 +464,42 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a][filesize<?{max_fs}]/"
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
                 f"best[vcodec!=none][acodec!=none][filesize<?{max_fs}]/"
                 f"bestvideo+bestaudio/best"
             ),
-            'merge_output_format': 'mp4'
+            'merge_output_format': 'mp4',
+            'postprocessor_args': {
+                'Merger': [
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-movflags', '+faststart'
+                ]
+            }
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a][filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a][filesize<?{max_fs}]/"
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
                 f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
                 f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
                 f"best[vcodec!=none][acodec!=none][height<={target_res}][filesize<?{max_fs}]/"
                 f"best[vcodec!=none][acodec!=none][width<={target_res}][filesize<?{max_fs}]/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
                 f"best[vcodec!=none][acodec!=none][filesize<?{max_fs}]/"
                 f"bestvideo+bestaudio/best"
             ),
-            'merge_output_format': 'mp4'
+            'merge_output_format': 'mp4',
+            'postprocessor_args': {
+                'Merger': [
+                    '-c:v', 'copy',
+                    '-c:a', 'aac', 
+                    '-movflags', '+faststart'
+                ]
+            }
         })
     
     try:
@@ -544,10 +509,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             allowed_exts = [".mp4", ".mkv", ".webm", ".m4a", ".mp3", ".opus", ".aac", ".ogg"]
             matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if f.suffix.lower() in allowed_exts and not f.name.endswith(".part")]
             if matching_files:
-                target_file = matching_files[0]
-                if mode in ['video', 'raw_video']:
-                    target_file = ensure_compatible_video_web(target_file)
-                filename = target_file.name
+                filename = matching_files[0].name
             else:
                 ext = 'mp3' if mode == 'audio' else 'mp4'
                 filename = f"{job_id}.{ext}"
