@@ -37,7 +37,6 @@ from handlers.user import render_search_page
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 async def safe_answer(query, text=None, show_alert=False):
-    """إجابة الاستعلام وتفادي أخطاء انتهاء المهلة أو المفاتيح القديمة"""
     try:
         if text: await query.answer(text, show_alert=show_alert)
         else: await query.answer()
@@ -45,7 +44,6 @@ async def safe_answer(query, text=None, show_alert=False):
         pass
 
 def probe_video_dimensions(file_path: Path):
-    """استخراج دقيق لأبعاد الفيديو لدعم الريلز الطولي"""
     try:
         cmd = [
             'ffprobe', '-v', 'error', 
@@ -257,9 +255,8 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             dl_mode = mode
             info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, dl_mode, job_dir, progress_data, resolution))
             
-            # فلترة مسارات الوسائط الحقيقية وتجاهل ملفات الصور والمؤقتات
-            allowed_exts = [".mp4", ".mkv", ".webm", ".m4a", ".mp3", ".opus", ".aac", ".ogg", ".wav", ".flv", ".mov"]
-            files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix.lower() in allowed_exts]
+            allowed_exts = [".mp4", ".mkv", ".webm", ".m4a", ".mp3", ".opus", ".aac", ".ogg", ".mov"]
+            files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix.lower() in allowed_exts and "playzone_thumb" not in p.name]
             if not files: 
                 raise RuntimeError("لم يتم العثور على ملف الوسائط النهائي")
             
@@ -283,14 +280,10 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
             native_width, native_height = probe_video_dimensions(target_file)
             if not native_width or not native_height:
-                try: 
-                    native_width = int(info_dict.get("width"))
-                except Exception: 
-                    native_width = None
-                try: 
-                    native_height = int(info_dict.get("height"))
-                except Exception: 
-                    native_height = None
+                try: native_width = int(info_dict.get("width"))
+                except Exception: native_width = None
+                try: native_height = int(info_dict.get("height"))
+                except Exception: native_height = None
 
             title, duration = clean_title(request.get("title", _t("txt_media_file", lang)), 80, lang), int(request.get("duration") or 0)
             caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration, lang))}"            
@@ -316,8 +309,8 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                     await context.bot.send_video(
                         chat_id=query.message.chat_id, video=f, caption=caption, 
                         supports_streaming=True, duration=duration, 
-                        width=native_width,
-                        height=native_height,
+                        width=native_width if (native_width and native_width > 0) else None,
+                        height=native_height if (native_height and native_height > 0) else None,
                         reply_markup=media_keyboard, parse_mode="HTML", 
                         read_timeout=120, write_timeout=120
                     )
