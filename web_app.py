@@ -23,6 +23,7 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
+# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -48,6 +49,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
+# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -105,6 +107,7 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
+# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -136,6 +139,8 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
     return opts
+
+# --- المسارات والـ API Endpoints ---
 
 @app.get("/")
 def home():
@@ -450,11 +455,11 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     
     if mode == 'raw_audio':
         opts.update({
-            'format': f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
+            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
         })
     elif mode == 'audio':
         opts.update({
-            'format': f"bestaudio[filesize<?{max_fs}]/bestaudio/best",
+            'format': 'bestaudio/best',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
@@ -464,50 +469,32 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"best[vcodec!=none][acodec!=none][filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
+                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {
-                'Merger': [
-                    '-c:v', 'copy',
-                    '-c:a', 'aac',
-                    '-movflags', '+faststart'
-                ]
-            }
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"best[vcodec!=none][acodec!=none][height<={target_res}][filesize<?{max_fs}]/"
-                f"best[vcodec!=none][acodec!=none][width<={target_res}][filesize<?{max_fs}]/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"best[vcodec!=none][acodec!=none][filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[height<={target_res}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {
-                'Merger': [
-                    '-c:v', 'copy',
-                    '-c:a', 'aac', 
-                    '-movflags', '+faststart'
-                ]
-            }
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
         })
     
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
             
-            allowed_exts = [".mp4", ".mkv", ".webm", ".m4a", ".mp3", ".opus", ".aac", ".ogg"]
-            matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if f.suffix.lower() in allowed_exts and not f.name.endswith(".part")]
+            matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
             if matching_files:
                 filename = matching_files[0].name
             else:
@@ -671,12 +658,9 @@ async def send_to_telegram(request: Request):
             data_payload.update({'supports_streaming': True, 'duration': dur})
             try:
                 cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                res = subprocess.run(cmd, capture_output=True, text=True)
                 probe_data = json.loads(res.stdout)
-                w = probe_data['streams'][0].get('width')
-                h = probe_data['streams'][0].get('height')
-                if w and h:
-                    data_payload.update({'width': int(w), 'height': int(h)})
+                data_payload.update({'width': probe_data['streams'][0]['width'], 'height': probe_data['streams'][0]['height']})
             except Exception:
                 pass
 
