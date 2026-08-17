@@ -40,11 +40,11 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     from core.config import LOCAL_API_URL
     max_fs = "50M" if not LOCAL_API_URL else "2000M"
 
-    # 1️⃣ صوت أصلي (خام 100% كما في المنصة)
+    # 1️⃣ صوت أصلي (خام 100% من المنصة)
     if mode == "raw_audio":
         opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
 
-    # 2️⃣ صوت مفلتر (تحويل مباشر إلى MP3 قياسي 192k)
+    # 2️⃣ صوت مفلتر (MP3 قياسي)
     elif mode == "audio":
         opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
         opts["postprocessors"] = [{
@@ -53,43 +53,45 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             "preferredquality": "192"
         }]
 
-    # 3️⃣ فيديو أصلي (يسحب الفيديو المدمج بصوته من إنستغرام/تيك توك أو يدمجهما دون ضغط)
+    # 3️⃣ فيديو أصلي (خام مباشر)
     elif mode == "raw_video":
         opts["format"] = (
+            f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+            f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+            f"best[ext=mp4][filesize<?{max_fs}]/"
             f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-            f"best[filesize<?{max_fs}]/"
-            f"bestvideo+bestaudio/"
-            f"best"
+            f"best[filesize<?{max_fs}]/best"
         )
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {
             "ffmpeg": [
-                "-c:v", "copy",
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-movflags", "+faststart"
             ]
         }
 
-    # 4️⃣ فيديو مفلتر (حسب الدقة ويدعم الريلز والفيديوهات الأفقية والمدمجة)
+    # 4️⃣ فيديو مفلتر (إجبار ترميز H.264 المتوافق مع كافة المنصات والريلز)
     else:
         target_res = resolution if resolution and resolution != "best" else "720"
         opts["format"] = (
             f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
             f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+            f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+            f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio/"
+            f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
+            f"best[ext=mp4][width<={target_res}][filesize<?{max_fs}]/"
+            f"best[ext=mp4][filesize<?{max_fs}]/"
             f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
             f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
             f"best[height<={target_res}][filesize<?{max_fs}]/"
             f"best[width<={target_res}][filesize<?{max_fs}]/"
             f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-            f"best[filesize<?{max_fs}]/"
-            f"bestvideo+bestaudio/"
-            f"best"
+            f"best[filesize<?{max_fs}]/best"
         )
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {
             "ffmpeg": [
-                "-c:v", "copy",
                 "-c:a", "aac", 
                 "-b:a", "192k", 
                 "-movflags", "+faststart"
