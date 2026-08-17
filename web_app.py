@@ -23,7 +23,6 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
-# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -49,7 +48,6 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -107,7 +105,6 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -139,8 +136,6 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
     return opts
-
-# --- المسارات والـ API Endpoints ---
 
 @app.get("/")
 def home():
@@ -453,12 +448,10 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     max_fs = "49M"
     
-    # 1️⃣ صوت أصلي (خام 100%)
     if mode == 'raw_audio':
         opts.update({
             'format': f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
         })
-    # 2️⃣ صوت مفلتر (MP3)
     elif mode == 'audio':
         opts.update({
             'format': f"bestaudio[filesize<?{max_fs}]/bestaudio/best",
@@ -468,45 +461,45 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 'preferredquality': '192'
             }]
         })
-    # 3️⃣ فيديو أصلي (خام مع الحفاظ على الصوت)
     elif mode == 'raw_video':
         opts.update({
             'format': (
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"best[ext=mp4][filesize<?{max_fs}]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"best[filesize<?{max_fs}]/"
-                f"bestvideo+bestaudio/"
-                f"best"
+                f"best[filesize<?{max_fs}]/best"
             ),
             'merge_output_format': 'mp4',
             'postprocessor_args': {
                 'ffmpeg': [
-                    '-c:v', 'copy',
                     '-c:a', 'aac',
                     '-b:a', '192k',
                     '-movflags', '+faststart'
                 ]
             }
         })
-    # 4️⃣ فيديو مفلتر (حسب الدقة مع معالجة الريلز والفيديوهات المدمجة)
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio/"
+                f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
+                f"best[ext=mp4][width<={target_res}][filesize<?{max_fs}]/"
+                f"best[ext=mp4][filesize<?{max_fs}]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
                 f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
                 f"best[height<={target_res}][filesize<?{max_fs}]/"
                 f"best[width<={target_res}][filesize<?{max_fs}]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"best[filesize<?{max_fs}]/"
-                f"bestvideo+bestaudio/"
-                f"best"
+                f"best[filesize<?{max_fs}]/best"
             ),
             'merge_output_format': 'mp4',
             'postprocessor_args': {
                 'ffmpeg': [
-                    '-c:v', 'copy',
                     '-c:a', 'aac', 
                     '-b:a', '192k', 
                     '-movflags', '+faststart'
@@ -518,7 +511,8 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
             
-            matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
+            allowed_exts = [".mp4", ".mkv", ".webm", ".m4a", ".mp3", ".opus", ".aac", ".ogg"]
+            matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if f.suffix.lower() in allowed_exts and not f.name.endswith(".part")]
             if matching_files:
                 filename = matching_files[0].name
             else:
