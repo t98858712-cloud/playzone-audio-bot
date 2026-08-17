@@ -5,6 +5,8 @@ import asyncio
 import shutil
 import logging
 import os
+import subprocess
+import json
 from urllib.parse import quote
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -33,6 +35,31 @@ from handlers.user import render_search_page
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+async def safe_answer(query, text=None, show_alert=False):
+    """إجابة الاستعلام وتفادي أخطاء انتهاء المهلة أو المفاتيح القديمة"""
+    try:
+        if text: await query.answer(text, show_alert=show_alert)
+        else: await query.answer()
+    except Exception:
+        pass
+
+def probe_video_dimensions(file_path: Path):
+    """استخراج دقيق لأبعاد الفيديو لدعم الريلز الطولي"""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'error', 
+            '-select_streams', 'v:0', 
+            '-show_entries', 'stream=width,height', 
+            '-of', 'json', str(file_path)
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        data = json.loads(res.stdout)
+        width = int(data['streams'][0]['width'])
+        height = int(data['streams'][0]['height'])
+        return width, height
+    except Exception:
+        return None, None
+
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query: return
@@ -40,24 +67,25 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data, uid, lang = query.data or "", query.from_user.id, context.user_data.get("lang", "ar")
     
     if data.startswith("adm_"):
-        if not is_admin(uid): return await query.answer("⛔ هذا الزر مخصص للمدراء فقط.", show_alert=True)
+        if not is_admin(uid): 
+            return await safe_answer(query, "⛔ هذا الزر مخصص للمدراء فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
 
-    # فحص وضع الصيانة عند الضغط على أي زر
+    # فحص وضع الصيانة
     maintenance = get_setting("maintenance", "0")
     if maintenance == "1" and not is_admin(uid):
-        await query.answer(_t("msg_maintenance", lang), show_alert=True)
+        await safe_answer(query, _t("msg_maintenance", lang), show_alert=True)
         return await edit_message_smart(query.message, _t("msg_maintenance", lang), reply_markup=None)
         
     if data == "cancel_search":
-        await query.answer(_t("msg_cancel_done", lang))
+        await safe_answer(query, _t("msg_cancel_done", lang))
         return await safe_delete(query.message)
         
     if data.startswith("page:"):
         parts = data.split(":")
         search_id, page_num = parts[1], int(parts[2])
         context.user_data.setdefault("search_cache", {})[search_id]["page"] = page_num
-        await query.answer()
+        await safe_answer(query)
         await render_search_page(query.message, context, search_id, lang)
         return
         
@@ -66,10 +94,10 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = f"https://www.youtube.com/watch?v={video_id}"
         
         if context.user_data.get("loading_preview"):
-            return await query.answer("⏳ جاري فحص خيارات الرابط، يرجى الانتظار...", show_alert=True)
+            return await safe_answer(query, "⏳ جاري فحص خيارات الرابط، يرجى الانتظار...", show_alert=True)
         
         context.user_data["loading_preview"] = True
-        await query.answer()
+        await safe_answer(query)
         
         try:
             await query.message.edit_text(_t("msg_check_link", lang), reply_markup=None)
@@ -114,17 +142,17 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("cancel:"):
         ensure_pending_requests(context).pop(data.split(":")[1], None)
-        await query.answer(_t("msg_cancel_done", lang))
+        await safe_answer(query, _t("msg_cancel_done", lang))
         return await safe_delete(query.message)
 
     if data.startswith("back:"):
         request_id = data.split(":")[1]
-        await query.answer(_t("msg_back", lang))
+        await safe_answer(query, _t("msg_back", lang))
         return await query.message.edit_reply_markup(reply_markup=build_preview_keyboard(request_id, lang))
 
     if data.startswith("vid:"):
         request_id = data.split(":")[1]
-        await query.answer(_t("msg_select_res", lang))
+        await safe_answer(query, _t("msg_select_res", lang))
         return await query.message.edit_reply_markup(reply_markup=build_resolution_keyboard(request_id, lang))
 
     if data.startswith("aud:") or data.startswith("raw_aud:") or data.startswith("raw_vid:") or data.startswith("res:") or data.startswith("v_ad:"):
@@ -147,16 +175,16 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if is_admin(uid) or adsterra_status == "0" or check_ad_verified_status(uid):
             if data.startswith("v_ad:"):
-                await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
+                await safe_answer(query, "✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
             else:
-                if mode in ["audio", "raw_audio"]: await query.answer(_t("msg_prep_audio", lang))
-                else: await query.answer(_t("msg_prep_video", lang))
+                if mode in ["audio", "raw_audio"]: await safe_answer(query, _t("msg_prep_audio", lang))
+                else: await safe_answer(query, _t("msg_prep_video", lang))
 
             request = ensure_pending_requests(context).pop(request_id, None)
             trim_old_pending_requests(context)
             
             if not request: return await edit_message_smart(query.message, _t("msg_session_expired", lang))
-            if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
+            if uid in ACTIVE_USERS: return await safe_answer(query, _t("msg_wait_current", lang), show_alert=True)
             
             await start_download_from_callback(query, context, request, mode, resolution, lang)
         else:
@@ -166,16 +194,16 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     from database.operations import verify_user_ad_completion
                     verify_user_ad_completion(uid)
                     
-                    await query.answer("✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
+                    await safe_answer(query, "✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
                     request = ensure_pending_requests(context).pop(request_id, None)
                     trim_old_pending_requests(context)
                     if not request: return await edit_message_smart(query.message, _t("msg_session_expired", lang))
-                    if uid in ACTIVE_USERS: return await query.answer(_t("msg_wait_current", lang), show_alert=True)
+                    if uid in ACTIVE_USERS: return await safe_answer(query, _t("msg_wait_current", lang), show_alert=True)
                     await start_download_from_callback(query, context, request, mode, resolution, lang)
                 else:
-                    return await query.answer("❌ يرجى زيارة الإعلان والانتظار ثوانٍ قبل التحقق.", show_alert=True)
+                    return await safe_answer(query, "❌ يرجى زيارة الإعلان والانتظار ثوانٍ قبل التحقق.", show_alert=True)
             else:
-                await query.answer()
+                await safe_answer(query)
                 context.user_data[f"ad_start_{request_id}"] = time.time()
                 
                 ad_direct_url = ADSTERRA_LINK
@@ -218,7 +246,7 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             loop = asyncio.get_running_loop()
             local_thumb = await loop.run_in_executor(EXECUTOR, lambda: download_thumbnail_safely(request.get("thumb_url"), job_dir / "playzone_thumb.jpg"))
             
-            dl_mode = "audio" if mode == "raw_audio" else ("video" if mode == "raw_video" else mode)
+            dl_mode = mode
             info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, dl_mode, job_dir, progress_data, resolution))
             
             files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
@@ -242,14 +270,12 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             stop_event.set()
             await edit_message_smart(query.message, _t("msg_uploading", lang), reply_markup=None)
 
-            native_width = info_dict.get("width")
-            native_height = info_dict.get("height")
-            
-            try: native_width = int(native_width) if native_width else None
-            except Exception: native_width = None
-            
-            try: native_height = int(native_height) if native_height else None
-            except Exception: native_height = None
+            native_width, native_height = probe_video_dimensions(target_file)
+            if not native_width or not native_height:
+                try: native_width = int(info_dict.get("width"))
+                except Exception: native_width = None
+                try: native_height = int(info_dict.get("height"))
+                except Exception: native_height = None
 
             title, duration = clean_title(request.get("title", _t("txt_media_file", lang)), 80, lang), int(request.get("duration") or 0)
             caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration, lang))}"            
