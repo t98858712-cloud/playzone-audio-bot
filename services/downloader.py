@@ -44,7 +44,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if mode == "raw_audio":
         opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
 
-    # 2️⃣ صوت مفلتر (MP3 قياسي)
+    # 2️⃣ صوت مفلتر (MP3 قياسي متوافق)
     elif mode == "audio":
         opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
         opts["postprocessors"] = [{
@@ -53,10 +53,12 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             "preferredquality": "192"
         }]
 
-    # 3️⃣ فيديو أصلي (خام مباشر)
+    # 3️⃣ فيديو أصلي (إجبار ترميز H.264 المتوافق مع كافة المشغلات)
     elif mode == "raw_video":
         opts["format"] = (
             f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+            f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
+            f"best[vcodec^=avc1][filesize<?{max_fs}]/"
             f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
             f"best[ext=mp4][filesize<?{max_fs}]/"
             f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
@@ -64,14 +66,11 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         )
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {
-            "ffmpeg": [
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-movflags", "+faststart"
-            ]
+            "Merger": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"],
+            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
         }
 
-    # 4️⃣ فيديو مفلتر (إجبار ترميز H.264 المتوافق مع كافة المنصات والريلز)
+    # 4️⃣ فيديو مفلتر (حسب الدقة المطلوبة مع إجبار التوافق H.264 وAAC)
     else:
         target_res = resolution if resolution and resolution != "best" else "720"
         opts["format"] = (
@@ -79,23 +78,18 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
             f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
             f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio/"
+            f"best[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]/"
+            f"best[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]/"
             f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
             f"best[ext=mp4][width<={target_res}][filesize<?{max_fs}]/"
             f"best[ext=mp4][filesize<?{max_fs}]/"
-            f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-            f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-            f"best[height<={target_res}][filesize<?{max_fs}]/"
-            f"best[width<={target_res}][filesize<?{max_fs}]/"
             f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
             f"best[filesize<?{max_fs}]/best"
         )
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {
-            "ffmpeg": [
-                "-c:a", "aac", 
-                "-b:a", "192k", 
-                "-movflags", "+faststart"
-            ]
+            "Merger": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"],
+            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
         }
 
     from core.config import COOKIES_FILE
