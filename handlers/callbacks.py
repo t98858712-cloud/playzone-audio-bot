@@ -39,10 +39,8 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 async def safe_answer(query, text=None, show_alert=False):
     """إجابة الاستعلام وتفادي أخطاء انتهاء المهلة أو المفاتيح القديمة"""
     try:
-        if text: 
-            await query.answer(text, show_alert=show_alert)
-        else: 
-            await query.answer()
+        if text: await query.answer(text, show_alert=show_alert)
+        else: await query.answer()
     except Exception:
         pass
 
@@ -74,7 +72,6 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await safe_answer(query, "⛔ هذا الزر مخصص للمدراء فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
 
-    # فحص وضع الصيانة
     maintenance = get_setting("maintenance", "0")
     if maintenance == "1" and not is_admin(uid):
         await safe_answer(query, _t("msg_maintenance", lang), show_alert=True)
@@ -260,9 +257,11 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             dl_mode = mode
             info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, dl_mode, job_dir, progress_data, resolution))
             
-            files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
+            # فلترة مسارات الوسائط الحقيقية وتجاهل ملفات الصور والمؤقتات
+            allowed_exts = [".mp4", ".mkv", ".webm", ".m4a", ".mp3", ".opus", ".aac", ".ogg", ".wav", ".flv", ".mov"]
+            files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix.lower() in allowed_exts]
             if not files: 
-                raise RuntimeError("لم يتم العثور على الملف النهائي")
+                raise RuntimeError("لم يتم العثور على ملف الوسائط النهائي")
             
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
