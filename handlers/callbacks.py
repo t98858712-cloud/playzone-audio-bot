@@ -7,6 +7,7 @@ import logging
 import os
 import subprocess
 import json
+from pathlib import Path
 from urllib.parse import quote
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -38,8 +39,10 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 async def safe_answer(query, text=None, show_alert=False):
     """إجابة الاستعلام وتفادي أخطاء انتهاء المهلة أو المفاتيح القديمة"""
     try:
-        if text: await query.answer(text, show_alert=show_alert)
-        else: await query.answer()
+        if text: 
+            await query.answer(text, show_alert=show_alert)
+        else: 
+            await query.answer()
     except Exception:
         pass
 
@@ -177,14 +180,18 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if data.startswith("v_ad:"):
                 await safe_answer(query, "✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
             else:
-                if mode in ["audio", "raw_audio"]: await safe_answer(query, _t("msg_prep_audio", lang))
-                else: await safe_answer(query, _t("msg_prep_video", lang))
+                if mode in ["audio", "raw_audio"]: 
+                    await safe_answer(query, _t("msg_prep_audio", lang))
+                else: 
+                    await safe_answer(query, _t("msg_prep_video", lang))
 
             request = ensure_pending_requests(context).pop(request_id, None)
             trim_old_pending_requests(context)
             
-            if not request: return await edit_message_smart(query.message, _t("msg_session_expired", lang))
-            if uid in ACTIVE_USERS: return await safe_answer(query, _t("msg_wait_current", lang), show_alert=True)
+            if not request: 
+                return await edit_message_smart(query.message, _t("msg_session_expired", lang))
+            if uid in ACTIVE_USERS: 
+                return await safe_answer(query, _t("msg_wait_current", lang), show_alert=True)
             
             await start_download_from_callback(query, context, request, mode, resolution, lang)
         else:
@@ -197,8 +204,10 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await safe_answer(query, "✅ تم التحقق بنجاح! جاري بدء التحميل...", show_alert=True)
                     request = ensure_pending_requests(context).pop(request_id, None)
                     trim_old_pending_requests(context)
-                    if not request: return await edit_message_smart(query.message, _t("msg_session_expired", lang))
-                    if uid in ACTIVE_USERS: return await safe_answer(query, _t("msg_wait_current", lang), show_alert=True)
+                    if not request: 
+                        return await edit_message_smart(query.message, _t("msg_session_expired", lang))
+                    if uid in ACTIVE_USERS: 
+                        return await safe_answer(query, _t("msg_wait_current", lang), show_alert=True)
                     await start_download_from_callback(query, context, request, mode, resolution, lang)
                 else:
                     return await safe_answer(query, "❌ يرجى زيارة الإعلان والانتظار ثوانٍ قبل التحقق.", show_alert=True)
@@ -237,8 +246,10 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
     updater_task = asyncio.create_task(run_progress_updates(query.message, progress_data, stop_event))
 
     try:
-        try: await query.message.edit_reply_markup(reply_markup=None)
-        except Exception: pass
+        try: 
+            await query.message.edit_reply_markup(reply_markup=None)
+        except Exception: 
+            pass
 
         async with DOWNLOAD_SEMAPHORE:
             progress_data["text"] = _t("msg_dl_started", lang)
@@ -250,7 +261,8 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, dl_mode, job_dir, progress_data, resolution))
             
             files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix not in [".part", ".tmp", ".ytdl"]]
-            if not files: raise RuntimeError("لم يتم العثور على الملف النهائي")
+            if not files: 
+                raise RuntimeError("لم يتم العثور على الملف النهائي")
             
             raw_downloaded_file = max(files, key=lambda p: p.stat().st_mtime)
 
@@ -272,10 +284,14 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
             native_width, native_height = probe_video_dimensions(target_file)
             if not native_width or not native_height:
-                try: native_width = int(info_dict.get("width"))
-                except Exception: native_width = None
-                try: native_height = int(info_dict.get("height"))
-                except Exception: native_height = None
+                try: 
+                    native_width = int(info_dict.get("width"))
+                except Exception: 
+                    native_width = None
+                try: 
+                    native_height = int(info_dict.get("height"))
+                except Exception: 
+                    native_height = None
 
             title, duration = clean_title(request.get("title", _t("txt_media_file", lang)), 80, lang), int(request.get("duration") or 0)
             caption = f"- {esc(BOT_USERNAME)}، {esc(format_duration(duration, lang))}"            
@@ -295,7 +311,8 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                             read_timeout=120, write_timeout=120
                         )
                     finally:
-                        if t_file: t_file.close()
+                        if t_file: 
+                            t_file.close()
                 else:
                     await context.bot.send_video(
                         chat_id=query.message.chat_id, video=f, caption=caption, 
@@ -312,17 +329,25 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
 
     except (TimedOut, NetworkError):
         stat_inc_sync("failed")
-        try: await edit_message_smart(query.message, _t("msg_network_error", lang))
-        except Exception: pass
+        try: 
+            await edit_message_smart(query.message, _t("msg_network_error", lang))
+        except Exception: 
+            pass
     except Exception as e:
         stat_inc_sync("failed")
         logger.error(f"Error during download: {e}")
-        try: await edit_message_smart(query.message, _t("msg_dl_failed", lang))
-        except Exception: pass
+        try: 
+            await edit_message_smart(query.message, _t("msg_dl_failed", lang))
+        except Exception: 
+            pass
     finally:
         stop_event.set()
-        try: await updater_task
-        except Exception: pass
-        try: shutil.rmtree(job_dir)
-        except Exception: pass
+        try: 
+            await updater_task
+        except Exception: 
+            pass
+        try: 
+            shutil.rmtree(job_dir)
+        except Exception: 
+            pass
         ACTIVE_USERS.discard(uid)
