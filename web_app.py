@@ -475,7 +475,14 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             ),
             'merge_output_format': 'mp4',
             'postprocessor_args': {
-                'Merger': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
+                'Merger': [
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-b:a', '192k',
+                    '-ac', '2',
+                    '-ar', '44100',
+                    '-movflags', '+faststart'
+                ]
             }
         })
     # 4️⃣ فيديو مفلتر
@@ -496,7 +503,14 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             ),
             'merge_output_format': 'mp4',
             'postprocessor_args': {
-                'Merger': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
+                'Merger': [
+                    '-c:v', 'copy',
+                    '-c:a', 'aac', 
+                    '-b:a', '192k',
+                    '-ac', '2',
+                    '-ar', '44100',
+                    '-movflags', '+faststart'
+                ]
             }
         })
     
