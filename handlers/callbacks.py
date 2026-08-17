@@ -27,7 +27,7 @@ from utils.helpers import (
 from utils.keyboards import build_preview_keyboard, build_resolution_keyboard
 
 from services.downloader import (
-    download_thumbnail_safely, execute_download, run_progress_updates, extract_metadata, ensure_compatible_video
+    download_thumbnail_safely, execute_download, run_progress_updates, extract_metadata
 )
 from services.media import convert_to_mp3_local
 
@@ -37,6 +37,7 @@ from handlers.user import render_search_page
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 async def safe_answer(query, text=None, show_alert=False):
+    """إجابة الاستعلام وتفادي أخطاء انتهاء المهلة أو المفاتيح القديمة"""
     try:
         if text: await query.answer(text, show_alert=show_alert)
         else: await query.answer()
@@ -44,6 +45,7 @@ async def safe_answer(query, text=None, show_alert=False):
         pass
 
 def probe_video_dimensions(file_path: Path):
+    """استخراج دقيق لأبعاد الفيديو لدعم الريلز الطولي"""
     try:
         cmd = [
             'ffprobe', '-v', 'error', 
@@ -70,6 +72,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await safe_answer(query, "⛔ هذا الزر مخصص للمدراء فقط.", show_alert=True)
         return await handle_admin_callbacks(query, context)
 
+    # فحص وضع الصيانة
     maintenance = get_setting("maintenance", "0")
     if maintenance == "1" and not is_admin(uid):
         await safe_answer(query, _t("msg_maintenance", lang), show_alert=True)
@@ -255,8 +258,9 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
             dl_mode = mode
             info_dict = await loop.run_in_executor(EXECUTOR, lambda: execute_download(url, dl_mode, job_dir, progress_data, resolution))
             
+            # استبعاد صورة الغلاف تماماً من اختيار الملف
             allowed_exts = [".mp4", ".mkv", ".webm", ".m4a", ".mp3", ".opus", ".aac", ".ogg", ".mov"]
-            files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix.lower() in allowed_exts and "playzone_thumb" not in p.name]
+            files = [p for p in job_dir.iterdir() if p.is_file() and p.suffix.lower() in allowed_exts and p.name != "playzone_thumb.jpg"]
             if not files: 
                 raise RuntimeError("لم يتم العثور على ملف الوسائط النهائي")
             
@@ -267,9 +271,6 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                 final_mp3_path = job_dir / "playzone_final_audio.mp3"
                 success = await loop.run_in_executor(EXECUTOR, lambda: convert_to_mp3_local(raw_downloaded_file, final_mp3_path, local_thumb))
                 target_file = final_mp3_path if success and final_mp3_path.exists() else raw_downloaded_file
-            elif mode in ["video", "raw_video"]:
-                progress_data["text"] = "⚡ جاري تحسين التوافق..."
-                target_file = await loop.run_in_executor(EXECUTOR, lambda: ensure_compatible_video(raw_downloaded_file))
             else:
                 target_file = raw_downloaded_file
 
