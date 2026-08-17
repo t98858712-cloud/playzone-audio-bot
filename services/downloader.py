@@ -15,9 +15,16 @@ logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
-        "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
-        "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "quiet": True, 
+        "no_warnings": True, 
+        "noplaylist": True, 
+        "playlist_items": "1",
+        "retries": 15, 
+        "fragment_retries": 15, 
+        "socket_timeout": 45, 
+        "cachedir": False,
+        "concurrent_fragment_downloads": 10, 
+        "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
                 "player_client": ["android", "ios", "tv"],
@@ -30,39 +37,56 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
-    if mode == "audio":
+    from core.config import LOCAL_API_URL
+    max_fs = "50M" if not LOCAL_API_URL else "2000M"
+
+    # 1️⃣ صوت أصلي (خام 100% كما في المنصة بدون إعادة تحويل)
+    if mode == "raw_audio":
+        opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
+
+    # 2️⃣ صوت مفلتر (تحويل مباشر إلى MP3 قياسي 192k)
+    elif mode == "audio":
         opts["format"] = "bestaudio/best"
-    else:
-        from core.config import LOCAL_API_URL
-        max_fs = "50M" if not LOCAL_API_URL else "2000M"
-        
-        # 🌟 الاستراتيجية الذكية للدقة الحقيقية:
-        # 1. نحاول أولاً سحب جودة H.264 (avc1) المتوافقة كلياً مع التليجرام بالدقة المطلوبة لتجنب استهلاك السيرفر.
-        # 2. إذا لم تتوفر، نسحب أفضل جودة فيديو متاحة بالدقة المطلوبة (حتى لو كانت VP9/AV1) لضمان الدقة الحقيقية.
-        # 3. ندمج الفيديو مع الصوت ونخرجهما داخل حاوية mp4 القياسية.
-        if resolution == "best":
-            opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best"
-            )
-        else:
-            opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best"
-            )
-            
+        opts["postprocessors"] = [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192"
+        }]
+
+    # 3️⃣ فيديو أصلي (دمج خام بدون إعادة ترميز البكسلات)
+    elif mode == "raw_video":
+        opts["format"] = f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/bestvideo+bestaudio/best"
         opts["merge_output_format"] = "mp4"
-        # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
+        opts["postprocessor_args"] = {"ffmpeg": ["-c", "copy"]}
+
+    # 4️⃣ فيديو مفلتر (حسب الدقة مع معالجة أبعاد الريلز الطولية والبث الفوري)
+    else:
+        target_res = resolution if resolution and resolution != "best" else "720"
+        opts["format"] = (
+            f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+            f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+            f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+            f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio/"
+            f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+            f"best"
+        )
+        opts["merge_output_format"] = "mp4"
+        opts["postprocessor_args"] = {
+            "ffmpeg": [
+                "-c:a", "aac", 
+                "-b:a", "192k", 
+                "-movflags", "+faststart"
+            ]
+        }
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
-    if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
-    if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
+    if job_dir: 
+        opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
+    if progress_data is not None: 
+        opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
 
 def extract_metadata(url: str):
@@ -167,7 +191,7 @@ async def youtube_health_monitor(app: Application):
                 }
             }
             with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
+                ydl.extract_info("https://www.youtube.com/watch?v=dQw4w9WgXcQ", download=False)
         except Exception as e:
             if "Sign in" in str(e) or "cookie" in str(e).lower():
                 await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور.")
