@@ -44,7 +44,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if mode == "raw_audio":
         opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
 
-    # 2️⃣ صوت مفلتر (MP3 قياسي)
+    # 2️⃣ صوت مفلتر (MP3 قياسي نقي)
     elif mode == "audio":
         opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
         opts["postprocessors"] = [{
@@ -53,7 +53,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             "preferredquality": "192"
         }]
 
-    # 3️⃣ فيديو أصلي (يسحب الفيديو المدمج مع الصوت دائماً)
+    # 3️⃣ فيديو أصلي
     elif mode == "raw_video":
         opts["format"] = (
             f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
@@ -64,10 +64,17 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         )
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {
-            "Merger": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
+            "Merger": [
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-ac", "2",
+                "-ar", "44100",
+                "-movflags", "+faststart"
+            ]
         }
 
-    # 4️⃣ فيديو مفلتر (إجبار دمج الصوت AAC مع الفيديو H.264 ليعمل على كافة الأجهزة)
+    # 4️⃣ فيديو مفلتر (دقة محددة مع إجبار قنوات الستيريو لمنع كتم الصوت)
     else:
         target_res = resolution if resolution and resolution != "best" else "720"
         opts["format"] = (
@@ -84,7 +91,14 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         )
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {
-            "Merger": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
+            "Merger": [
+                "-c:v", "copy",
+                "-c:a", "aac", 
+                "-b:a", "192k",
+                "-ac", "2",
+                "-ar", "44100",
+                "-movflags", "+faststart"
+            ]
         }
 
     from core.config import COOKIES_FILE
