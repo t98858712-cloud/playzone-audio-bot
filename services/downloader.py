@@ -32,7 +32,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
@@ -40,39 +40,56 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     from core.config import LOCAL_API_URL
     max_fs = "50M" if not LOCAL_API_URL else "2000M"
 
-    # 1️⃣ صوت أصلي (خام 100% كما في المنصة بدون إعادة تحويل)
+    # 1️⃣ صوت أصلي (خام 100% كما في المنصة)
     if mode == "raw_audio":
         opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
 
     # 2️⃣ صوت مفلتر (تحويل مباشر إلى MP3 قياسي 192k)
     elif mode == "audio":
-        opts["format"] = "bestaudio/best"
+        opts["format"] = f"bestaudio[filesize<?{max_fs}]/bestaudio/best"
         opts["postprocessors"] = [{
             "key": "FFmpegExtractAudio",
             "preferredcodec": "mp3",
             "preferredquality": "192"
         }]
 
-    # 3️⃣ فيديو أصلي (دمج خام بدون إعادة ترميز البكسلات)
+    # 3️⃣ فيديو أصلي (يسحب الفيديو المدمج بصوته من إنستغرام/تيك توك أو يدمجهما دون ضغط)
     elif mode == "raw_video":
-        opts["format"] = f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/bestvideo+bestaudio/best"
-        opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {"ffmpeg": ["-c", "copy"]}
-
-    # 4️⃣ فيديو مفلتر (حسب الدقة مع معالجة أبعاد الريلز الطولية والبث الفوري)
-    else:
-        target_res = resolution if resolution and resolution != "best" else "720"
         opts["format"] = (
-            f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-            f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-            f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-            f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio/"
-            f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+            f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+            f"best[filesize<?{max_fs}]/"
+            f"bestvideo+bestaudio/"
             f"best"
         )
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {
             "ffmpeg": [
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-movflags", "+faststart"
+            ]
+        }
+
+    # 4️⃣ فيديو مفلتر (حسب الدقة ويدعم الريلز والفيديوهات الأفقية والمدمجة)
+    else:
+        target_res = resolution if resolution and resolution != "best" else "720"
+        opts["format"] = (
+            f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+            f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+            f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+            f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+            f"best[height<={target_res}][filesize<?{max_fs}]/"
+            f"best[width<={target_res}][filesize<?{max_fs}]/"
+            f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+            f"best[filesize<?{max_fs}]/"
+            f"bestvideo+bestaudio/"
+            f"best"
+        )
+        opts["merge_output_format"] = "mp4"
+        opts["postprocessor_args"] = {
+            "ffmpeg": [
+                "-c:v", "copy",
                 "-c:a", "aac", 
                 "-b:a", "192k", 
                 "-movflags", "+faststart"
