@@ -463,22 +463,19 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 'preferredquality': '192'
             }]
         })
-    # 3️⃣ فيديو أصلي (H.264 متوافق)
+    # 3️⃣ فيديو أصلي
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"best[vcodec^=avc1][filesize<?{max_fs}]/"
-                f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
-                f"best[ext=mp4][filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"best[filesize<?{max_fs}]/best"
+                f"best[vcodec!=none][acodec!=none][filesize<?{max_fs}]/"
+                f"bestvideo+bestaudio/"
+                f"best[vcodec!=none][acodec!=none]/best"
             ),
             'merge_output_format': 'mp4',
             'postprocessor_args': {
-                'Merger': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'],
-                'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
+                'Merger': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
             }
         })
     # 4️⃣ فيديو مفلتر
@@ -486,22 +483,20 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"best[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]/"
-                f"best[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]/"
-                f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
-                f"best[ext=mp4][width<={target_res}][filesize<?{max_fs}]/"
-                f"best[ext=mp4][filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+                f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+                f"bestvideo[width<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+                f"best[vcodec!=none][acodec!=none][height<={target_res}][filesize<?{max_fs}]/"
+                f"best[vcodec!=none][acodec!=none][width<={target_res}][filesize<?{max_fs}]/"
+                f"best[vcodec!=none][acodec!=none][filesize<?{max_fs}]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"best[filesize<?{max_fs}]/best"
+                f"bestvideo+bestaudio/"
+                f"best[vcodec!=none][acodec!=none]/best"
             ),
             'merge_output_format': 'mp4',
             'postprocessor_args': {
-                'Merger': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'],
-                'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
+                'Merger': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
             }
         })
     
