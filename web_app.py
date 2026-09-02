@@ -477,17 +477,19 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             'merge_output_format': 'mp4',
             'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
         })
-    else:
+        else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+                f"best[height<={target_res}][ext=mp4]/" # ← دعم ريلز انستا وسناب شات
                 f"bestvideo[height<={target_res}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
+            # إصلاح حاوية الفيديو للمشاهدة المباشرة في متصفحات الويب
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
         })
     
     try:
