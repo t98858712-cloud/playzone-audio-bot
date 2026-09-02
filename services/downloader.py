@@ -14,16 +14,11 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
+    # تم إزالة extractor_args لأن تحديث yt-dlp الأخير يرفضها ويسبب خطأ الكوكيز في يوتيوب
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
-            }
-        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
@@ -36,32 +31,27 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # 1. إعطاء أولوية صارمة لـ H.264 + AAC المتوافقين مع تيليجرام
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"best[vcodec^=avc1][filesize<?{max_fs}]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best[filesize<?{max_fs}]/best"
+                f"best[ext=mp4][filesize<?{max_fs}]/best"
             )
         else:
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"best[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best[height<={resolution}][filesize<?{max_fs}]/best"
+                f"best[ext=mp4][height<={resolution}][filesize<?{max_fs}]/best"
             )
             
         opts["merge_output_format"] = "mp4"
-        
-        # 2. ضمان ترميز H.264 القياسي + ألوان yuv420p + تصحيح تزامن الصوت والصورة لحل مشكلة السناب والانستا
+        # تم استخدام copy لعدم استهلاك معالج السيرفر، مع الحفاظ على faststart لحل تجميد الفيديو
         opts["postprocessor_args"] = {
             "ffmpeg": [
-                "-c:v", "libx264",
-                "-preset", "ultrafast",
-                "-pix_fmt", "yuv420p",
-                "-c:a", "aac",
-                "-b:a", "192k",
+                "-c:v", "copy",
+                "-c:a", "copy",
                 "-movflags", "+faststart"
             ]
         }
@@ -84,17 +74,12 @@ def extract_metadata(url: str):
         return ydl.extract_info(url, download=False)
 
 def search_youtube(query: str, limit: int = 30):
+    # تم إزالة extractor_args ليعمل البحث في يوتيوب بشكل سليم
     opts = {
         "quiet": True, 
         "extract_flat": True, 
         "no_warnings": True, 
-        "ignoreerrors": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
-            }
-        }
+        "ignoreerrors": True
     }
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
@@ -167,13 +152,7 @@ async def youtube_health_monitor(app: Application):
             opts = {
                 "quiet": True, 
                 "extract_flat": True, 
-                "cookiefile": str(COOKIES_FILE),
-                "extractor_args": {
-                    "youtube": {
-                        "player_client": ["android", "ios", "tv"],
-                        "player_skip": ["web", "mweb"]
-                    }
-                }
+                "cookiefile": str(COOKIES_FILE)
             }
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
