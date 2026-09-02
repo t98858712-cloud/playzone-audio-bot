@@ -13,8 +13,8 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# تم تمرير الرابط لمعرفة المنصة
-def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
+# تم إضافة url كمعامل لمعرفة المنصة وتطبيق الإصلاح إذا لزم الأمر
+def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720", url: str = ""):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
@@ -37,28 +37,42 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        if resolution == "best":
-            opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4]/"
-                f"best"
-            )
-        else:
-            opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best[height<={resolution}][ext=mp4]/"
-                f"best"
-            )
-            
-        opts["merge_output_format"] = "mp4"
-        
-        # التفرقة الذكية: يوتيوب يعود للأساس الأصلي الخاص بك 100%، والمنصات الأخرى تطبق الإصلاح
         is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower() or not url
+        
         if is_youtube:
+            # 🌟 الأساس الخاص بك ليوتيوب (كما هو 100% بدون أي تغيير)
+            if resolution == "best":
+                opts["format"] = (
+                    f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                    f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                    f"best"
+                )
+            else:
+                opts["format"] = (
+                    f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                    f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
+                    f"best"
+                )
+            opts["merge_output_format"] = "mp4"
             opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
+            
         else:
+            # 🌟 الإصلاح المخصص لمنصات انستا/سناب (لحل مشكلة תجميد الصوت أو الصورة)
+            if resolution == "best":
+                opts["format"] = (
+                    f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                    f"best[ext=mp4]/"
+                    f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                    f"best"
+                )
+            else:
+                opts["format"] = (
+                    f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                    f"best[height<={resolution}][ext=mp4]/"
+                    f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
+                    f"best"
+                )
+            opts["merge_output_format"] = "mp4"
             opts["postprocessor_args"] = {
                 "ffmpeg": [
                     "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
@@ -75,7 +89,8 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
     return opts
 
 def extract_metadata(url: str):
-    opts = get_ydl_options(url=url, mode="video")
+    # تمرير url كمعامل
+    opts = get_ydl_options(mode="video", url=url)
     opts["skip_download"] = True
     opts["extract_flat"] = False
     opts.pop("format", None) 
@@ -141,7 +156,8 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
-    opts = get_ydl_options(url=url, job_dir=job_dir, progress_data=progress_data, mode=mode, resolution=resolution)
+    # تمرير url كمعامل
+    opts = get_ydl_options(job_dir, progress_data, mode, resolution, url=url)
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
