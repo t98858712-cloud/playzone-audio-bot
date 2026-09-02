@@ -36,39 +36,34 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
+        # إضافة best[ext=mp4] لدعم المنصات الأخرى مع الحفاظ على أساس يوتيوب
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"best[vcodec^=avc1][filesize<?{max_fs}]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best[filesize<?{max_fs}]/best"
+                f"best[ext=mp4]/"
+                f"best"
             )
         else:
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"best[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best[height<={resolution}][filesize<?{max_fs}]/best"
+                f"best[height<={resolution}][ext=mp4]/"
+                f"best[ext=mp4]/"
+                f"best"
             )
             
         opts["merge_output_format"] = "mp4"
         
-        # التفرقة الذكية: لا نعيد تشفير يوتيوب أبداً لتجنب الضغط والوقت الطويل
+        # التفرقة الذكية لحل مشكلة التجميد مع الحفاظ على سرعة وأساس يوتيوب
         is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
-        
-        if is_youtube:
-            opts["postprocessor_args"] = {
-                "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]
-            }
+        if is_youtube or not url:
+            opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
         else:
             opts["postprocessor_args"] = {
                 "ffmpeg": [
-                    "-c:v", "libx264",
-                    "-preset", "ultrafast",
-                    "-pix_fmt", "yuv420p",
-                    "-c:a", "aac",
-                    "-b:a", "320k",
-                    "-movflags", "+faststart"
+                    "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"
                 ]
             }
 
@@ -81,7 +76,7 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
     return opts
 
 def extract_metadata(url: str):
-    opts = get_ydl_options(url, mode="video")
+    opts = get_ydl_options(url=url, mode="video")
     opts["skip_download"] = True
     opts["extract_flat"] = False
     opts.pop("format", None) 
@@ -147,7 +142,7 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
-    opts = get_ydl_options(url, job_dir, progress_data, mode, resolution)
+    opts = get_ydl_options(url=url, job_dir=job_dir, progress_data=progress_data, mode=mode, resolution=resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
