@@ -18,10 +18,11 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "extractor_retries": 4, # إضافة محاولات الاستخراج لتخطي حظر يوتيوب تلقائياً
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                # السماح بكل الواجهات ليقوم البرنامج بالتبديل الذكي لتخطي جدار تسجيل الدخول
+                "player_client": ["android", "ios", "tv", "mweb", "web"]
             }
         },
         "http_headers": {
@@ -36,7 +37,6 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # إضافة best[ext=mp4] لدعم الملفات المدمجة من انستا وسناب
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
@@ -55,7 +55,6 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
             
         opts["merge_output_format"] = "mp4"
         
-        # التفرقة الذكية: يوتيوب نسخ مباشر (لحماية الكوكيز)، المنصات الأخرى إعادة تشفير سريعة (لحل التجميد)
         is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
         if is_youtube or not url:
             opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
@@ -92,8 +91,7 @@ def search_youtube(query: str, limit: int = 30):
         "ignoreerrors": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["android", "ios", "tv", "mweb", "web"]
             }
         }
     }
@@ -171,8 +169,7 @@ async def youtube_health_monitor(app: Application):
                 "cookiefile": str(COOKIES_FILE),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios", "tv"],
-                        "player_skip": ["web", "mweb"]
+                        "player_client": ["android", "ios", "tv", "mweb", "web"]
                     }
                 }
             }
