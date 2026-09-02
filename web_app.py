@@ -480,16 +480,19 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         })
     else:
         target_res = res if res and res != 'best' else '720'
-        ffmpeg_args = ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'] if is_youtube else [
+        
+        # التفرقة الذكية لحل مشكلة التجميد مع الحفاظ على سرعة وأساس يوتيوب
+        ffmpeg_args = ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'] if is_youtube else [
             '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
             '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'
         ]
+        
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"best[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"best[height<={target_res}][filesize<?{max_fs}]/best"
+                f"best[height<={target_res}][ext=mp4]/"
+                f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
             'postprocessor_args': {'ffmpeg': ffmpeg_args}
