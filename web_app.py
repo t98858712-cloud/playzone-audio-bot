@@ -477,7 +477,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             'merge_output_format': 'mp4',
             'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
         })
-        else:
+    else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
