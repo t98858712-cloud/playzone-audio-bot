@@ -18,11 +18,10 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
-        "extractor_retries": 4, # إضافة محاولات الاستخراج لتخطي حظر يوتيوب تلقائياً
+        "extractor_retries": 10, # تخطي حظر يوتيوب عبر المحاولات المتعددة
         "extractor_args": {
             "youtube": {
-                # السماح بكل الواجهات ليقوم البرنامج بالتبديل الذكي لتخطي جدار تسجيل الدخول
-                "player_client": ["android", "ios", "tv", "mweb", "web"]
+                "player_client": ["android", "ios", "tv", "web", "mweb"] # التبديل الذكي بين الواجهات
             }
         },
         "http_headers": {
@@ -34,27 +33,27 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
     if mode == "audio":
         opts["format"] = "bestaudio/best"
     else:
-        from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4]/"
+                f"best[ext=mp4]/" # أولوية للملفات المدمجة من انستا/سناب
                 f"best"
             )
         else:
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best[height<={resolution}][ext=mp4]/"
+                f"best[height<={resolution}][ext=mp4]/" # أولوية للملفات المدمجة
                 f"best[ext=mp4]/"
                 f"best"
             )
             
         opts["merge_output_format"] = "mp4"
         
+        # التفرقة الذكية: يوتيوب نسخ مباشر، ريلز/سناب إعادة تشفير لحل التجميد
         is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
         if is_youtube or not url:
             opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
@@ -66,10 +65,10 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
                 ]
             }
 
-    from core.config import COOKIES_FILE
-    from utils.helpers import cookie_file_is_usable
+    # الكوكيز نستخدمه فقط في التحميل الفعلي وليس في البحث
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
+        
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
@@ -89,14 +88,14 @@ def search_youtube(query: str, limit: int = 30):
         "extract_flat": True, 
         "no_warnings": True, 
         "ignoreerrors": True,
+        "extractor_retries": 10,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv", "mweb", "web"]
+                "player_client": ["android", "ios", "tv", "web", "mweb"]
             }
         }
     }
-    if cookie_file_is_usable(COOKIES_FILE):
-        opts["cookiefile"] = str(COOKIES_FILE)
+    # تم إيقاف استخدام الكوكيز في عملية البحث فقط لأنها عامة، وهذا يحل مشكلة Sign in to confirm
     combined_entries = []
     seen_ids = set()
     try:
@@ -167,9 +166,10 @@ async def youtube_health_monitor(app: Application):
                 "quiet": True, 
                 "extract_flat": True, 
                 "cookiefile": str(COOKIES_FILE),
+                "extractor_retries": 10,
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios", "tv", "mweb", "web"]
+                        "player_client": ["android", "ios", "tv", "web", "mweb"]
                     }
                 }
             }
