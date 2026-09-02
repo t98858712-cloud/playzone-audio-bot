@@ -108,7 +108,7 @@ def cleanup_cron():
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
 # --- خيارات yt-dlp الأساسية والمحصنة ---
-def get_hardened_ydl_options(url="", outtmpl_path=None, progress_hook=None):
+def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -120,24 +120,20 @@ def get_hardened_ydl_options(url="", outtmpl_path=None, progress_hook=None):
         "cachedir": False,
         "concurrent_fragment_downloads": 5,
         "no_check_certificate": True,
-        "extractor_retries": 10,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv", "web", "mweb"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
-    
-    # تعطيل الكوكيز في عملية البحث العامة لحل مشكلة بلوك يوتيوب
     cookie_path = Path("cookies.txt")
-    is_search = url.startswith("ytsearch")
-    if not is_search and cookie_path.exists() and cookie_path.stat().st_size > 0:
+    if cookie_path.exists() and cookie_path.stat().st_size > 0:
         opts["cookiefile"] = str(cookie_path)
-        
     if outtmpl_path:
         opts["outtmpl"] = str(outtmpl_path)
     if progress_hook:
@@ -340,8 +336,7 @@ async def api_search(request: Request):
     try:
         data = await request.json()
         query = data.get("query", "")
-        # إرسال نوع العملية ليتم تخطي الكوكيز فيها
-        opts = get_hardened_ydl_options(url=f"ytsearch25:{query}")
+        opts = get_hardened_ydl_options()
         opts['extract_flat'] = True
         if 'playlist_items' in opts: del opts['playlist_items']
         if 'noplaylist' in opts: del opts['noplaylist']
@@ -377,7 +372,7 @@ async def get_preview(request: Request):
     try:
         data = await request.json()
         url = data.get("url", "")
-        opts = get_hardened_ydl_options(url=url)
+        opts = get_hardened_ydl_options()
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return {
@@ -455,9 +450,8 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             except Exception:
                 pass
 
-    opts = get_hardened_ydl_options(url=url, outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
+    opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     max_fs = "49M"
-    is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
     
     if mode == 'raw_audio':
         opts.update({
@@ -486,7 +480,9 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     else:
         target_res = res if res and res != 'best' else '720'
         
-        ffmpeg_args = ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'] if is_youtube else [
+        # التفرقة الذكية في ملف الويب (الإصلاح الأول فقط)
+        is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
+        ffmpeg_args = ['-c:a', 'aac', '-b:a', '192k'] if is_youtube else [
             '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
             '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'
         ]
