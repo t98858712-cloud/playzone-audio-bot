@@ -120,10 +120,10 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "cachedir": False,
         "concurrent_fragment_downloads": 5,
         "no_check_certificate": True,
+        "extractor_retries": 4,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["android", "ios", "tv", "mweb", "web"]
             }
         },
         "http_headers": {
@@ -452,6 +452,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
 
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     max_fs = "49M"
+    is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
     
     if mode == 'raw_audio':
         opts.update({
@@ -479,6 +480,12 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         })
     else:
         target_res = res if res and res != 'best' else '720'
+        
+        ffmpeg_args = ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'] if is_youtube else [
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'
+        ]
+        
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
@@ -487,20 +494,9 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 f"best[ext=mp4]/"
                 f"best"
             ),
-            'merge_output_format': 'mp4'
+            'merge_output_format': 'mp4',
+            'postprocessor_args': {'ffmpeg': ffmpeg_args}
         })
-        
-        # التفرقة الذكية في ملف الويب أيضاً
-        is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
-        if is_youtube:
-            opts['postprocessor_args'] = {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
-        else:
-            opts['postprocessor_args'] = {
-                'ffmpeg': [
-                    '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
-                    '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'
-                ]
-            }
     
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
