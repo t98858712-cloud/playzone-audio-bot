@@ -13,12 +13,17 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
-    # تم إزالة extractor_args لأن تحديث yt-dlp الأخير يرفضها ويسبب خطأ الكوكيز في يوتيوب
+def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
+            }
+        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
@@ -36,25 +41,36 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"best[vcodec^=avc1][filesize<?{max_fs}]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4][filesize<?{max_fs}]/best"
+                f"best[filesize<?{max_fs}]/best"
             )
         else:
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"best[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4][height<={resolution}][filesize<?{max_fs}]/best"
+                f"best[height<={resolution}][filesize<?{max_fs}]/best"
             )
             
         opts["merge_output_format"] = "mp4"
-        # تم استخدام copy لعدم استهلاك معالج السيرفر، مع الحفاظ على faststart لحل تجميد الفيديو
-        opts["postprocessor_args"] = {
-            "ffmpeg": [
-                "-c:v", "copy",
-                "-c:a", "copy",
-                "-movflags", "+faststart"
-            ]
-        }
+        
+        # التفرقة الذكية: لا نعيد تشفير يوتيوب أبداً لتجنب الضغط والوقت الطويل
+        is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
+        
+        if is_youtube:
+            opts["postprocessor_args"] = {
+                "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]
+            }
+        else:
+            opts["postprocessor_args"] = {
+                "ffmpeg": [
+                    "-c:v", "libx264",
+                    "-preset", "ultrafast",
+                    "-pix_fmt", "yuv420p",
+                    "-c:a", "aac",
+                    "-b:a", "320k",
+                    "-movflags", "+faststart"
+                ]
+            }
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -65,7 +81,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     return opts
 
 def extract_metadata(url: str):
-    opts = get_ydl_options(mode="video")
+    opts = get_ydl_options(url, mode="video")
     opts["skip_download"] = True
     opts["extract_flat"] = False
     opts.pop("format", None) 
@@ -74,12 +90,17 @@ def extract_metadata(url: str):
         return ydl.extract_info(url, download=False)
 
 def search_youtube(query: str, limit: int = 30):
-    # تم إزالة extractor_args ليعمل البحث في يوتيوب بشكل سليم
     opts = {
         "quiet": True, 
         "extract_flat": True, 
         "no_warnings": True, 
-        "ignoreerrors": True
+        "ignoreerrors": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
+            }
+        }
     }
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
@@ -126,7 +147,7 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
-    opts = get_ydl_options(job_dir, progress_data, mode, resolution)
+    opts = get_ydl_options(url, job_dir, progress_data, mode, resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
@@ -152,7 +173,13 @@ async def youtube_health_monitor(app: Application):
             opts = {
                 "quiet": True, 
                 "extract_flat": True, 
-                "cookiefile": str(COOKIES_FILE)
+                "cookiefile": str(COOKIES_FILE),
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["android", "ios", "tv"],
+                        "player_skip": ["web", "mweb"]
+                    }
+                }
             }
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
