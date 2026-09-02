@@ -479,21 +479,24 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         })
     else:
         target_res = res if res and res != 'best' else '720'
-        
-        # التفرقة الذكية في ملف الويب (الإصلاح الأول فقط)
         is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
-        ffmpeg_args = ['-c:a', 'aac', '-b:a', '192k'] if is_youtube else [
-            '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
-            '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'
-        ]
         
+        # التفرقة الذكية في ملف الويب للحفاظ على أساس يوتيوب
+        if is_youtube:
+            ffmpeg_args = ['-c:a', 'aac', '-b:a', '192k']
+        else:
+            ffmpeg_args = [
+                '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+                '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart'
+            ]
+            
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"best[height<={target_res}][ext=mp4]/"
-                f"best[ext=mp4]/"
-                f"best"
+                f"bestvideo[height<={target_res}]+bestaudio/"
+                f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
             'postprocessor_args': {'ffmpeg': ffmpeg_args}
