@@ -30,7 +30,13 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
-            # 🌟 الاستراتيجية الذكية للدقة الحقيقية متضمنة دعم انستا وسناب:
+    if mode == "audio":
+        opts["format"] = "bestaudio/best"
+    else:
+        from core.config import LOCAL_API_URL
+        max_fs = "50M" if not LOCAL_API_URL else "2000M"
+        
+        # 🌟 الاستراتيجية الذكية للدقة الحقيقية متضمنة دعم انستا وسناب:
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
