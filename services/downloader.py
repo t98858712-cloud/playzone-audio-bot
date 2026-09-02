@@ -13,7 +13,7 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# تم إضافة url كمعامل لتحديد المنصة
+# تم تمرير الرابط لمعرفة المنصة
 def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
@@ -37,7 +37,6 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # 🌟 الاستراتيجية الذكية للدقة الحقيقية + دعم انستا/سناب (الإصلاح الأول فقط)
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
@@ -50,15 +49,14 @@ def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: d
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
                 f"best[height<={resolution}][ext=mp4]/"
-                f"best[ext=mp4]/"
                 f"best"
             )
             
         opts["merge_output_format"] = "mp4"
         
-        # التفرقة: يوتيوب يعود لأساسك الأصلي، والمنصات الأخرى تعاد معالجتها لمنع التجميد
-        is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
-        if is_youtube or not url:
+        # التفرقة الذكية: يوتيوب يعود للأساس الأصلي الخاص بك 100%، والمنصات الأخرى تطبق الإصلاح
+        is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower() or not url
+        if is_youtube:
             opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
         else:
             opts["postprocessor_args"] = {
