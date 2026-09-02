@@ -13,15 +13,16 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-# أضفنا url هنا لمعرفة المنصة وتطبيق الإعداد المناسب
-def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720", url: str = ""):
+# تم إضافة url كمعامل لتحديد المنصة
+def get_ydl_options(url: str = "", job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv", "web", "mweb"] # توسيع الواجهات لمنع الحظر
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         },
         "http_headers": {
@@ -36,7 +37,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # تم إضافة best[ext=mp4] لدعم الملفات المدمجة من انستا وسناب مع الحفاظ على أساس يوتيوب
+        # 🌟 الاستراتيجية الذكية للدقة الحقيقية + دعم انستا/سناب (الإصلاح الأول فقط)
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
@@ -55,10 +56,10 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             
         opts["merge_output_format"] = "mp4"
         
-        # التفرقة الذكية لحل التجميد دون التأثير على يوتيوب
+        # التفرقة: يوتيوب يعود لأساسك الأصلي، والمنصات الأخرى تعاد معالجتها لمنع التجميد
         is_youtube = "youtube.com" in url.lower() or "youtu.be" in url.lower()
         if is_youtube or not url:
-            opts["postprocessor_args"] = {"ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
+            opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
         else:
             opts["postprocessor_args"] = {
                 "ffmpeg": [
@@ -76,8 +77,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     return opts
 
 def extract_metadata(url: str):
-    # تمرير الرابط لمعرفة المنصة
-    opts = get_ydl_options(mode="video", url=url)
+    opts = get_ydl_options(url=url, mode="video")
     opts["skip_download"] = True
     opts["extract_flat"] = False
     opts.pop("format", None) 
@@ -91,15 +91,15 @@ def search_youtube(query: str, limit: int = 30):
         "extract_flat": True, 
         "no_warnings": True, 
         "ignoreerrors": True,
-        "extractor_retries": 5,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv", "web", "mweb"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         }
     }
-    # إيقاف استخدام الكوكيز في عملية البحث فقط لحل مشكلة (Sign in to confirm you’re not a bot)
-    
+    if cookie_file_is_usable(COOKIES_FILE):
+        opts["cookiefile"] = str(COOKIES_FILE)
     combined_entries = []
     seen_ids = set()
     try:
@@ -143,8 +143,7 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
         await asyncio.sleep(PROGRESS_UPDATE_SECONDS)
 
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
-    # تمرير الرابط للمعالجة الدقيقة
-    opts = get_ydl_options(job_dir, progress_data, mode, resolution, url=url)
+    opts = get_ydl_options(url=url, job_dir=job_dir, progress_data=progress_data, mode=mode, resolution=resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
@@ -171,10 +170,10 @@ async def youtube_health_monitor(app: Application):
                 "quiet": True, 
                 "extract_flat": True, 
                 "cookiefile": str(COOKIES_FILE),
-                "extractor_retries": 5,
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios", "tv", "web", "mweb"]
+                        "player_client": ["android", "ios", "tv"],
+                        "player_skip": ["web", "mweb"]
                     }
                 }
             }
