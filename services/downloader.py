@@ -36,26 +36,35 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # 🌟 الاستراتيجية الذكية للدقة الحقيقية متضمنة دعم انستا وسناب:
+        # 1. إعطاء أولوية صارمة لـ H.264 + AAC المتوافقين مع تيليجرام
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"best[vcodec^=avc1][filesize<?{max_fs}]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4]/" # ← أولوية للملفات المدمجة الجاهزة لدعم سناب وانستا
-                f"best"
+                f"best[filesize<?{max_fs}]/best"
             )
         else:
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"best[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best[height<={resolution}][ext=mp4]/" # ← أولوية للملفات المدمجة الجاهزة
-                f"best[ext=mp4]/"
-                f"best"
+                f"best[height<={resolution}][filesize<?{max_fs}]/best"
             )
             
         opts["merge_output_format"] = "mp4"
-        # إضافة إعدادات FFmpeg لإصلاح مشكلة التزامن وتجميد الصورة عبر faststart
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
+        
+        # 2. ضمان ترميز H.264 القياسي + ألوان yuv420p + تصحيح تزامن الصوت والصورة لحل مشكلة السناب والانستا
+        opts["postprocessor_args"] = {
+            "ffmpeg": [
+                "-c:v", "libx264",
+                "-preset", "ultrafast",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-movflags", "+faststart"
+            ]
+        }
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
