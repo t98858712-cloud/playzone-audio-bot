@@ -116,7 +116,7 @@ LANG_DICT = {
         "txt_none": "None",
         "msg_dl_progress": "📥 <b>Downloading file...</b>\n\n{bar}  {percent}%\n📦 Size: {downloaded} / {total}\n🚀 Speed: {speed}/s",
         "msg_dl_progress_no_total": "📥 Downloading...\n📦 Downloaded: {downloaded}",
-        "msg_dl_finished": "⚙️ Download complete, preparing and compressing...",
+        "msg_dl_finished": "⚙️ Download complete...",
         "share_text": "📥 Download any video or MP3 in seconds!\n⚡ Fast, free, and highest quality.\n👇 Try it now:",
         "btn_share": "🌟 Like the bot? Share it",
         "msg_adm_panel": "🛠 <b>Enterprise Control Center</b>\n\nPlease select a category:",
