@@ -18,6 +18,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        # الحفاظ على إعدادات التخطي لتجنب خطأ 403
         "extractor_args": {
             "youtube": {
                 "player_client": ["android", "ios", "tv"],
@@ -30,28 +31,26 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
+    from core.config import LOCAL_API_URL
+    max_fs = "50M" if not LOCAL_API_URL else "2000M"
+    
     if mode == "audio":
         opts["format"] = "bestaudio/best"
-        opts["postprocessors"] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '320'
-        }]
     else:
         target_res = resolution if resolution != "best" else "1080"
         
-        # الحل النهائي المضمون: 
-        # طلب فيديو H.264 وصوت M4A عالي الجودة بشكل منفصل، وترك yt-dlp يدمجهم طبيعياً دون تدخل عنيف يكسر الإطارات.
+        # التدرج الذكي: ضمان H.264 (avc1) لمنع تجميد تيليجرام، وتجنب الفشل بوضع بدائل جاهزة
         opts["format"] = (
-            f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio[ext=m4a]/"
-            f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio/"
-            f"best[ext=mp4]/best"
+            f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+            f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
+            f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
+            f"best"
         )
         opts["merge_output_format"] = "mp4"
         
-        # إبقاء faststart فقط للبث المباشر، وحذف أوامر التشفير التي جمدت الصورة
+        # استعادة نفس جودة الصوت الأساسية العالية 320k مع تفعيل البث المباشر (faststart)
         opts["postprocessor_args"] = {
-            "ffmpeg": ["-movflags", "+faststart"]
+            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]
         }
 
     from core.config import COOKIES_FILE
@@ -138,7 +137,7 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
         
-        # كود إصلاح المعاينة المعتمد
+        # تحويل صيغ webp التي لا يدعمها تيليجرام إلى jpg لضمان ظهور المعاينة دائماً
         if "ytimg.com" in thumb_url and ".webp" in thumb_url:
             thumb_url = thumb_url.replace(".webp", ".jpg")
             
