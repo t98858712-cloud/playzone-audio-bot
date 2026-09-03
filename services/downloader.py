@@ -3,7 +3,6 @@ import shutil
 import logging
 import asyncio
 import urllib.request
-import subprocess
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
@@ -18,7 +17,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
                 "player_client": ["android", "ios", "tv"],
@@ -36,15 +35,34 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     
     if mode == "audio":
         opts["format"] = "bestaudio/best"
-    else:
-        target_res = resolution if resolution != "best" else "1080"
+        opts["postprocessors"] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192'
+        }]
+    elif mode == "raw_audio":
+        opts["format"] = f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
+    elif mode == "raw_video":
         opts["format"] = (
-            f"bestvideo[ext=mp4][vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
-            f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
+            f"best[ext=mp4][filesize<?{max_fs}]/"
+            f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
             f"best"
         )
         opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
+        opts["postprocessor_args"] = {
+            "ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]
+        }
+    else:
+        target_res = resolution if resolution != "best" else "1080"
+        opts["format"] = (
+            f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
+            f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+            f"best"
+        )
+        opts["merge_output_format"] = "mp4"
+        opts["postprocessor_args"] = {
+            "ffmpeg": ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
+        }
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -130,32 +148,20 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
         
+        # الحل الذكي: إجبار يوتيوب على تقديم صورة مصغرة قياسية تتوافق مع شروط تيليجرام
+        if "ytimg.com" in thumb_url:
+            thumb_url = thumb_url.replace("maxresdefault", "hqdefault")
+            thumb_url = thumb_url.replace("sddefault", "hqdefault")
+            thumb_url = thumb_url.replace("vi_webp", "vi")
+            thumb_url = thumb_url.replace(".webp", ".jpg")
+            
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
-            data = response.read(5 * 1024 * 1024)
-        if not data: return None
-        
-        temp_path = output_path.with_suffix('.tmp')
-        temp_path.write_bytes(data)
-        
-        # الحل المضمون 100%: تصغير الصورة باستخدام FFmpeg لتتوافق مع شروط تيليجرام القاسية
-        cmd = [
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(temp_path),
-            "-vf", "scale='min(320,iw)':-1",
-            "-vframes", "1",
-            "-f", "image2",
-            "-c:v", "mjpeg",
-            str(output_path)
-        ]
-        subprocess.run(cmd, check=True)
-        temp_path.unlink(missing_ok=True)
-        
+            data = response.read(2 * 1024 * 1024 + 1)
+        if len(data) > 2 * 1024 * 1024: return None
+        output_path.write_bytes(data)
         return output_path if output_path.exists() else None
-    except Exception as e:
-        if 'temp_path' in locals() and temp_path.exists():
-            temp_path.unlink(missing_ok=True)
-        return None
+    except Exception: return None
 
 async def youtube_health_monitor(app: Application):
     while True:
