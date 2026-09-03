@@ -469,21 +469,23 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"best[ext=mp4]/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-movflags', '+faststart']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"best[ext=mp4]/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-movflags', '+faststart']}
         })
     
     try:
@@ -625,7 +627,6 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            # إصلاح ظهور المعاينة داخل تيليجرام
             if thumb:
                 try:
                     if "ytimg.com" in thumb and ".webp" in thumb:
