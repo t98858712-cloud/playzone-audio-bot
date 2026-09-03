@@ -36,22 +36,21 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # نفس الكود الأساسي الخاص بك بالضبط
         if resolution == "best":
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[ext=mp4][vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"best[ext=mp4][filesize<?{max_fs}]/"
                 f"best"
             )
         else:
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[ext=mp4][vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"best[ext=mp4][height<={resolution}][filesize<?{max_fs}]/"
                 f"best"
             )
             
         opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -136,11 +135,6 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
-        
-        # استبدال صامت في الرابط لضمان ظهور المعاينة في تيليجرام
-        if "ytimg.com" in thumb_url:
-            thumb_url = thumb_url.replace("maxresdefault", "hqdefault").replace("sddefault", "hqdefault").replace("vi_webp", "vi").replace(".webp", ".jpg")
-            
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
             data = response.read(2 * 1024 * 1024 + 1)
