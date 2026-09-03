@@ -17,7 +17,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
+        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
                 "player_client": ["android", "ios", "tv"],
@@ -30,39 +30,32 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
-    from core.config import LOCAL_API_URL
-    max_fs = "50M" if not LOCAL_API_URL else "2000M"
-    
     if mode == "audio":
         opts["format"] = "bestaudio/best"
-        opts["postprocessors"] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192'
-        }]
-    elif mode == "raw_audio":
-        opts["format"] = f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
-    elif mode == "raw_video":
-        opts["format"] = (
-            f"best[ext=mp4][filesize<?{max_fs}]/"
-            f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-            f"best"
-        )
-        opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {
-            "ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]
-        }
     else:
-        target_res = resolution if resolution != "best" else "1080"
-        opts["format"] = (
-            f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
-            f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-            f"best"
-        )
+        from core.config import LOCAL_API_URL
+        max_fs = "50M" if not LOCAL_API_URL else "2000M"
+        
+        # 🌟 الاستراتيجية الذكية للدقة الحقيقية:
+        # 1. نحاول أولاً سحب جودة H.264 (avc1) المتوافقة كلياً مع التليجرام بالدقة المطلوبة لتجنب استهلاك السيرفر.
+        # 2. إذا لم تتوفر، نسحب أفضل جودة فيديو متاحة بالدقة المطلوبة (حتى لو كانت VP9/AV1) لضمان الدقة الحقيقية.
+        # 3. ندمج الفيديو مع الصوت ونخرجهما داخل حاوية mp4 القياسية.
+        if resolution == "best":
+            opts["format"] = (
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"best"
+            )
+        else:
+            opts["format"] = (
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
+                f"best"
+            )
+            
         opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {
-            "ffmpeg": ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
-        }
+        # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -147,14 +140,6 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
-        
-        # الحل الذكي: إجبار يوتيوب على تقديم صورة مصغرة قياسية تتوافق مع شروط تيليجرام
-        if "ytimg.com" in thumb_url:
-            thumb_url = thumb_url.replace("maxresdefault", "hqdefault")
-            thumb_url = thumb_url.replace("sddefault", "hqdefault")
-            thumb_url = thumb_url.replace("vi_webp", "vi")
-            thumb_url = thumb_url.replace(".webp", ".jpg")
-            
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
             data = response.read(2 * 1024 * 1024 + 1)
