@@ -453,7 +453,6 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     max_fs = "49M"
     
-    # نفس الكود الأساسي الخاص بك بالضبط للقيم[span_5](start_span)[span_5](end_span)
     if mode == 'raw_audio':
         opts.update({
             'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
@@ -470,25 +469,23 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
-                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo+bestaudio/best"
+                f"bestvideo[ext=mp4][vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"best[ext=mp4][filesize<?{max_fs}]/"
+                f"best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[height<={target_res}]+bestaudio/"
-                f"bestvideo+bestaudio/best"
+                f"bestvideo[ext=mp4][vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
+                f"best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
         })
     
     try:
@@ -632,9 +629,6 @@ async def send_to_telegram(request: Request):
             
             if thumb and is_audio:
                 try:
-                    # سطر التصحيح لضمان ظهور المعاينة في تيليجرام
-                    if "ytimg.com" in thumb:
-                        thumb = thumb.replace("maxresdefault", "hqdefault").replace("sddefault", "hqdefault").replace("vi_webp", "vi").replace(".webp", ".jpg")
                     t_res = requests.get(thumb, timeout=4)
                     if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
