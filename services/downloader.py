@@ -36,10 +36,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # 🌟 الاستراتيجية الذكية للدقة الحقيقية:
-        # 1. نحاول أولاً سحب جودة H.264 (avc1) المتوافقة كلياً مع التليجرام بالدقة المطلوبة لتجنب استهلاك السيرفر.
-        # 2. إذا لم تتوفر، نسحب أفضل جودة فيديو متاحة بالدقة المطلوبة (حتى لو كانت VP9/AV1) لضمان الدقة الحقيقية.
-        # 3. ندمج الفيديو مع الصوت ونخرجهما داخل حاوية mp4 القياسية.
+        # نفس الكود الأساسي الخاص بك بالضبط
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
@@ -54,7 +51,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             )
             
         opts["merge_output_format"] = "mp4"
-        # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
     from core.config import COOKIES_FILE
@@ -140,6 +136,11 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
+        
+        # استبدال صامت في الرابط لضمان ظهور المعاينة في تيليجرام
+        if "ytimg.com" in thumb_url:
+            thumb_url = thumb_url.replace("maxresdefault", "hqdefault").replace("sddefault", "hqdefault").replace("vi_webp", "vi").replace(".webp", ".jpg")
+            
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
             data = response.read(2 * 1024 * 1024 + 1)
