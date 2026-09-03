@@ -622,15 +622,31 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            # ✅ الحل المطبق هنا لضمان ظهور المعاينة للفيديو والصوت:
-            if thumb:
+            if thumb and is_audio:
+                thumb_tmp = None
+                thumb_jpg = None
                 try:
-                    if "ytimg.com" in thumb:
-                        thumb = thumb.replace("vi_webp", "vi").replace(".webp", ".jpg")
-                    t_res = requests.get(thumb, timeout=4)
-                    if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
+                    thumb_tmp = WEB_DIR / f"thumb_tmp_{uuid.uuid4().hex[:8]}.tmp"
+                    thumb_jpg = WEB_DIR / f"thumb_{uuid.uuid4().hex[:8]}.jpg"
+                    t_res = requests.get(thumb, timeout=6)
+                    if t_res.status_code == 200:
+                        thumb_tmp.write_bytes(t_res.content)
+                        # تحجيم وتصحيح الصورة بواسطة FFmpeg لضمان قبولها في تيليجرام
+                        subprocess.run([
+                            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                            "-i", str(thumb_tmp),
+                            "-vf", "scale='min(320,iw)':-1",
+                            "-vframes", "1",
+                            "-f", "image2",
+                            "-c:v", "mjpeg",
+                            str(thumb_jpg)
+                        ], check=True)
+                        files_payload['thumb'] = ('thumb.jpg', thumb_jpg.read_bytes(), 'image/jpeg')
                 except Exception:
                     pass
+                finally:
+                    if thumb_tmp and thumb_tmp.exists(): thumb_tmp.unlink(missing_ok=True)
+                    if thumb_jpg and thumb_jpg.exists(): thumb_jpg.unlink(missing_ok=True)
                     
             response = requests.post(telegram_url, data=data_payload, files=files_payload, timeout=120)
             res_data = response.json()
