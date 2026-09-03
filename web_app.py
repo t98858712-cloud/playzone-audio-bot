@@ -106,7 +106,6 @@ def cleanup_cron():
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
-    # بدون extractor_args لحماية عملية التحميل من 403 Forbidden
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -118,6 +117,12 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "cachedir": False,
         "concurrent_fragment_downloads": 5,
         "no_check_certificate": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
+            }
+        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
@@ -357,7 +362,6 @@ async def api_search(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# --- كود مسار المعاينة المنسوخ من مصدرك كما هو ---[span_4](start_span)[span_4](end_span)
 @app.post("/api/preview")
 async def get_preview(request: Request):
     try:
@@ -375,7 +379,6 @@ async def get_preview(request: Request):
             }
     except Exception as e:
         return {"success": False, "error": str(e)}
-# ---------------------------------------------------
 
 @app.get("/api/generate_ad_session")
 def generate_ad_session():
@@ -619,14 +622,15 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            # --- كود إرسال الصورة المصغرة لتيليجرام المنسوخ من مصدرك كما هو ---[span_5](start_span)[span_5](end_span)
+            # العودة للكود الأساسي بالضبط الذي يرسل المعاينة لملفات الصوت فقط
             if thumb and is_audio:
                 try:
+                    if "ytimg.com" in thumb:
+                        thumb = thumb.replace("maxresdefault", "hqdefault").replace("vi_webp", "vi").replace(".webp", ".jpg")
                     t_res = requests.get(thumb, timeout=4)
                     if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
                     pass
-            # -------------------------------------------------------------------
                     
             response = requests.post(telegram_url, data=data_payload, files=files_payload, timeout=120)
             res_data = response.json()
