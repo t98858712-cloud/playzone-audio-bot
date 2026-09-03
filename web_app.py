@@ -453,12 +453,18 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     max_fs = "49M"
     
-    # 1. زر صوت أصلي (raw_audio)
+    # 1. زر صوت أصلي (raw_audio) - يدعم المسارات المنفصلة والمدمجة
     if mode == 'raw_audio':
         opts.update({
-            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
+            'format': (
+                f"bestaudio[acodec=opus][filesize<?{max_fs}]/"
+                f"bestaudio[ext=m4a][filesize<?{max_fs}]/"
+                f"bestaudio[filesize<?{max_fs}]/"
+                f"b[filesize<?{max_fs}]/"
+                f"bestaudio/best"
+            )
         })
-    # 2. زر صوت مفلتر (audio)
+    # 2. زر صوت مفلتر (audio) - تحويل نظيف إلى MP3 192k
     elif mode == 'audio':
         opts.update({
             'format': 'bestaudio/best',
@@ -468,14 +474,19 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 'preferredquality': '192'
             }]
         })
-    # 3. زر فيديو أصلي (raw_video) - أعلى دقة مع تحويل الفيديو إلى H.264 ونسخ الصوت دون لمسه
+    # 3. زر فيديو أصلي (raw_video) - يدعم الريلز ويوتيوب مع نسخ الصوت دون لمسه
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo+bestaudio/best"
+                f"bv*[filesize<?{max_fs}]+ba/"
+                f"b[filesize<?{max_fs}]/"
+                f"bv*+ba/b"
             ),
             'merge_output_format': 'mp4',
+            'postprocessors': [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4'
+            }],
             'postprocessor_args': {
                 'ffmpeg': [
                     '-c:v', 'libx264',
@@ -486,16 +497,22 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 ]
             }
         })
-    # 4. زر فيديو مفلتر (video) - دقة محددة متوافقة مع كل الأجهزة دون تعديل الصوت
+    # 4. زر فيديو مفلتر (video) - دقة متوافقة مع جميع الهواتف ونسخ الصوت دون إعادة ترميز
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[height<={target_res}]+bestaudio/"
-                f"bestvideo+bestaudio/best"
+                f"bv*[height<={target_res}][filesize<?{max_fs}]+ba/"
+                f"b[height<={target_res}][filesize<?{max_fs}]/"
+                f"bv*[height<={target_res}]+ba/"
+                f"b[height<={target_res}]/"
+                f"bv*+ba/b"
             ),
             'merge_output_format': 'mp4',
+            'postprocessors': [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4'
+            }],
             'postprocessor_args': {
                 'ffmpeg': [
                     '-c:v', 'libx264',
