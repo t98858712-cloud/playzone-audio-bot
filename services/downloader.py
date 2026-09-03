@@ -39,19 +39,21 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }]
     else:
         # الحل الجذري لمشكلة تجمد الصورة:
-        # 1. إجبار النظام على استخدام ترميز H.264 (avc1) حصراً للفيديو.
-        # 2. إضافة -movflags +faststart لتمكين البث المباشر (Streaming) على تيليجرام والآيفون بسلاسة.
+        # 1. إعطاء الأولوية القصوى للصيغ المدمجة جاهزاً من يوتيوب (best[ext=mp4]) لتجنب أخطاء الدمج تماماً.
+        # 2. في حال عدم توفرها، يتم سحب الفيديو والصوت ودمجهما دون إجبار FFmpeg على الـ copy العنيف الذي يكسر التزامن.
         target_res = resolution if resolution != "best" else "1080"
         
         opts["format"] = (
-            f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio[ext=m4a]/"
+            f"best[vcodec^=avc1][height<={target_res}][ext=mp4]/"
+            f"bestvideo[vcodec^=avc1][height<={target_res}][ext=mp4]+bestaudio[ext=m4a]/"
             f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio/"
-            f"bestvideo[vcodec^=avc1]+bestaudio/"
-            f"best[ext=mp4][vcodec^=avc1]"
+            f"best[ext=mp4]/best"
         )
         opts["merge_output_format"] = "mp4"
+        
+        # اكتفينا بـ faststart للبث المباشر السلس، وحذفنا أوامر -c:v copy لترك التزامن الزمني سليماً
         opts["postprocessor_args"] = {
-            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
+            "ffmpeg": ["-movflags", "+faststart"]
         }
 
     from core.config import COOKIES_FILE
