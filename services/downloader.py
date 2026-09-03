@@ -14,6 +14,7 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
+    # الكود الأساسي الخاص بك مع الحماية[span_2](start_span)[span_2](end_span)
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
@@ -35,17 +36,25 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     else:
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
-        target_res = resolution if resolution != "best" else "1080"
         
-        # الحل الجذري لمنع التجميد: طلب فيديو MP4 مدمج جاهزاً من يوتيوب كأولوية قصوى
-        opts["format"] = (
-            f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
-            f"bestvideo[ext=mp4][vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
-            f"best"
-        )
+        # الحل: إجبار H.264 (avc1) لمنع التجميد، وإزالة أوامر FFmpeg التي تتلف المعاينة[span_3](start_span)[span_3](end_span)
+        if resolution == "best":
+            opts["format"] = (
+                f"bestvideo[ext=mp4][vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
+                f"best[ext=mp4][filesize<?{max_fs}]/"
+                f"best"
+            )
+        else:
+            opts["format"] = (
+                f"bestvideo[ext=mp4][vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio/"
+                f"best[ext=mp4][height<={resolution}][filesize<?{max_fs}]/"
+                f"best"
+            )
+            
         opts["merge_output_format"] = "mp4"
-        # جودة 320 كما في كودك الأساسي مع تفعيل البث السلس
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -55,6 +64,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
 
+# دالة المعاينة مأخوذة من الكود الأساسي لك حرفياً بدون تعديل[span_4](start_span)[span_4](end_span)
 def extract_metadata(url: str):
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
@@ -126,15 +136,11 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, re
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
+# دالة المعاينة مأخوذة من الكود الأساسي لك حرفياً بدون تعديل[span_5](start_span)[span_5](end_span)
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
-        
-        # الحل الجذري لاختفاء المعاينة: استبدال الرابط ليناسب حجم وشروط تيليجرام
-        if "ytimg.com" in thumb_url:
-            thumb_url = thumb_url.replace("maxresdefault.jpg", "hqdefault.jpg").replace("sddefault.jpg", "hqdefault.jpg").replace("vi_webp", "vi").replace(".webp", ".jpg")
-            
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
             data = response.read(2 * 1024 * 1024 + 1)
