@@ -117,7 +117,6 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "cachedir": False,
         "concurrent_fragment_downloads": 5,
         "no_check_certificate": True,
-        # إعادة إعدادات التخطي لتجنب فشل يوتيوب[span_9](start_span)[span_9](end_span)
         "extractor_args": {
             "youtube": {
                 "player_client": ["android", "ios", "tv"],
@@ -459,7 +458,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '192' # الجودة الأساسية
+                'preferredquality': '192'
             }]
         })
     elif mode == 'raw_video':
@@ -623,9 +622,11 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            # استعادة إرسال المعاينة الأساسي للصوتيات كما طلبت[span_10](start_span)[span_10](end_span)
-            if thumb and is_audio:
+            # ✅ الحل المطبق هنا لضمان ظهور المعاينة للفيديو والصوت:
+            if thumb:
                 try:
+                    if "ytimg.com" in thumb:
+                        thumb = thumb.replace("vi_webp", "vi").replace(".webp", ".jpg")
                     t_res = requests.get(thumb, timeout=4)
                     if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
