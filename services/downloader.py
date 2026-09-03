@@ -17,41 +17,29 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
-        # الحفاظ على إعدادات التخطي لتجنب خطأ 403
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
-            }
-        },
+        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
     
-    from core.config import LOCAL_API_URL
-    max_fs = "50M" if not LOCAL_API_URL else "2000M"
-    
     if mode == "audio":
         opts["format"] = "bestaudio/best"
+        opts["postprocessors"] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '320'
+        }]
     else:
         target_res = resolution if resolution != "best" else "1080"
         
-        # التدرج الذكي: ضمان H.264 (avc1) لمنع تجميد تيليجرام، وتجنب الفشل بوضع بدائل جاهزة
         opts["format"] = (
-            f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
-            f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
-            f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
+            f"bestvideo[ext=mp4][height<={target_res}]+bestaudio[ext=m4a]/"
+            f"best[ext=mp4][height<={target_res}]/"
             f"best"
         )
         opts["merge_output_format"] = "mp4"
-        
-        # استعادة نفس جودة الصوت الأساسية العالية 320k مع تفعيل البث المباشر (faststart)
-        opts["postprocessor_args"] = {
-            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]
-        }
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -75,13 +63,7 @@ def search_youtube(query: str, limit: int = 30):
         "quiet": True, 
         "extract_flat": True, 
         "no_warnings": True, 
-        "ignoreerrors": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
-            }
-        }
+        "ignoreerrors": True
     }
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
@@ -136,11 +118,6 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
-        
-        # تحويل صيغ webp التي لا يدعمها تيليجرام إلى jpg لضمان ظهور المعاينة دائماً
-        if "ytimg.com" in thumb_url and ".webp" in thumb_url:
-            thumb_url = thumb_url.replace(".webp", ".jpg")
-            
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
             data = response.read(2 * 1024 * 1024 + 1)
@@ -159,13 +136,7 @@ async def youtube_health_monitor(app: Application):
             opts = {
                 "quiet": True, 
                 "extract_flat": True, 
-                "cookiefile": str(COOKIES_FILE),
-                "extractor_args": {
-                    "youtube": {
-                        "player_client": ["android", "ios", "tv"],
-                        "player_skip": ["web", "mweb"]
-                    }
-                }
+                "cookiefile": str(COOKIES_FILE)
             }
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
