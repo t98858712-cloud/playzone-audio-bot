@@ -106,7 +106,6 @@ def cleanup_cron():
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
-    # الحفاظ على أساس كودك
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -459,7 +458,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '192' # جودة الصوت الأصلية
+                'preferredquality': '192'
             }]
         })
     elif mode == 'raw_video':
@@ -623,11 +622,9 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            # إصلاح معاينة الويب في حال تم استقبالها كمعلمة مستقلة من الموقع الخارجي
-            if thumb:
+            # إرسال الصورة المصغرة للصوتيات فقط بناءً على كودك الأساسي الأول
+            if thumb and is_audio:
                 try:
-                    if "ytimg.com" in thumb and ".webp" in thumb:
-                        thumb = thumb.replace(".webp", ".jpg")
                     t_res = requests.get(thumb, timeout=4)
                     if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
