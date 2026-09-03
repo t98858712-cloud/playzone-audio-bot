@@ -23,7 +23,6 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
-# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -49,7 +48,6 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -107,8 +105,8 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
+    # الكود الأساسي الخاص بك مع الحماية[span_6](start_span)[span_6](end_span)
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -139,8 +137,6 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
     return opts
-
-# --- المسارات والـ API Endpoints ---
 
 @app.get("/")
 def home():
@@ -367,6 +363,7 @@ async def api_search(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+# دالة المعاينة مأخوذة من الكود الأساسي لك حرفياً بدون تعديل[span_7](start_span)[span_7](end_span)
 @app.post("/api/preview")
 async def get_preview(request: Request):
     try:
@@ -463,29 +460,31 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '192'
+                'preferredquality': '192' # الجودة الأساسية لك[span_8](start_span)[span_8](end_span)
             }]
         })
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"best[ext=mp4][filesize<?{max_fs}]/"
                 f"bestvideo[ext=mp4][vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
+                f"best[ext=mp4][filesize<?{max_fs}]/"
                 f"best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
                 f"bestvideo[ext=mp4][vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+                f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
                 f"best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
         })
     
     try:
@@ -627,10 +626,9 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
+            # كود إرسال المعاينة لتيليجرام من الكود الأساسي لك حرفياً[span_9](start_span)[span_9](end_span)
             if thumb and is_audio:
                 try:
-                    if "ytimg.com" in thumb:
-                        thumb = thumb.replace("maxresdefault.jpg", "hqdefault.jpg").replace("sddefault.jpg", "hqdefault.jpg").replace("vi_webp", "vi").replace(".webp", ".jpg")
                     t_res = requests.get(thumb, timeout=4)
                     if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
