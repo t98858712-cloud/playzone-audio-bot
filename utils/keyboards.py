@@ -13,12 +13,17 @@ def user_main_keyboard(lang: str = "ar") -> ReplyKeyboardMarkup:
 
 def build_preview_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(_t("btn_audio", lang), callback_data=f"aud:{request_id}")],
-        [InlineKeyboardButton(_t("btn_video", lang), callback_data=f"vid:{request_id}")],
+        # صف الفيديو: مفلتر (دقات مختلفة) مقابل أصلي (أعلى جودة خام)
         [
-            InlineKeyboardButton(_t("btn_raw_audio", lang), callback_data=f"raw_aud:{request_id}"),
+            InlineKeyboardButton(_t("btn_video", lang), callback_data=f"vid:{request_id}"),
             InlineKeyboardButton(_t("btn_raw_video", lang), callback_data=f"raw_vid:{request_id}")
         ],
+        # صف الصوت: مفلتر (MP3 192k) مقابل أصلي (خام المصدر)
+        [
+            InlineKeyboardButton(_t("btn_audio", lang), callback_data=f"aud:{request_id}"),
+            InlineKeyboardButton(_t("btn_raw_audio", lang), callback_data=f"raw_aud:{request_id}")
+        ],
+        # زر الإلغاء
         [InlineKeyboardButton(_t("btn_cancel", lang), callback_data=f"cancel:{request_id}")],
     ])
 
@@ -37,7 +42,8 @@ def build_resolution_keyboard(request_id: str, lang: str = "ar") -> InlineKeyboa
     ])
 
 def build_playzone_links_keyboard(bot_username: str = BOT_USERNAME) -> InlineKeyboardMarkup:
-    tg_url = f"https://t.me/{bot_username.replace('@', '')}"
+    clean_username = bot_username.replace('@', '')
+    tg_url = f"https://t.me/{clean_username}"
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🌐 Website PlayZone", url=WEBSITE_PLAYZONE)],
         [InlineKeyboardButton("📘 Facebook", url=FACEBOOK_PLAYZONE), InlineKeyboardButton("📸 Instagram", url=INSTAGRAM_PLAYZONE)],
@@ -61,7 +67,6 @@ def admin_broadcast_menu(lang: str = "ar") -> InlineKeyboardMarkup:
         [InlineKeyboardButton("🔙 رجوع للقائمة الرئيسية", callback_data="adm_main_back")]
     ])
 
-# 📌 تم إضافة زر "زوار الموقع (أونلاين)" هنا
 def admin_users_menu(lang: str = "ar") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📋 أحدث المنضمين", callback_data="adm_users"), 
