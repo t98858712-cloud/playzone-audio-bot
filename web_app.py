@@ -468,30 +468,43 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 'preferredquality': '192'
             }]
         })
-    # 3. زر فيديو أصلي (raw_video) - نسخ مسار الصوت الأصلي دون أي تعديل أو ضغط
+    # 3. زر فيديو أصلي (raw_video) - أعلى دقة مع تحويل الفيديو إلى H.264 ونسخ الصوت دون لمسه
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
-                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'copy']}
+            'postprocessor_args': {
+                'ffmpeg': [
+                    '-c:v', 'libx264',
+                    '-preset', 'veryfast',
+                    '-pix_fmt', 'yuv420p',
+                    '-c:a', 'copy',
+                    '-movflags', '+faststart'
+                ]
+            }
         })
-    # 4. زر فيديو مفلتر (video / else) - تغيير حاوية الفيديو لـ mp4 مع نسخ الصوت دون لمسه
+    # 4. زر فيديو مفلتر (video) - دقة محددة متوافقة مع كل الأجهزة دون تعديل الصوت
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={target_res}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'copy']}
+            'postprocessor_args': {
+                'ffmpeg': [
+                    '-c:v', 'libx264',
+                    '-preset', 'veryfast',
+                    '-pix_fmt', 'yuv420p',
+                    '-c:a', 'copy',
+                    '-movflags', '+faststart'
+                ]
+            }
         })
     
     try:
@@ -502,7 +515,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             if matching_files:
                 filename = matching_files[0].name
             else:
-                ext = 'mp3' if mode == 'audio' else 'mp4'
+                ext = 'mp3' if mode == 'audio' else ('m4a' if mode == 'raw_audio' else 'mp4')
                 filename = f"{job_id}.{ext}"
 
             payload = {
