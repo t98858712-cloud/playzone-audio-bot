@@ -469,24 +469,25 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"best[vcodec^=avc1][filesize<?{max_fs}][ext=mp4]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}][ext=mp4]+bestaudio[ext=m4a]/"
                 f"bestvideo[vcodec^=avc1]+bestaudio/"
-                f"best[ext=mp4][vcodec^=avc1]"
+                f"best[ext=mp4]/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-movflags', '+faststart']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"best[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}][ext=mp4]/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}][ext=mp4]+bestaudio[ext=m4a]/"
                 f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio/"
-                f"bestvideo[vcodec^=avc1]+bestaudio/"
-                f"best[ext=mp4][vcodec^=avc1]"
+                f"best[ext=mp4]/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-movflags', '+faststart']}
         })
     
     try:
