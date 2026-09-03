@@ -23,6 +23,7 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
+# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -48,6 +49,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
+# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -105,6 +107,7 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
+# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -136,6 +139,8 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
     return opts
+
+# --- المسارات والـ API Endpoints ---
 
 @app.get("/")
 def home():
@@ -464,23 +469,25 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"best[ext=mp4][filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"best"
+                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
+                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"best"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[height<={target_res}]+bestaudio/"
+                f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
         })
     
     try:
@@ -622,14 +629,8 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            # كود المعاينة الأساسي لك مع إضافة التبديل لضمان قبولها في تيليجرام
             if thumb and is_audio:
                 try:
-                    if "ytimg.com" in thumb:
-                        thumb = thumb.replace("maxresdefault", "hqdefault")
-                        thumb = thumb.replace("sddefault", "hqdefault")
-                        thumb = thumb.replace("vi_webp", "vi")
-                        thumb = thumb.replace(".webp", ".jpg")
                     t_res = requests.get(thumb, timeout=4)
                     if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
