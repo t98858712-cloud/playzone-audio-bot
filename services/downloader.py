@@ -31,7 +31,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
     
     if mode == "audio":
-        # استعادة أعلى جودة ممكنة للصوتيات وتحويلها إلى MP3 بجودة 320k الصافية
         opts["format"] = "bestaudio/best"
         opts["postprocessors"] = [{
             'key': 'FFmpegExtractAudio',
@@ -39,21 +38,20 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             'preferredquality': '320'
         }]
     else:
-        # الحل الذهبي للفيديو:
-        # 1. سحب فيديو H.264 (avc1) لضمان عدم تجميد الصورة.
-        # 2. سحب أفضل صوت متوفر.
         target_res = resolution if resolution != "best" else "1080"
         
+        # الحل النهائي المضمون: 
+        # طلب فيديو H.264 وصوت M4A عالي الجودة بشكل منفصل، وترك yt-dlp يدمجهم طبيعياً دون تدخل عنيف يكسر الإطارات.
         opts["format"] = (
+            f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio[ext=m4a]/"
             f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio/"
-            f"bestvideo[height<={target_res}]+bestaudio/"
             f"best[ext=mp4]/best"
         )
         opts["merge_output_format"] = "mp4"
         
-        # 3. دمج ذكي: نسخ الفيديو كما هو (يمنع التجمد)، وتشفير الصوت إلى AAC 256k (جودة عالية وتوافق تام)، وتفعيل البث السريع
+        # إبقاء faststart فقط للبث المباشر، وحذف أوامر التشفير التي جمدت الصورة
         opts["postprocessor_args"] = {
-            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart"]
+            "ffmpeg": ["-movflags", "+faststart"]
         }
 
     from core.config import COOKIES_FILE
@@ -140,7 +138,7 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
         
-        # إصلاح مشكلة اختفاء المعاينة: تحويل رابط WebP إلى JPG ليقبله تيليجرام
+        # كود إصلاح المعاينة المعتمد
         if "ytimg.com" in thumb_url and ".webp" in thumb_url:
             thumb_url = thumb_url.replace(".webp", ".jpg")
             
