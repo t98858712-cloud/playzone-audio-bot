@@ -271,14 +271,20 @@ async def start_download_from_callback(query, context: ContextTypes.DEFAULT_TYPE
                     finally:
                         if t_file: t_file.close()
                 else:
-                    await context.bot.send_video(
-                        chat_id=query.message.chat_id, video=f, caption=caption, 
-                        supports_streaming=True, duration=duration, 
-                        width=native_width,
-                        height=native_height,
-                        reply_markup=media_keyboard, parse_mode="HTML", 
-                        read_timeout=120, write_timeout=120
-                    )
+                    # ✅ الحل تم تطبيقه هنا: إرفاق المعاينة للفيديو أيضاً لكي تظهر دائماً
+                    t_file = open(local_thumb, "rb") if local_thumb and local_thumb.exists() else None
+                    try:
+                        await context.bot.send_video(
+                            chat_id=query.message.chat_id, video=f, caption=caption, 
+                            supports_streaming=True, duration=duration, 
+                            width=native_width,
+                            height=native_height,
+                            thumbnail=t_file, 
+                            reply_markup=media_keyboard, parse_mode="HTML", 
+                            read_timeout=120, write_timeout=120
+                        )
+                    finally:
+                        if t_file: t_file.close()
 
             stat_inc_sync("success")
             stat_inc_sync("bytes", file_size)
