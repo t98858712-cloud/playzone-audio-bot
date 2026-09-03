@@ -32,11 +32,17 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     
     max_fs = "50M" if not LOCAL_API_URL else "2000M"
     
-    # 1. زر صوت أصلي (raw_audio)
+    # 1. زر صوت أصلي (raw_audio) - يدعم المسارات المنفصلة والمدمجة
     if mode == "raw_audio":
-        opts["format"] = f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
+        opts["format"] = (
+            f"bestaudio[acodec=opus][filesize<?{max_fs}]/"
+            f"bestaudio[ext=m4a][filesize<?{max_fs}]/"
+            f"bestaudio[filesize<?{max_fs}]/"
+            f"b[filesize<?{max_fs}]/"
+            f"bestaudio/best"
+        )
 
-    # 2. زر صوت مفلتر (audio)
+    # 2. زر صوت مفلتر (audio) - تحويل الصوت إلى MP3
     elif mode == "audio":
         opts["format"] = "bestaudio/best"
         opts["postprocessors"] = [{
@@ -45,13 +51,18 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             "preferredquality": "192",
         }]
 
-    # 3. زر فيديو أصلي (raw_video) - أعلى دقة مع توافق H.264 لجميع المنصات ودون المساس بالصوت
+    # 3. زر فيديو أصلي (raw_video) - جلب أعلى جودة مع دعم الريلز وتحويل مسار الفيديو إلى H.264 ونسخ الصوت
     elif mode == "raw_video":
         opts["format"] = (
-            f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-            f"bestvideo+bestaudio/best"
+            f"bv*[filesize<?{max_fs}]+ba/"
+            f"b[filesize<?{max_fs}]/"
+            f"bv*+ba/b"
         )
         opts["merge_output_format"] = "mp4"
+        opts["postprocessors"] = [{
+            "key": "FFmpegVideoConvertor",
+            "preferedformat": "mp4"
+        }]
         opts["postprocessor_args"] = {
             "ffmpeg": [
                 "-c:v", "libx264",
@@ -62,21 +73,28 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             ]
         }
 
-    # 4. زر فيديو مفلتر (video) - دقة محددة متوافقة كلياً مع مشغلات الهواتف ونسخ الصوت كما هو
+    # 4. زر فيديو مفلتر (video) - استهداف دقة محددة مع التوافق التام للهواتف ونسخ مسار الصوت الأصلي
     else:
         if resolution == "best":
             opts["format"] = (
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best"
+                f"bv*[filesize<?{max_fs}]+ba/"
+                f"b[filesize<?{max_fs}]/"
+                f"bv*+ba/b"
             )
         else:
             opts["format"] = (
-                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[height<={resolution}]+bestaudio/"
-                f"best"
+                f"bv*[height<={resolution}][filesize<?{max_fs}]+ba/"
+                f"b[height<={resolution}][filesize<?{max_fs}]/"
+                f"bv*[height<={resolution}]+ba/"
+                f"b[height<={resolution}]/"
+                f"bv*+ba/b"
             )
             
         opts["merge_output_format"] = "mp4"
+        opts["postprocessors"] = [{
+            "key": "FFmpegVideoConvertor",
+            "preferedformat": "mp4"
+        }]
         opts["postprocessor_args"] = {
             "ffmpeg": [
                 "-c:v", "libx264",
