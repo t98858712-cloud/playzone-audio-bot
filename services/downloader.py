@@ -36,26 +36,18 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # 🌟 الاستراتيجية الذكية للدقة الحقيقية:
-        # 1. نحاول أولاً سحب جودة H.264 (avc1) المتوافقة كلياً مع التليجرام بالدقة المطلوبة لتجنب استهلاك السيرفر.
-        # 2. إذا لم تتوفر، نسحب أفضل جودة فيديو متاحة بالدقة المطلوبة (حتى لو كانت VP9/AV1) لضمان الدقة الحقيقية.
-        # 3. ندمج الفيديو مع الصوت ونخرجهما داخل حاوية mp4 القياسية.
+        # 🌟 حل مشكلة "صوت بدون صورة": 
+        # إجبار النظام على تفضيل ترميز H.264 (avc1) للفيديو و m4a للصوت لتوافق شامل 100% مع جميع المنصات.
+        opts["format_sort"] = ["res", "vcodec:h264", "acodec:m4a"]
+        
         if resolution == "best":
-            opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best"
-            )
+            opts["format"] = f"bestvideo[filesize<?{max_fs}]+bestaudio/best"
         else:
-            opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best"
-            )
+            opts["format"] = f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/best[height<={resolution}]/best"
             
         opts["merge_output_format"] = "mp4"
-        # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
+        # ضمان دمج الصوت بصيغة AAC عالية التوافق ونسخ الفيديو دون ضغط على المعالج
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
