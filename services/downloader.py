@@ -31,23 +31,28 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
     
     if mode == "audio":
-        opts["format"] = "bestaudio/best"
+        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
+        opts["postprocessors"] = [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '320'
+        }]
     else:
-        from core.config import LOCAL_API_URL
-        max_fs = "50M" if not LOCAL_API_URL else "2000M"
+        # الحل الجذري لمشكلة تجمد الصورة:
+        # 1. إجبار النظام على استخدام ترميز H.264 (avc1) حصراً للفيديو.
+        # 2. إضافة -movflags +faststart لتمكين البث المباشر (Streaming) على تيليجرام والآيفون بسلاسة.
+        target_res = resolution if resolution != "best" else "1080"
         
-        # 🌟 حل مشكلة "صوت بدون صورة": 
-        # إجبار النظام على تفضيل ترميز H.264 (avc1) للفيديو و m4a للصوت لتوافق شامل 100% مع جميع المنصات.
-        opts["format_sort"] = ["res", "vcodec:h264", "acodec:m4a"]
-        
-        if resolution == "best":
-            opts["format"] = f"bestvideo[filesize<?{max_fs}]+bestaudio/best"
-        else:
-            opts["format"] = f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/best[height<={resolution}]/best"
-            
+        opts["format"] = (
+            f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio[ext=m4a]/"
+            f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio/"
+            f"bestvideo[vcodec^=avc1]+bestaudio/"
+            f"best[ext=mp4][vcodec^=avc1]"
+        )
         opts["merge_output_format"] = "mp4"
-        # ضمان دمج الصوت بصيغة AAC عالية التوافق ونسخ الفيديو دون ضغط على المعالج
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k"]}
+        opts["postprocessor_args"] = {
+            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
+        }
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
