@@ -453,6 +453,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     max_fs = "49M"
     
+    # نفس الكود الأساسي الخاص بك بالضبط للقيم[span_5](start_span)[span_5](end_span)
     if mode == 'raw_audio':
         opts.update({
             'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
@@ -631,6 +632,9 @@ async def send_to_telegram(request: Request):
             
             if thumb and is_audio:
                 try:
+                    # سطر التصحيح لضمان ظهور المعاينة في تيليجرام
+                    if "ytimg.com" in thumb:
+                        thumb = thumb.replace("maxresdefault", "hqdefault").replace("sddefault", "hqdefault").replace("vi_webp", "vi").replace(".webp", ".jpg")
                     t_res = requests.get(thumb, timeout=4)
                     if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
