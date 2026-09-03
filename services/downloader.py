@@ -31,29 +31,29 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     }
     
     if mode == "audio":
-        opts["format"] = "bestaudio[ext=m4a]/bestaudio/best"
+        # استعادة أعلى جودة ممكنة للصوتيات وتحويلها إلى MP3 بجودة 320k الصافية
+        opts["format"] = "bestaudio/best"
         opts["postprocessors"] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '320'
         }]
     else:
-        # الحل الجذري لمشكلة تجمد الصورة:
-        # 1. إعطاء الأولوية القصوى للصيغ المدمجة جاهزاً من يوتيوب (best[ext=mp4]) لتجنب أخطاء الدمج تماماً.
-        # 2. في حال عدم توفرها، يتم سحب الفيديو والصوت ودمجهما دون إجبار FFmpeg على الـ copy العنيف الذي يكسر التزامن.
+        # الحل الذهبي للفيديو:
+        # 1. سحب فيديو H.264 (avc1) لضمان عدم تجميد الصورة.
+        # 2. سحب أفضل صوت متوفر.
         target_res = resolution if resolution != "best" else "1080"
         
         opts["format"] = (
-            f"best[vcodec^=avc1][height<={target_res}][ext=mp4]/"
-            f"bestvideo[vcodec^=avc1][height<={target_res}][ext=mp4]+bestaudio[ext=m4a]/"
             f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio/"
+            f"bestvideo[height<={target_res}]+bestaudio/"
             f"best[ext=mp4]/best"
         )
         opts["merge_output_format"] = "mp4"
         
-        # اكتفينا بـ faststart للبث المباشر السلس، وحذفنا أوامر -c:v copy لترك التزامن الزمني سليماً
+        # 3. دمج ذكي: نسخ الفيديو كما هو (يمنع التجمد)، وتشفير الصوت إلى AAC 256k (جودة عالية وتوافق تام)، وتفعيل البث السريع
         opts["postprocessor_args"] = {
-            "ffmpeg": ["-movflags", "+faststart"]
+            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart"]
         }
 
     from core.config import COOKIES_FILE
@@ -139,6 +139,11 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
+        
+        # إصلاح مشكلة اختفاء المعاينة: تحويل رابط WebP إلى JPG ليقبله تيليجرام
+        if "ytimg.com" in thumb_url and ".webp" in thumb_url:
+            thumb_url = thumb_url.replace(".webp", ".jpg")
+            
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
             data = response.read(2 * 1024 * 1024 + 1)
