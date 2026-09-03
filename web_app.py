@@ -117,12 +117,6 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "cachedir": False,
         "concurrent_fragment_downloads": 5,
         "no_check_certificate": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
-            }
-        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
@@ -449,42 +443,36 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     max_fs = "49M"
     
     if mode == 'raw_audio':
-        # استعادة الصوت الخام الأصلي 
         opts.update({
-            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
+            'format': f"bestaudio/best"
         })
     elif mode == 'audio':
-        # استعادة جودة 192 للصوت المفلتر
         opts.update({
             'format': 'bestaudio/best',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '192'
+                'preferredquality': '320'
             }]
         })
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"bestvideo[ext=mp4][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
                 f"best[ext=mp4][filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"best"
             ),
-            'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
+            'merge_output_format': 'mp4'
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"bestvideo[ext=mp4][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
                 f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"best"
             ),
-            'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
+            'merge_output_format': 'mp4'
         })
     
     try:
@@ -626,10 +614,8 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            if thumb:
+            if thumb and is_audio:
                 try:
-                    if "ytimg.com" in thumb and ".webp" in thumb:
-                        thumb = thumb.replace(".webp", ".jpg")
                     t_res = requests.get(thumb, timeout=4)
                     if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
