@@ -3,6 +3,7 @@ import shutil
 import logging
 import asyncio
 import urllib.request
+import subprocess
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
@@ -35,11 +36,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     
     if mode == "audio":
         opts["format"] = "bestaudio/best"
-        opts["postprocessors"] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192'
-        }]
     else:
         target_res = resolution if resolution != "best" else "1080"
         opts["format"] = (
@@ -134,17 +130,32 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
         
-        # تحويل صيغ webp التي يرفضها تيليجرام إلى jpg لضمان قبولها كصورة مصغرة
-        if "ytimg.com" in thumb_url:
-            thumb_url = thumb_url.replace("vi_webp", "vi").replace(".webp", ".jpg")
-            
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
-            data = response.read(2 * 1024 * 1024 + 1)
-        if len(data) > 2 * 1024 * 1024: return None
-        output_path.write_bytes(data)
+            data = response.read(5 * 1024 * 1024)
+        if not data: return None
+        
+        temp_path = output_path.with_suffix('.tmp')
+        temp_path.write_bytes(data)
+        
+        # الحل المضمون 100%: تصغير الصورة باستخدام FFmpeg لتتوافق مع شروط تيليجرام القاسية
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-i", str(temp_path),
+            "-vf", "scale='min(320,iw)':-1",
+            "-vframes", "1",
+            "-f", "image2",
+            "-c:v", "mjpeg",
+            str(output_path)
+        ]
+        subprocess.run(cmd, check=True)
+        temp_path.unlink(missing_ok=True)
+        
         return output_path if output_path.exists() else None
-    except Exception: return None
+    except Exception as e:
+        if 'temp_path' in locals() and temp_path.exists():
+            temp_path.unlink(missing_ok=True)
+        return None
 
 async def youtube_health_monitor(app: Application):
     while True:
