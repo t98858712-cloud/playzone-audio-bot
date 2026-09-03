@@ -17,7 +17,8 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
+        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        # إعادة كود تخطي حماية يوتيوب الأساسي الخاص بك لمنع فشل التحميل
         "extractor_args": {
             "youtube": {
                 "player_client": ["android", "ios", "tv"],
@@ -35,34 +36,17 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     
     if mode == "audio":
         opts["format"] = "bestaudio/best"
-        opts["postprocessors"] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192'
-        }]
-    elif mode == "raw_audio":
-        opts["format"] = f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
-    elif mode == "raw_video":
-        opts["format"] = (
-            f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-            f"best[ext=mp4][filesize<?{max_fs}]/"
-            f"best"
-        )
-        opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {
-            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]
-        }
     else:
         target_res = resolution if resolution != "best" else "1080"
+        # ضمان سحب H.264 لمنع تجميد الفيديو، مع الحفاظ على التزامن الزمني
         opts["format"] = (
-            f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+            f"bestvideo[ext=mp4][vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
             f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
             f"best"
         )
         opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {
-            "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
-        }
+        # جودة الصوت 320k الأساسية الخاصة بك مع تفعيل البث السلس
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -143,15 +127,11 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, re
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
+# استعادة دالة المعاينة بالظبط كما كانت في كودك الأساسي الأول بدون أي تعديل
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
-        
-        # التعديل الذكي لضمان توافق المعاينة مع تيليجرام 100%
-        if "ytimg.com" in thumb_url:
-            thumb_url = thumb_url.replace("maxresdefault", "hqdefault").replace("vi_webp", "vi").replace(".webp", ".jpg")
-            
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
             data = response.read(2 * 1024 * 1024 + 1)
