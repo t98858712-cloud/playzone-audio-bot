@@ -54,8 +54,8 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             )
             
         opts["merge_output_format"] = "mp4"
-        # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
+        # نسخ مسار الصوت الأصلي مباشرة دون أي فك تشفير أو إعادة ترميز
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "copy"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
