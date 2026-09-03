@@ -453,10 +453,12 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     max_fs = "49M"
     
+    # 1. زر صوت أصلي (raw_audio)
     if mode == 'raw_audio':
         opts.update({
             'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
         })
+    # 2. زر صوت مفلتر (audio)
     elif mode == 'audio':
         opts.update({
             'format': 'bestaudio/best',
@@ -466,6 +468,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 'preferredquality': '192'
             }]
         })
+    # 3. زر فيديو أصلي (raw_video) - نسخ مسار الصوت الأصلي دون أي تعديل أو ضغط
     elif mode == 'raw_video':
         opts.update({
             'format': (
@@ -475,8 +478,9 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'copy']}
         })
+    # 4. زر فيديو مفلتر (video / else) - تغيير حاوية الفيديو لـ mp4 مع نسخ الصوت دون لمسه
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
@@ -487,7 +491,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'copy']}
         })
     
     try:
