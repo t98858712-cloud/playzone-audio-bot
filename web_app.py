@@ -23,7 +23,6 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
-# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -49,7 +48,6 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -107,7 +105,6 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -139,8 +136,6 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
     return opts
-
-# --- المسارات والـ API Endpoints ---
 
 @app.get("/")
 def home():
@@ -454,38 +449,42 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     max_fs = "49M"
     
     if mode == 'raw_audio':
+        # استعادة الصوت الخام الأصلي 
         opts.update({
-            'format': f"bestaudio/best"
+            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
         })
     elif mode == 'audio':
+        # استعادة جودة 192 للصوت المفلتر
         opts.update({
             'format': 'bestaudio/best',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '320'
+                'preferredquality': '192'
             }]
         })
     elif mode == 'raw_video':
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"best[ext=mp4][filesize<?{max_fs}]/"
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4]/best"
+                f"best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4]/best"
+                f"best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
         })
     
     try:
