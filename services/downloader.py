@@ -35,22 +35,17 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     else:
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
+        target_res = resolution if resolution != "best" else "1080"
         
-        if resolution == "best":
-            opts["format"] = (
-                f"bestvideo[ext=mp4][vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
-                f"best[ext=mp4][filesize<?{max_fs}]/"
-                f"best"
-            )
-        else:
-            opts["format"] = (
-                f"bestvideo[ext=mp4][vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
-                f"best[ext=mp4][height<={resolution}][filesize<?{max_fs}]/"
-                f"best"
-            )
-            
+        # الحل الجذري لمنع التجميد: طلب فيديو MP4 مدمج جاهزاً من يوتيوب كأولوية قصوى
+        opts["format"] = (
+            f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
+            f"bestvideo[ext=mp4][vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+            f"best"
+        )
         opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
+        # جودة 320 كما في كودك الأساسي مع تفعيل البث السلس
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -135,6 +130,11 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
         if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
+        
+        # الحل الجذري لاختفاء المعاينة: استبدال الرابط ليناسب حجم وشروط تيليجرام
+        if "ytimg.com" in thumb_url:
+            thumb_url = thumb_url.replace("maxresdefault.jpg", "hqdefault.jpg").replace("sddefault.jpg", "hqdefault.jpg").replace("vi_webp", "vi").replace(".webp", ".jpg")
+            
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=6) as response:
             data = response.read(2 * 1024 * 1024 + 1)
