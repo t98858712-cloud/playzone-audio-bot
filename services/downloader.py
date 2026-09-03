@@ -14,16 +14,11 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
+    # إعدادات تخطي الحظر وتجميد الفيديو المستقرة
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 5, "no_check_certificate": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
-            }
-        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
@@ -54,14 +49,12 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     else:
         target_res = resolution if resolution != "best" else "1080"
-        
         opts["format"] = (
             f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
             f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
             f"best"
         )
         opts["merge_output_format"] = "mp4"
-        
         opts["postprocessor_args"] = {
             "ffmpeg": ["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
         }
@@ -74,6 +67,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
 
+# --- كود المعاينة المنسوخ من مصدرك كما هو ---[span_2](start_span)[span_2](end_span)
 def extract_metadata(url: str):
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
@@ -82,6 +76,7 @@ def extract_metadata(url: str):
     
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=False)
+# ---------------------------------------------
 
 def search_youtube(query: str, limit: int = 30):
     opts = {
@@ -145,6 +140,7 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, re
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
+# --- كود جلب الصورة المصغرة المنسوخ من مصدرك كما هو ---[span_3](start_span)[span_3](end_span)
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
@@ -156,6 +152,7 @@ def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
         output_path.write_bytes(data)
         return output_path if output_path.exists() else None
     except Exception: return None
+# --------------------------------------------------------
 
 async def youtube_health_monitor(app: Application):
     while True:
