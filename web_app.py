@@ -469,23 +469,23 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[ext=mp4][vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
                 f"best[ext=mp4][filesize<?{max_fs}]/"
+                f"bestvideo[ext=mp4][vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
                 f"best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[ext=mp4][vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
                 f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
+                f"bestvideo[ext=mp4][vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
                 f"best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
         })
     
     try:
@@ -629,6 +629,8 @@ async def send_to_telegram(request: Request):
             
             if thumb and is_audio:
                 try:
+                    if "ytimg.com" in thumb:
+                        thumb = thumb.replace("maxresdefault.jpg", "hqdefault.jpg").replace("sddefault.jpg", "hqdefault.jpg").replace("vi_webp", "vi").replace(".webp", ".jpg")
                     t_res = requests.get(thumb, timeout=4)
                     if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
