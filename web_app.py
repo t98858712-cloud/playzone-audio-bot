@@ -455,7 +455,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     
     if mode == 'raw_audio':
         opts.update({
-            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
+            'format': f"bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
         })
     elif mode == 'audio':
         opts.update({
@@ -468,18 +468,25 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         })
     elif mode == 'raw_video':
         opts.update({
-            'format': f"bestvideo[filesize<?{max_fs}]+bestaudio/best",
-            'format_sort': ['res', 'vcodec:h264', 'acodec:m4a'],
+            'format': (
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"bestvideo[vcodec^=avc1]+bestaudio/"
+                f"best[ext=mp4][vcodec^=avc1]"
+            ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k']}
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
-            'format': f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/best[height<={target_res}]/best",
-            'format_sort': ['res', 'vcodec:h264', 'acodec:m4a'],
+            'format': (
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1]+bestaudio/"
+                f"best[ext=mp4][vcodec^=avc1]"
+            ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']}
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
         })
     
     try:
