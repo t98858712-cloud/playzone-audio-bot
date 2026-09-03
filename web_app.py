@@ -455,7 +455,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     
     if mode == 'raw_audio':
         opts.update({
-            'format': f"bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
+            'format': f"bestaudio/best"
         })
     elif mode == 'audio':
         opts.update({
@@ -463,31 +463,27 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '192'
+                'preferredquality': '320'
             }]
         })
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"best[vcodec^=avc1][filesize<?{max_fs}][ext=mp4]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}][ext=mp4]+bestaudio[ext=m4a]/"
-                f"bestvideo[vcodec^=avc1]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"best[ext=mp4]/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-movflags', '+faststart']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"best[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}][ext=mp4]/"
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}][ext=mp4]+bestaudio[ext=m4a]/"
-                f"bestvideo[vcodec^=avc1][height<={target_res}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"best[ext=mp4]/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '256k', '-movflags', '+faststart']}
         })
     
     try:
@@ -519,44 +515,6 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         with get_db() as conn:
             conn.execute("UPDATE progress SET status='error', data=? WHERE job_id=?", (json.dumps(payload), job_id))
             conn.commit()
-
-@app.post("/api/download")
-async def start_download(request: Request):
-    data = await request.json()
-    url = data.get("url", "")
-    mode = str(data.get("mode", "video")).lower().strip()
-    resolution = str(data.get("resolution", "720")).lower().strip()
-    click_id = data.get("click_id", "")
-
-    if not url:
-        return {"success": False, "error": "يرجى إدخال رابط صحيح."}
-
-    with get_db() as conn:
-        cursor = conn.execute("SELECT * FROM ads WHERE click_id = ?", (click_id,))
-        row = cursor.fetchone()
-        if not row: return {"success": False, "error": "جلسة إعلانية غير صالحة."}
-        if not (row["status"] == "verified" or (time.time() - row["created_at"] > 10)):
-            return {"success": False, "error": "خطأ: لم يتم تأكيد فك قفل التحميل بعد."}
-
-    stat_inc_sync("adsterra_verified", 1)
-    job_id = uuid.uuid4().hex[:8]
-    with get_db() as conn:
-        conn.execute("INSERT INTO progress (job_id, status, data, timestamp) VALUES (?, ?, ?, ?)", (job_id, "starting", "{}", time.time()))
-        conn.commit()
-        
-    DOWNLOAD_POOL.submit(bg_download_worker, job_id, url, mode, resolution)
-    return {"success": True, "job_id": job_id}
-
-@app.get("/api/progress/{job_id}")
-def get_progress(job_id: str):
-    with get_db() as conn:
-        cursor = conn.execute("SELECT * FROM progress WHERE job_id = ?", (job_id,))
-        row = cursor.fetchone()
-        if not row: return {"status": "waiting"}
-        status = row["status"]
-        if status == "starting": return {"status": "starting", "percent": 0}
-        if status == "converting": return {"status": "converting", "percent": 99}
-        return json.loads(row["data"])
 
 @app.post("/api/send_telegram")
 async def send_to_telegram(request: Request):
@@ -667,8 +625,11 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            if thumb and is_audio:
+            # إصلاح ظهور المعاينة داخل تيليجرام
+            if thumb:
                 try:
+                    if "ytimg.com" in thumb and ".webp" in thumb:
+                        thumb = thumb.replace(".webp", ".jpg")
                     t_res = requests.get(thumb, timeout=4)
                     if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
