@@ -1,6 +1,5 @@
 import os
 import sys
-import io
 import uuid
 import time
 import json
@@ -13,7 +12,6 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
-from PIL import Image
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -626,16 +624,18 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            # معالجة وإرفاق صورة المعاينة للصوت والفيديو بصيغة JPEG متوافقة مع تيليجرام
             if thumb:
                 try:
                     t_res = requests.get(thumb, headers={"User-Agent": "Mozilla/5.0"}, timeout=8)
                     if t_res.status_code == 200:
-                        img = Image.open(io.BytesIO(t_res.content)).convert("RGB")
-                        img.thumbnail((320, 320), Image.Resampling.LANCZOS)
-                        out_thumb = io.BytesIO()
-                        img.save(out_thumb, format="JPEG", quality=85, optimize=True)
-                        thumb_bytes = out_thumb.getvalue()
+                        cmd = [
+                            'ffmpeg', '-y', '-i', 'pipe:0',
+                            '-vf', 'scale=320:320:force_original_aspect_ratio=decrease',
+                            '-f', 'mjpeg',
+                            'pipe:1'
+                        ]
+                        proc = subprocess.run(cmd, input=t_res.content, capture_output=True, timeout=5)
+                        thumb_bytes = proc.stdout if proc.returncode == 0 and proc.stdout else t_res.content
                         
                         files_payload['thumbnail'] = ('thumb.jpg', thumb_bytes, 'image/jpeg')
                         files_payload['thumb'] = ('thumb.jpg', thumb_bytes, 'image/jpeg')
