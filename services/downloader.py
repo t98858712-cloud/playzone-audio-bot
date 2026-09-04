@@ -3,6 +3,8 @@ import shutil
 import logging
 import asyncio
 import urllib.request
+import subprocess
+import json
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
@@ -12,6 +14,42 @@ from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progres
 from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
+
+def ensure_compatible_video(file_path: Path):
+    if not file_path.exists() or file_path.suffix.lower() != ".mp4":
+        return
+    try:
+        probe_cmd = [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=codec_name,pix_fmt",
+            "-of", "json", str(file_path)
+        ]
+        res = subprocess.run(probe_cmd, capture_output=True, text=True)
+        data = json.loads(res.stdout)
+        stream = data.get("streams", [{}])[0]
+        codec = stream.get("codec_name", "")
+        pix_fmt = stream.get("pix_fmt", "")
+
+        temp_out = file_path.with_name(f"fixed_{file_path.name}")
+        if codec != "h264" or "10" in pix_fmt:
+            cmd = [
+                "ffmpeg", "-y", "-i", str(file_path),
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "192k",
+                "-movflags", "+faststart", str(temp_out)
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            temp_out.replace(file_path)
+        else:
+            cmd = [
+                "ffmpeg", "-y", "-i", str(file_path),
+                "-c", "copy", "-movflags", "+faststart", str(temp_out)
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            temp_out.replace(file_path)
+    except Exception:
+        pass
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
@@ -36,7 +74,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # تفضيل H.264 (avc1) مع أي مسار صوتي متاح، وتفادي التقيد بـ mp4a لمنع الهبوط لـ VP9/AV1
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
@@ -55,7 +92,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
             )
             
         opts["merge_output_format"] = "mp4"
-        # تحويل الصوت إلى AAC وإضافة +faststart لضمان البث السريع على تليجرام ومنع تجميد الإطارات
         opts["postprocessor_args"] = {
             "ffmpeg": [
                 "-c:a", "aac",
@@ -141,7 +177,13 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
     opts = get_ydl_options(job_dir, progress_data, mode, resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
-        return ydl.extract_info(url, download=True)
+        info = ydl.extract_info(url, download=True)
+    
+    if mode != "audio":
+        for video_file in job_dir.glob("*.mp4"):
+            ensure_compatible_video(video_file)
+            
+    return info
 
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
