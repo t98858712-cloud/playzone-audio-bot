@@ -24,50 +24,66 @@ def ensure_compatible_video(file_path: Path) -> Path:
     try:
         probe_cmd = [
             "ffprobe", "-v", "error",
-            "-show_entries", "stream=codec_type,codec_name,pix_fmt",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=codec_name,pix_fmt,width,height",
             "-of", "json", str(file_path)
         ]
         res = subprocess.run(probe_cmd, capture_output=True, text=True)
         data = json.loads(res.stdout) if res.stdout else {}
-        streams = data.get("streams", [])
+        v_streams = data.get("streams", [])
         
         v_codec = ""
         v_pix = ""
-        a_codec = ""
-        for s in streams:
-            if s.get("codec_type") == "video" and not v_codec:
-                v_codec = s.get("codec_name", "").lower()
-                v_pix = s.get("pix_fmt", "").lower()
-            elif s.get("codec_type") == "audio" and not a_codec:
-                a_codec = s.get("codec_name", "").lower()
+        w = 0
+        h = 0
+        if v_streams:
+            v_codec = v_streams[0].get("codec_name", "").lower()
+            v_pix = v_streams[0].get("pix_fmt", "").lower()
+            w = int(v_streams[0].get("width") or 0)
+            h = int(v_streams[0].get("height") or 0)
 
-        need_v_transcode = (v_codec != "h264") or ("10" in v_pix)
-        need_a_transcode = (a_codec != "aac") and (a_codec != "")
+        probe_a = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "a:0",
+            "-show_entries", "stream=codec_name",
+            "-of", "json", str(file_path)
+        ]
+        res_a = subprocess.run(probe_a, capture_output=True, text=True)
+        data_a = json.loads(res_a.stdout) if res_a.stdout else {}
+        a_streams = data_a.get("streams", [])
+        a_codec = a_streams[0].get("codec_name", "").lower() if a_streams else ""
+
+        # الشروط القياسية لتشغيل الفيديو بدون تجمد: H.264 + yuv420p + أبعاد زوجية + صوت aac
+        need_v = (v_codec != "h264") or (v_pix != "yuv420p") or (w % 2 != 0) or (h % 2 != 0)
+        need_a = (a_codec != "aac") and (a_codec != "")
         is_mp4 = (file_path.suffix.lower() == ".mp4")
 
-        # إذا كان الفيديو متوافقاً كلياً مع مشغلات الهواتف، نكتفي بالملف كما هو
-        if is_mp4 and not need_v_transcode and not need_a_transcode:
+        if is_mp4 and not need_v and not need_a:
             return file_path
 
         cmd = ["ffmpeg", "-y", "-i", str(file_path)]
-        
-        # تحويل الفيديو فقط إذا لم يكن H.264 قياسياً
-        if need_v_transcode:
-            cmd.extend(["-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p"])
+
+        if need_v:
+            cmd.extend([
+                "-c:v", "libx264",
+                "-preset", "ultrafast",
+                "-crf", "23",
+                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                "-pix_fmt", "yuv420p"
+            ])
         else:
             cmd.extend(["-c:v", "copy"])
 
-        # تحويل الصوت إلى AAC إذا كان Opus أو غير متوافق
-        if need_a_transcode:
+        if need_a:
             cmd.extend(["-c:a", "aac", "-b:a", "192k"])
         elif a_codec:
             cmd.extend(["-c:a", "copy"])
 
         cmd.extend(["-movflags", "+faststart", str(temp_out)])
-        
+
         sub_res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if sub_res.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
-            if file_path != target_path and file_path.exists():
+            if file_path.exists() and file_path != target_path:
                 file_path.unlink(missing_ok=True)
             temp_out.replace(target_path)
             return target_path
