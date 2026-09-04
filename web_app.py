@@ -1,5 +1,6 @@
 import os
 import sys
+import io
 import uuid
 import time
 import json
@@ -12,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
+from PIL import Image
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -106,7 +108,6 @@ def cleanup_cron():
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
-    # الكود الأساسي الخاص بك مع الحماية[span_6](start_span)[span_6](end_span)
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -363,7 +364,6 @@ async def api_search(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# دالة المعاينة مأخوذة من الكود الأساسي لك حرفياً بدون تعديل[span_7](start_span)[span_7](end_span)
 @app.post("/api/preview")
 async def get_preview(request: Request):
     try:
@@ -460,7 +460,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
-                'preferredquality': '192' # الجودة الأساسية لك[span_8](start_span)[span_8](end_span)
+                'preferredquality': '192'
             }]
         })
     elif mode == 'raw_video':
@@ -626,11 +626,19 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            # كود إرسال المعاينة لتيليجرام من الكود الأساسي لك حرفياً[span_9](start_span)[span_9](end_span)
-            if thumb and is_audio:
+            # معالجة وإرفاق صورة المعاينة للصوت والفيديو بصيغة JPEG متوافقة مع تيليجرام
+            if thumb:
                 try:
-                    t_res = requests.get(thumb, timeout=4)
-                    if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
+                    t_res = requests.get(thumb, headers={"User-Agent": "Mozilla/5.0"}, timeout=8)
+                    if t_res.status_code == 200:
+                        img = Image.open(io.BytesIO(t_res.content)).convert("RGB")
+                        img.thumbnail((320, 320), Image.Resampling.LANCZOS)
+                        out_thumb = io.BytesIO()
+                        img.save(out_thumb, format="JPEG", quality=85, optimize=True)
+                        thumb_bytes = out_thumb.getvalue()
+                        
+                        files_payload['thumbnail'] = ('thumb.jpg', thumb_bytes, 'image/jpeg')
+                        files_payload['thumb'] = ('thumb.jpg', thumb_bytes, 'image/jpeg')
                 except Exception:
                     pass
                     
