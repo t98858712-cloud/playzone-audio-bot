@@ -3,6 +3,8 @@ import shutil
 import logging
 import asyncio
 import urllib.request
+import io
+from PIL import Image
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
@@ -14,7 +16,6 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
-    # الكود الأساسي الخاص بك مع الحماية[span_2](start_span)[span_2](end_span)
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
@@ -37,7 +38,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # الحل: إجبار H.264 (avc1) لمنع التجميد، وإزالة أوامر FFmpeg التي تتلف المعاينة[span_3](start_span)[span_3](end_span)
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[ext=mp4][vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
@@ -64,7 +64,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
 
-# دالة المعاينة مأخوذة من الكود الأساسي لك حرفياً بدون تعديل[span_4](start_span)[span_4](end_span)
 def extract_metadata(url: str):
     opts = get_ydl_options(mode="video")
     opts["skip_download"] = True
@@ -136,18 +135,26 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, re
     with yt_dlp.YoutubeDL(opts) as ydl:
         return ydl.extract_info(url, download=True)
 
-# دالة المعاينة مأخوذة من الكود الأساسي لك حرفياً بدون تعديل[span_5](start_span)[span_5](end_span)
+# تم التعديل: تحويل المعاينة إجبارياً إلى JPEG وضبط الأبعاد لتيليجرام
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
-        if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
+        if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): 
+            return None
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=6) as response:
-            data = response.read(2 * 1024 * 1024 + 1)
-        if len(data) > 2 * 1024 * 1024: return None
-        output_path.write_bytes(data)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = response.read(10 * 1024 * 1024)
+        if not data: 
+            return None
+            
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+        img.thumbnail((320, 320), Image.Resampling.LANCZOS)
+        
+        output_path = output_path.with_suffix(".jpg")
+        img.save(output_path, format="JPEG", quality=85, optimize=True)
         return output_path if output_path.exists() else None
-    except Exception: return None
+    except Exception: 
+        return None
 
 async def youtube_health_monitor(app: Application):
     while True:
