@@ -110,69 +110,23 @@ def ensure_compatible_video(file_path: Path) -> Path:
         return file_path
         
     target_path = file_path.with_suffix(".mp4")
-    temp_out = file_path.with_name(f"temp_fix_{uuid.uuid4().hex[:6]}.mp4")
+    temp_out = file_path.with_name(f"fixed_{uuid.uuid4().hex[:6]}.mp4")
+    
+    cmd = [
+        "ffmpeg", "-y", "-i", str(file_path),
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+        "-profile:v", "main", "-level", "4.0",
+        "-vf", "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+        "-movflags", "+faststart",
+        str(temp_out)
+    ]
+    
     try:
-        probe_cmd = [
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=codec_name,pix_fmt,width,height",
-            "-of", "json", str(file_path)
-        ]
-        res = subprocess.run(probe_cmd, capture_output=True, text=True)
-        data = json.loads(res.stdout) if res.stdout else {}
-        v_streams = data.get("streams", [])
-        
-        v_codec = ""
-        v_pix = ""
-        w = 0
-        h = 0
-        if v_streams:
-            v_codec = v_streams[0].get("codec_name", "").lower()
-            v_pix = v_streams[0].get("pix_fmt", "").lower()
-            w = int(v_streams[0].get("width") or 0)
-            h = int(v_streams[0].get("height") or 0)
-
-        probe_a = [
-            "ffprobe", "-v", "error",
-            "-select_streams", "a:0",
-            "-show_entries", "stream=codec_name",
-            "-of", "json", str(file_path)
-        ]
-        res_a = subprocess.run(probe_a, capture_output=True, text=True)
-        data_a = json.loads(res_a.stdout) if res_a.stdout else {}
-        a_streams = data_a.get("streams", [])
-        a_codec = a_streams[0].get("codec_name", "").lower() if a_streams else ""
-
-        need_v = (v_codec != "h264") or (v_pix != "yuv420p") or (w % 2 != 0) or (h % 2 != 0)
-        need_a = (a_codec != "aac") and (a_codec != "")
-        is_mp4 = (file_path.suffix.lower() == ".mp4")
-
-        if is_mp4 and not need_v and not need_a:
-            return file_path
-
-        cmd = ["ffmpeg", "-y", "-i", str(file_path)]
-
-        if need_v:
-            cmd.extend([
-                "-c:v", "libx264",
-                "-preset", "ultrafast",
-                "-crf", "23",
-                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                "-pix_fmt", "yuv420p"
-            ])
-        else:
-            cmd.extend(["-c:v", "copy"])
-
-        if need_a:
-            cmd.extend(["-c:a", "aac", "-b:a", "192k"])
-        elif a_codec:
-            cmd.extend(["-c:a", "copy"])
-
-        cmd.extend(["-movflags", "+faststart", str(temp_out)])
-
-        sub_res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if sub_res.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
-            if file_path.exists() and file_path != target_path:
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
+        if res.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
+            if file_path.exists():
                 file_path.unlink(missing_ok=True)
             temp_out.replace(target_path)
             return target_path
@@ -194,12 +148,11 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "fragment_retries": 15,
         "socket_timeout": 30,
         "cachedir": False,
-        "concurrent_fragment_downloads": 5,
+        "concurrent_fragment_downloads": 2,
         "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["ios", "web", "mweb"]
             }
         },
         "http_headers": {
@@ -540,25 +493,13 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 'preferredquality': '192'
             }]
         })
-    elif mode == 'raw_video':
-        opts.update({
-            'format': (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best"
-            ),
-            'merge_output_format': 'mp4'
-        })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"best[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]/"
-                f"best"
+                f"bestvideo[height<={target_res}]+bestaudio/"
+                f"best[height<={target_res}]/best"
             ),
             'merge_output_format': 'mp4'
         })
@@ -569,10 +510,10 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             
             if mode not in ['audio', 'raw_audio']:
                 for v_file in list(WEB_DIR.glob(f"{job_id}.*")):
-                    if v_file.is_file() and not v_file.name.endswith(".part"):
+                    if v_file.is_file() and not v_file.name.endswith(".part") and not v_file.name.startswith("fixed_"):
                         ensure_compatible_video(v_file)
 
-            matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part") and not f.name.startswith("temp_fix_")]
+            matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part") and not f.name.startswith("fixed_")]
             if matching_files:
                 filename = matching_files[0].name
             else:
