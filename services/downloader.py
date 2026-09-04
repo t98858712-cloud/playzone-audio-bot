@@ -2,7 +2,6 @@ import uuid
 import shutil
 import logging
 import asyncio
-import subprocess
 import urllib.request
 import yt_dlp
 from pathlib import Path
@@ -37,32 +36,40 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
+        # تفضيل H.264 (avc1) مع أي مسار صوتي متاح، وتفادي التقيد بـ mp4a لمنع الهبوط لـ VP9/AV1
         if resolution == "best":
             opts["format"] = (
-                f"bestvideo[ext=mp4][vcodec^=avc1][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4][filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]/"
+                f"best[vcodec^=avc1]/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"best"
             )
         else:
             opts["format"] = (
-                f"bestvideo[ext=mp4][vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[ext=m4a]/"
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4][height<={resolution}][filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
+                f"best[vcodec^=avc1]/"
+                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
                 f"best"
             )
             
         opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
+        # تحويل الصوت إلى AAC وإضافة +faststart لضمان البث السريع على تليجرام ومنع تجميد الإطارات
+        opts["postprocessor_args"] = {
+            "ffmpeg": [
+                "-c:a", "aac",
+                "-b:a", "320k",
+                "-movflags", "+faststart"
+            ]
+        }
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
-    if job_dir: 
-        opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
-    if progress_data is not None: 
-        opts["progress_hooks"] = [download_hook(progress_data)]
+    if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
+    if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
 
 def extract_metadata(url: str):
@@ -139,29 +146,14 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, re
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
     try:
-        if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): 
-            return None
+        if not thumb_url or not is_public_host(urlparse(thumb_url).hostname or ""): return None
         req = urllib.request.Request(thumb_url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=8) as response:
-            data = response.read(10 * 1024 * 1024)
-        if not data: 
-            return None
-            
-        output_jpg = output_path.with_suffix(".jpg")
-        cmd = [
-            'ffmpeg', '-y', '-i', 'pipe:0',
-            '-vf', 'scale=320:320:force_original_aspect_ratio=decrease',
-            '-f', 'mjpeg',
-            str(output_jpg)
-        ]
-        proc = subprocess.run(cmd, input=data, capture_output=True, timeout=6)
-        if proc.returncode == 0 and output_jpg.exists():
-            return output_jpg
-            
+        with urllib.request.urlopen(req, timeout=6) as response:
+            data = response.read(2 * 1024 * 1024 + 1)
+        if len(data) > 2 * 1024 * 1024: return None
         output_path.write_bytes(data)
         return output_path if output_path.exists() else None
-    except Exception: 
-        return None
+    except Exception: return None
 
 async def youtube_health_monitor(app: Application):
     while True:
