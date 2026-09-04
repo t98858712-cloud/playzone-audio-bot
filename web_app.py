@@ -105,41 +105,65 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-def ensure_compatible_video(file_path: Path):
-    if not file_path.exists() or file_path.suffix.lower() != ".mp4":
-        return
+def ensure_compatible_video(file_path: Path) -> Path:
+    if not file_path.exists() or file_path.stat().st_size == 0:
+        return file_path
+        
+    target_path = file_path.with_suffix(".mp4")
+    temp_out = file_path.with_name(f"temp_fix_{uuid.uuid4().hex[:6]}.mp4")
     try:
         probe_cmd = [
-            "ffprobe", "-v", "error", "-select_streams", "v:0",
-            "-show_entries", "stream=codec_name,pix_fmt",
+            "ffprobe", "-v", "error",
+            "-show_entries", "stream=codec_type,codec_name,pix_fmt",
             "-of", "json", str(file_path)
         ]
         res = subprocess.run(probe_cmd, capture_output=True, text=True)
-        data = json.loads(res.stdout)
-        stream = data.get("streams", [{}])[0]
-        codec = stream.get("codec_name", "")
-        pix_fmt = stream.get("pix_fmt", "")
+        data = json.loads(res.stdout) if res.stdout else {}
+        streams = data.get("streams", [])
+        
+        v_codec = ""
+        v_pix = ""
+        a_codec = ""
+        for s in streams:
+            if s.get("codec_type") == "video" and not v_codec:
+                v_codec = s.get("codec_name", "").lower()
+                v_pix = s.get("pix_fmt", "").lower()
+            elif s.get("codec_type") == "audio" and not a_codec:
+                a_codec = s.get("codec_name", "").lower()
 
-        temp_out = file_path.with_name(f"fixed_{file_path.name}")
-        if codec != "h264" or "10" in pix_fmt:
-            cmd = [
-                "ffmpeg", "-y", "-i", str(file_path),
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "192k",
-                "-movflags", "+faststart", str(temp_out)
-            ]
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            temp_out.replace(file_path)
+        need_v_transcode = (v_codec != "h264") or ("10" in v_pix)
+        need_a_transcode = (a_codec != "aac") and (a_codec != "")
+        is_mp4 = (file_path.suffix.lower() == ".mp4")
+
+        if is_mp4 and not need_v_transcode and not need_a_transcode:
+            return file_path
+
+        cmd = ["ffmpeg", "-y", "-i", str(file_path)]
+        if need_v_transcode:
+            cmd.extend(["-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p"])
         else:
-            cmd = [
-                "ffmpeg", "-y", "-i", str(file_path),
-                "-c", "copy", "-movflags", "+faststart", str(temp_out)
-            ]
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            temp_out.replace(file_path)
+            cmd.extend(["-c:v", "copy"])
+
+        if need_a_transcode:
+            cmd.extend(["-c:a", "aac", "-b:a", "192k"])
+        elif a_codec:
+            cmd.extend(["-c:a", "copy"])
+
+        cmd.extend(["-movflags", "+faststart", str(temp_out)])
+        
+        sub_res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if sub_res.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
+            if file_path != target_path and file_path.exists():
+                file_path.unlink(missing_ok=True)
+            temp_out.replace(target_path)
+            return target_path
+        else:
+            if temp_out.exists():
+                temp_out.unlink(missing_ok=True)
     except Exception:
-        pass
+        if temp_out.exists():
+            temp_out.unlink(missing_ok=True)
+    return file_path
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
@@ -500,27 +524,24 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
-                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo+bestaudio/best"
+                f"best"
             ),
-            'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
+            'merge_output_format': 'mp4'
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"best[vcodec^=avc1]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo+bestaudio/best"
+                f"best[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]/"
+                f"best"
             ),
-            'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
+            'merge_output_format': 'mp4'
         })
     
     try:
@@ -528,7 +549,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             info = ydl.extract_info(url, download=True)
             
             if mode not in ['audio', 'raw_audio']:
-                for v_file in WEB_DIR.glob(f"{job_id}.*"):
+                for v_file in list(WEB_DIR.glob(f"{job_id}.*")):
                     if v_file.is_file() and not v_file.name.endswith(".part"):
                         ensure_compatible_video(v_file)
 
