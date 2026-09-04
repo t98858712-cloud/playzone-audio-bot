@@ -105,6 +105,42 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
+def ensure_compatible_video(file_path: Path):
+    if not file_path.exists() or file_path.suffix.lower() != ".mp4":
+        return
+    try:
+        probe_cmd = [
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=codec_name,pix_fmt",
+            "-of", "json", str(file_path)
+        ]
+        res = subprocess.run(probe_cmd, capture_output=True, text=True)
+        data = json.loads(res.stdout)
+        stream = data.get("streams", [{}])[0]
+        codec = stream.get("codec_name", "")
+        pix_fmt = stream.get("pix_fmt", "")
+
+        temp_out = file_path.with_name(f"fixed_{file_path.name}")
+        if codec != "h264" or "10" in pix_fmt:
+            cmd = [
+                "ffmpeg", "-y", "-i", str(file_path),
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "192k",
+                "-movflags", "+faststart", str(temp_out)
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            temp_out.replace(file_path)
+        else:
+            cmd = [
+                "ffmpeg", "-y", "-i", str(file_path),
+                "-c", "copy", "-movflags", "+faststart", str(temp_out)
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            temp_out.replace(file_path)
+    except Exception:
+        pass
+
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -491,6 +527,11 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
             
+            if mode not in ['audio', 'raw_audio']:
+                for v_file in WEB_DIR.glob(f"{job_id}.*"):
+                    if v_file.is_file() and not v_file.name.endswith(".part"):
+                        ensure_compatible_video(v_file)
+
             matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
             if matching_files:
                 filename = matching_files[0].name
