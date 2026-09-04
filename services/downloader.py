@@ -20,70 +20,24 @@ def ensure_compatible_video(file_path: Path) -> Path:
         return file_path
         
     target_path = file_path.with_suffix(".mp4")
-    temp_out = file_path.with_name(f"temp_fix_{uuid.uuid4().hex[:6]}.mp4")
+    temp_out = file_path.with_name(f"fixed_{uuid.uuid4().hex[:6]}.mp4")
+    
+    # تحويل الفيديو لـ H.264 بمعدل إطارات ثابت (CFR 30fps) وأبعاد زوجية لإنهاء مشكلة تجمد الصورة نهائياً
+    cmd = [
+        "ffmpeg", "-y", "-i", str(file_path),
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+        "-profile:v", "main", "-level", "4.0",
+        "-vf", "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+        "-movflags", "+faststart",
+        str(temp_out)
+    ]
+    
     try:
-        probe_cmd = [
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=codec_name,pix_fmt,width,height",
-            "-of", "json", str(file_path)
-        ]
-        res = subprocess.run(probe_cmd, capture_output=True, text=True)
-        data = json.loads(res.stdout) if res.stdout else {}
-        v_streams = data.get("streams", [])
-        
-        v_codec = ""
-        v_pix = ""
-        w = 0
-        h = 0
-        if v_streams:
-            v_codec = v_streams[0].get("codec_name", "").lower()
-            v_pix = v_streams[0].get("pix_fmt", "").lower()
-            w = int(v_streams[0].get("width") or 0)
-            h = int(v_streams[0].get("height") or 0)
-
-        probe_a = [
-            "ffprobe", "-v", "error",
-            "-select_streams", "a:0",
-            "-show_entries", "stream=codec_name",
-            "-of", "json", str(file_path)
-        ]
-        res_a = subprocess.run(probe_a, capture_output=True, text=True)
-        data_a = json.loads(res_a.stdout) if res_a.stdout else {}
-        a_streams = data_a.get("streams", [])
-        a_codec = a_streams[0].get("codec_name", "").lower() if a_streams else ""
-
-        # الشروط القياسية لتشغيل الفيديو بدون تجمد: H.264 + yuv420p + أبعاد زوجية + صوت aac
-        need_v = (v_codec != "h264") or (v_pix != "yuv420p") or (w % 2 != 0) or (h % 2 != 0)
-        need_a = (a_codec != "aac") and (a_codec != "")
-        is_mp4 = (file_path.suffix.lower() == ".mp4")
-
-        if is_mp4 and not need_v and not need_a:
-            return file_path
-
-        cmd = ["ffmpeg", "-y", "-i", str(file_path)]
-
-        if need_v:
-            cmd.extend([
-                "-c:v", "libx264",
-                "-preset", "ultrafast",
-                "-crf", "23",
-                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                "-pix_fmt", "yuv420p"
-            ])
-        else:
-            cmd.extend(["-c:v", "copy"])
-
-        if need_a:
-            cmd.extend(["-c:a", "aac", "-b:a", "192k"])
-        elif a_codec:
-            cmd.extend(["-c:a", "copy"])
-
-        cmd.extend(["-movflags", "+faststart", str(temp_out)])
-
-        sub_res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if sub_res.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
-            if file_path.exists() and file_path != target_path:
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
+        if res.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
+            if file_path.exists():
                 file_path.unlink(missing_ok=True)
             temp_out.replace(target_path)
             return target_path
@@ -99,15 +53,14 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "concurrent_fragment_downloads": 2, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["ios", "web", "mweb"]
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
@@ -116,25 +69,14 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         opts["format"] = "bestaudio/best"
     else:
         from core.config import LOCAL_API_URL
-        max_fs = "50M" if not LOCAL_API_URL else "2000M"
+        max_fs = "49M" if not LOCAL_API_URL else "2000M"
         
-        if resolution == "best":
-            opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best[vcodec^=avc1][filesize<?{max_fs}]/"
-                f"best"
-            )
-        else:
-            opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]/"
-                f"best"
-            )
-            
+        target_res = resolution if resolution and resolution != 'best' else '720'
+        opts["format"] = (
+            f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+            f"bestvideo[height<={target_res}]+bestaudio/"
+            f"best[height<={target_res}]/best"
+        )
         opts["merge_output_format"] = "mp4"
 
     from core.config import COOKIES_FILE
@@ -162,8 +104,7 @@ def search_youtube(query: str, limit: int = 30):
         "ignoreerrors": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["ios", "web", "mweb"]
             }
         }
     }
@@ -218,7 +159,7 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, re
     
     if mode != "audio":
         for video_file in list(job_dir.glob("*")):
-            if video_file.is_file() and video_file.suffix.lower() in [".mp4", ".mkv", ".webm", ".mov"] and not video_file.name.startswith("temp_fix_"):
+            if video_file.is_file() and video_file.suffix.lower() in [".mp4", ".mkv", ".webm", ".mov"] and not video_file.name.startswith("fixed_"):
                 ensure_compatible_video(video_file)
                 
     return info
@@ -248,8 +189,7 @@ async def youtube_health_monitor(app: Application):
                 "cookiefile": str(COOKIES_FILE),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios", "tv"],
-                        "player_skip": ["web", "mweb"]
+                        "player_client": ["ios", "web", "mweb"]
                     }
                 }
             }
