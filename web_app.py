@@ -475,7 +475,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
@@ -487,7 +487,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
+            'postprocessor_args': {'ffmpeg': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
         })
     
     try:
