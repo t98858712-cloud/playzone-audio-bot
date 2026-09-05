@@ -23,6 +23,7 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
+# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -48,6 +49,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
+# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -105,61 +107,79 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-def fix_video_if_needed(file_path: Path):
-    """إصلاح تجمد الفيديو وضمان تشغيله على تليجرام والمتصفحات"""
+# --- دالة الفحص والمعالجة الشرطية للفيديو (حل تجميد الصورة) ---
+def sanitize_video_stream(file_path: Path) -> Path:
+    """
+    تفحص ملف الفيديو للتأكد من توافقه وتصحيحه تلقائياً إذا كان بترميز VP9/AV1
+    أو بأبعاد فردية تمنع محركات التشغيل والتليجرام من تحريك الإطارات.
+    """
     if not file_path.exists() or file_path.stat().st_size == 0:
-        return
+        return file_path
+    
+    if file_path.suffix.lower() not in [".mp4", ".mkv", ".webm", ".mov"]:
+        return file_path
+
     try:
-        cmd = [
+        probe_cmd = [
             "ffprobe", "-v", "error",
             "-select_streams", "v:0",
-            "-show_entries", "stream=codec_name,pix_fmt,width,height",
-            "-of", "json", str(file_path)
+            "-show_entries", "stream=codec_name,width,height,pix_fmt",
+            "-of", "json",
+            str(file_path)
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        probe = json.loads(res.stdout) if res.stdout else {}
-        streams = probe.get("streams", [])
+        res = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=8)
+        if res.returncode != 0 or not res.stdout.strip():
+            return file_path
+        
+        probe_data = json.loads(res.stdout)
+        streams = probe_data.get("streams", [])
         if not streams:
-            return
-        v = streams[0]
-        codec = v.get("codec_name", "").lower()
-        pix = v.get("pix_fmt", "").lower()
-        w = int(v.get("width") or 0)
-        h = int(v.get("height") or 0)
+            return file_path
+        
+        stream = streams[0]
+        codec = str(stream.get("codec_name", "")).lower().strip()
+        width = int(stream.get("width") or 0)
+        height = int(stream.get("height") or 0)
+        pix_fmt = str(stream.get("pix_fmt", "")).lower().strip()
 
-        needs_transcode = (codec != "h264") or (pix != "yuv420p") or (w % 2 != 0) or (h % 2 != 0)
-        temp_out = file_path.with_name(f"fix_{file_path.name}")
+        # أسباب تعطل حركة الصورة مع عمل الصوت:
+        # 1. الترميز ليس H.264 (مثل AV1 أو VP9 المعتمد في المنصات مؤخراً)
+        # 2. أبعاد فردية (Odd dimensions) تفشل معها معالجات الهواتف وتطبيق تليجرام
+        # 3. تنسيق ألوان غير قياسي (مثل 10-bit HDR)
+        needs_fix = (
+            codec not in ["h264", "avc1"] or
+            (width > 0 and width % 2 != 0) or
+            (height > 0 and height % 2 != 0) or
+            pix_fmt != "yuv420p"
+        )
 
-        if needs_transcode:
-            trans_cmd = [
-                "ffmpeg", "-y", "-i", str(file_path),
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "192k",
-                "-movflags", "+faststart",
-                str(temp_out)
-            ]
-            r = subprocess.run(trans_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if r.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
-                temp_out.replace(file_path)
-            elif temp_out.exists():
-                temp_out.unlink(missing_ok=True)
+        if not needs_fix:
+            return file_path
+
+        temp_fixed = file_path.with_name(f"fixed_{uuid.uuid4().hex[:6]}_{file_path.name}")
+        ffmpeg_cmd = [
+            "ffmpeg", "-y", "-v", "error",
+            "-i", str(file_path),
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "22",
+            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
+            "-c:a", "copy",
+            "-movflags", "+faststart",
+            str(temp_fixed)
+        ]
+        run_res = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=90)
+        if run_res.returncode == 0 and temp_fixed.exists() and temp_fixed.stat().st_size > 0:
+            file_path.unlink(missing_ok=True)
+            temp_fixed.rename(file_path)
         else:
-            fast_cmd = [
-                "ffmpeg", "-y", "-i", str(file_path),
-                "-c", "copy",
-                "-movflags", "+faststart",
-                str(temp_out)
-            ]
-            r = subprocess.run(fast_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if r.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
-                temp_out.replace(file_path)
-            elif temp_out.exists():
-                temp_out.unlink(missing_ok=True)
+            if temp_fixed.exists():
+                temp_fixed.unlink(missing_ok=True)
     except Exception:
         pass
+    return file_path
 
+# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -174,10 +194,12 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["tv_embedded", "web", "mweb", "tv"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         },
         "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
@@ -189,6 +211,8 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
     return opts
+
+# --- المسارات والـ API Endpoints ---
 
 @app.get("/")
 def home():
@@ -386,7 +410,6 @@ async def api_search(request: Request):
         query = data.get("query", "")
         opts = get_hardened_ydl_options()
         opts['extract_flat'] = True
-        opts['extractor_args'] = {'youtube': {'player_client': ['web', 'mweb', 'tv_embedded']}}
         if 'playlist_items' in opts: del opts['playlist_items']
         if 'noplaylist' in opts: del opts['noplaylist']
         
@@ -518,8 +541,8 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
-                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
@@ -531,8 +554,8 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[height<={target_res}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
@@ -546,8 +569,9 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
             if matching_files:
                 target_file = matching_files[0]
+                # فحص وتصحيح الريلز/الفيديو لمنع تجميد الصورة
                 if mode not in ['audio', 'raw_audio']:
-                    fix_video_if_needed(target_file)
+                    target_file = sanitize_video_stream(target_file)
                 filename = target_file.name
             else:
                 ext = 'mp3' if mode == 'audio' else 'mp4'
@@ -670,8 +694,9 @@ async def send_to_telegram(request: Request):
         if not file_path or not file_path.exists():
             return {"success": False, "error": "الملف غير موجود على السيرفر."}
 
+        # التأكد من سلامة ملف الفيديو قبل إرساله للتليجرام
         if not is_audio:
-            fix_video_if_needed(file_path)
+            file_path = sanitize_video_stream(Path(file_path))
 
         if not TELEGRAM_TOKEN:
             return {"success": False, "error": "توكن البوت غير مفعل بالخلفية."}
