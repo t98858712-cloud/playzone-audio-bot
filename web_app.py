@@ -7,6 +7,7 @@ import sqlite3
 import threading
 import subprocess
 import requests
+import re  # تم الإضافة لمعالجة الاسم
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
@@ -467,11 +468,11 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             }]
         })
     elif mode == 'raw_video':
+        # تم إزالة تفضيلات vp09 و av01 لأنها تسبب توقف الصورة في بعض المشغلات والآيفون
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
-                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"best[ext=mp4][filesize<?{max_fs}]/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
@@ -482,8 +483,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[height<={target_res}]+bestaudio/"
+                f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
@@ -625,6 +625,15 @@ async def send_to_telegram(request: Request):
             if temp_file_created: file_path.unlink(missing_ok=True)
             return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
 
+        # 🌟 استخراج الوقت الفعلي الدقيق باستخدام ffprobe (لحل مشكلة عدم ظهور الوقت)
+        try:
+            cmd_dur = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(file_path)]
+            res_dur = subprocess.run(cmd_dur, capture_output=True, text=True)
+            if res_dur.stdout.strip():
+                duration = int(float(res_dur.stdout.strip()))
+        except Exception:
+            pass
+
         api_method = "sendAudio" if is_audio else "sendVideo"
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
         dur = int(duration) if duration else 0
@@ -664,8 +673,17 @@ async def send_to_telegram(request: Request):
             except Exception:
                 pass
 
+        # 🌟 تنظيف العنوان ليكون اسم الملف (لحل مشكلة ظهور "غير معروف")
+        safe_title = re.sub(r'[\\/*?:"<>|]', "", title).strip()
+        if not safe_title:
+            safe_title = "PlayZone_Media"
+        
+        file_extension = file_path.suffix if file_path.suffix else ('.mp3' if is_audio else '.mp4')
+        display_filename = f"{safe_title}{file_extension}"
+
         with open(file_path, 'rb') as f_media:
-            files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
+            # استخدام display_filename المخصص بدلاً من اسم الملف المشفر (file_path.name)
+            files_payload = {'audio' if is_audio else 'video': (display_filename, f_media)}
             
             if thumb and is_audio:
                 try:
