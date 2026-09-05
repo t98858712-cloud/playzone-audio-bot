@@ -23,6 +23,7 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
+# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -48,6 +49,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
+# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -105,36 +107,7 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-def ensure_video_compatibility(file_path: Path):
-    """
-    التحقق من ترميز الفيديو للتأكد من أنه h264، وإذا كان غير ذلك (مثل VP9 / AV1)
-    يتم تحويله تلقائياً لضمان سلاسة التشغيل وعدم تجمد الصورة في تيليجرام والمتصفحات.
-    """
-    try:
-        if not file_path.exists() or file_path.name.endswith(".part"):
-            return
-        cmd_probe = [
-            "ffprobe", "-v", "error", "-select_streams", "v:0",
-            "-show_entries", "stream=codec_name",
-            "-of", "default=noprint_wrappers=1:nokey=1", str(file_path)
-        ]
-        res = subprocess.run(cmd_probe, capture_output=True, text=True)
-        codec = res.stdout.strip().lower()
-        if codec and codec != "h264":
-            temp_out = file_path.with_name(f"fixed_{file_path.name}")
-            cmd_convert = [
-                "ffmpeg", "-y", "-i", str(file_path),
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                "-pix_fmt", "yuv420p",
-                "-c:a", "copy",
-                "-movflags", "+faststart",
-                str(temp_out)
-            ]
-            subprocess.run(cmd_convert, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            temp_out.replace(file_path)
-    except Exception as e:
-        print(f"Error ensuring video compatibility: {e}")
-
+# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -166,6 +139,8 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
     return opts
+
+# --- المسارات والـ API Endpoints ---
 
 @app.get("/")
 def home():
@@ -494,26 +469,25 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1]+bestaudio/"
+                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
+                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best"
+                f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"best[vcodec^=avc1][height<={target_res}]/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"best"
+                f"bestvideo[height<={target_res}]+bestaudio/"
+                f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
         })
     
     try:
@@ -522,16 +496,10 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             
             matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
             if matching_files:
-                file_path = matching_files[0]
-                filename = file_path.name
+                filename = matching_files[0].name
             else:
                 ext = 'mp3' if mode == 'audio' else 'mp4'
                 filename = f"{job_id}.{ext}"
-                file_path = WEB_DIR / filename
-
-            # فحص الفيديو ومعالجته إذا لم يكن h264
-            if mode not in ['audio', 'raw_audio'] and file_path.exists():
-                ensure_video_compatibility(file_path)
 
             payload = {
                 "status": "completed",
@@ -649,9 +617,6 @@ async def send_to_telegram(request: Request):
 
         if not file_path or not file_path.exists():
             return {"success": False, "error": "الملف غير موجود على السيرفر."}
-
-        if not is_audio:
-            ensure_video_compatibility(file_path)
 
         if not TELEGRAM_TOKEN:
             return {"success": False, "error": "توكن البوت غير مفعل بالخلفية."}
