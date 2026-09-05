@@ -49,10 +49,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- دوال المعالجة المساعدة (العنوان، المدة، قاعدة البيانات) ---
-
 def resolve_clean_title(info: dict, max_len: int = 60) -> str:
-    """استخراج العنوان وحل مشكلة ظهور الاسم كـ 'غير معروف'"""
     raw_title = (
         info.get("title") 
         or info.get("description") 
@@ -66,7 +63,6 @@ def resolve_clean_title(info: dict, max_len: int = 60) -> str:
     return clean_line[:max_len].strip()
 
 def get_media_duration(file_path: Path) -> int:
-    """حل مشكلة عدم ظهور الوقت عبر استخراجه من الملف محلياً"""
     try:
         cmd = [
             'ffprobe', '-v', 'error',
@@ -150,12 +146,11 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["web", "mweb"]
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
@@ -167,8 +162,6 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
     return opts
-
-# --- مسارات الويب ---
 
 @app.get("/")
 def home():
@@ -390,18 +383,13 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[height<={target_res}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            # ترميز x264 صريح لتفادي تجمد الصورة وتشغيل الفيديو بسلاسة
             'postprocessor_args': {
                 'ffmpeg': [
-                    '-c:v', 'libx264',
-                    '-pix_fmt', 'yuv420p',
-                    '-preset', 'veryfast',
-                    '-crf', '23',
                     '-c:a', 'aac',
                     '-b:a', '192k',
                     '-movflags', '+faststart'
@@ -422,7 +410,6 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 filename = f"{job_id}.{ext}"
                 file_path = WEB_DIR / filename
 
-            # معالجة مشكلة الوقت والاسم
             clean_title = resolve_clean_title(info)
             duration = info.get('duration') or 0
             if (not duration or duration == 0) and file_path.exists():
@@ -552,7 +539,6 @@ async def send_to_telegram(request: Request):
             if temp_file_created: file_path.unlink(missing_ok=True)
             return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
 
-        # التأكد النهائي من المدة قبل الإرسال لتليجرام
         dur = int(duration) if duration else 0
         if dur == 0:
             dur = get_media_duration(file_path)
