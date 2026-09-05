@@ -107,9 +107,27 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- معالجة واستخراج صور المعاينة الحقيقية دون أي روابط بديلة ---
+# --- دوال المعالجة والتحقق المباشر ---
+def get_media_duration(file_path: Path) -> int:
+    """استخراج مدة المقطع الفعلية مباشرة من ملف الوسائط بالثواني عبر ffprobe"""
+    if not file_path.exists():
+        return 0
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "json",
+            str(file_path)
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        data = json.loads(res.stdout)
+        dur = float(data.get("format", {}).get("duration", 0))
+        return int(round(dur))
+    except Exception:
+        return 0
+
 def get_entry_thumbnail(entry: dict) -> str:
-    """استخراج رابط الصورة الأصلي الحقيقي من بيانات المنصة مباشرة دون تخمين روابط"""
+    """استخراج صورة المعاينة الحقيقية دون روابط افتراضية"""
     if not entry or not isinstance(entry, dict):
         return ""
     
@@ -127,7 +145,7 @@ def get_entry_thumbnail(entry: dict) -> str:
     return ""
 
 def extract_thumbnail_from_video(video_path: Path) -> Path | None:
-    """استخراج صورة معاينة فعلية من إطار الفيديو محلياً لمنع ظهور بطاقات بدون صور"""
+    """استخراج إطار حقيقي كصورة معاينة من الفيديو مباشرة"""
     if not video_path.exists() or video_path.stat().st_size == 0:
         return None
     thumb_path = video_path.with_suffix(".jpg")
@@ -148,8 +166,8 @@ def extract_thumbnail_from_video(video_path: Path) -> Path | None:
         pass
     return None
 
-# --- الفحص الشرطي للريلز والفيديو لمنع تجميد حركة الصورة ---
 def sanitize_video_stream(file_path: Path) -> Path:
+    """فحص الفيديو وحل مشكلة تجمد حركة الصورة للأبعاد الفردية وتنسيقات VP9/AV1"""
     if not file_path.exists() or file_path.stat().st_size == 0:
         return file_path
     
@@ -212,7 +230,7 @@ def sanitize_video_stream(file_path: Path) -> Path:
         pass
     return file_path
 
-# --- خيارات التحميل المحصنة (المكان الوحيد المسموح له باستخدام الكوكيز) ---
+# --- خيارات yt-dlp للتحميل وفحص الروابط (مع التوافق التام لليوتيوب) ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -221,14 +239,14 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "playlist_items": "1",
         "retries": 15,
         "fragment_retries": 15,
-        "socket_timeout": 30,
+        "socket_timeout": 35,
         "cachedir": False,
         "concurrent_fragment_downloads": 5,
         "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                # تسلسل عملاء متوازن يدعم الكوكيز ويتفادى حظر الويب
+                "player_client": ["android", "web", "ios"]
             }
         },
         "http_headers": {
@@ -244,23 +262,6 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
     return opts
-
-# --- خيارات البحث السريع والمستقل تماماً (معزول 100% عن الكوكيز لمنع حرقها) ---
-def get_search_ydl_options():
-    return {
-        "quiet": True,
-        "no_warnings": True,
-        "extract_flat": True,
-        "skip_download": True,
-        "noplaylist": True,
-        "no_check_certificate": True,
-        "socket_timeout": 15,
-        # لا نضع cookiefile هنا نهائياً لحماية حساب الكوكيز من تتبع جوجل
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9"
-        }
-    }
 
 # --- مسارات API ---
 @app.get("/")
@@ -457,8 +458,20 @@ async def api_search(request: Request):
     try:
         data = await request.json()
         query = data.get("query", "")
-        opts = get_search_ydl_options()
-        
+        # إعدادات مخصصة للبحث السريع فقط
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": True,
+            "skip_download": True,
+            "noplaylist": True,
+            "no_check_certificate": True,
+            "socket_timeout": 15,
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9"
+            }
+        }
         with yt_dlp.YoutubeDL(opts) as ydl:
             raw_results = ydl.extract_info(f"ytsearch25:{query}", download=False) or {}
             
@@ -470,10 +483,15 @@ async def api_search(request: Request):
             title = entry.get("title")
             if video_id and title:
                 thumb_url = get_entry_thumbnail(entry)
+                dur = entry.get("duration")
+                try:
+                    dur_val = int(round(float(dur))) if dur else 0
+                except (ValueError, TypeError):
+                    dur_val = 0
                 valid_videos.append({
                     "id": video_id,
                     "title": title,
-                    "duration": entry.get("duration") or 0,
+                    "duration": dur_val,
                     "uploader": entry.get("uploader") or entry.get("channel") or "غير معروف",
                     "thumbnail": thumb_url
                 })
@@ -486,19 +504,35 @@ async def api_search(request: Request):
 async def get_preview(request: Request):
     try:
         data = await request.json()
-        url = data.get("url", "")
-        # المعاينة تعمل بخيارات بدون كوكيز أيضاً لحماية الجلسة
-        opts = get_search_ydl_options()
+        url = data.get("url", "").strip()
+        if not url:
+            return {"success": False, "error": "الرابط فارغ"}
+
+        # استخراج البيانات الكاملة بدون تفعيل extract_flat لجلب الاسم والمدة بدقة
+        opts = get_hardened_ydl_options()
         opts["skip_download"] = True
+        opts.pop("format", None)
+
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False) or {}
-            thumb_url = get_entry_thumbnail(info)
+            if "entries" in info and info["entries"]:
+                entries_list = [e for e in info["entries"] if e]
+                if entries_list:
+                    info = entries_list[0]
+
+            title = info.get("title") or "مقطع فيديو"
+            dur = info.get("duration")
+            try:
+                dur_seconds = int(round(float(dur))) if dur else 0
+            except (ValueError, TypeError):
+                dur_seconds = 0
+
             return {
                 "success": True,
-                "title": info.get("title", "بدون عنوان"),
-                "thumb": thumb_url,
-                "uploader": info.get("uploader", "غير معروف"),
-                "duration": info.get("duration", 0)
+                "title": title,
+                "thumb": get_entry_thumbnail(info),
+                "uploader": info.get("uploader") or info.get("channel") or "غير معروف",
+                "duration": dur_seconds
             }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -621,15 +655,28 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             else:
                 ext = 'mp3' if mode == 'audio' else 'mp4'
                 filename = f"{job_id}.{ext}"
+                target_file = WEB_DIR / filename
 
-            thumb_url = get_entry_thumbnail(info)
+            # استخراج مدة المقطع واسمه مع التأكيد النهائي عبر ffprobe
+            dur_info = info.get('duration') if info else None
+            try:
+                duration_val = int(round(float(dur_info))) if dur_info else 0
+            except (ValueError, TypeError):
+                duration_val = 0
+
+            if duration_val == 0 and target_file.exists():
+                duration_val = get_media_duration(target_file)
+
+            title_val = (info.get('title') if info else None) or target_file.stem or "مقطع"
+            thumb_url = get_entry_thumbnail(info) if info else ""
+
             payload = {
                 "status": "completed",
                 "url": f"/files/{filename}",
-                "title": info.get('title', 'مقطع'),
+                "title": title_val,
                 "thumb": thumb_url,
-                "uploader": info.get('uploader', 'غير معروف'),
-                "duration": info.get('duration', 0),
+                "uploader": (info.get('uploader') or info.get('channel') if info else None) or 'غير معروف',
+                "duration": duration_val,
                 "is_audio": mode in ['audio', 'raw_audio']
             }
             with get_db() as conn:
@@ -702,7 +749,10 @@ async def send_to_telegram(request: Request):
             is_audio = bool(body.get("is_audio", True))
             title = str(body.get("title", "مقطع"))
             performer = str(body.get("performer", "PlayZone"))
-            duration = int(body.get("duration", 0))
+            try:
+                duration = int(body.get("duration", 0))
+            except (ValueError, TypeError):
+                duration = 0
             thumb = str(body.get("thumb", ""))
             file_url = str(body.get("file_url", ""))
         else:
@@ -751,9 +801,16 @@ async def send_to_telegram(request: Request):
             if temp_file_created: file_path.unlink(missing_ok=True)
             return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
 
+        # التأكد النهائي من المدة واسم المقطع
+        dur = int(duration) if duration else 0
+        if dur == 0:
+            dur = get_media_duration(file_path)
+
+        if not title or title.strip() in ["مقطع", "بدون عنوان"]:
+            title = file_path.stem
+
         api_method = "sendAudio" if is_audio else "sendVideo"
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
-        dur = int(duration) if duration else 0
         
         time_str = f"{dur // 60:02d}:{dur % 60:02d}"
         caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>' if dur > 0 else "- @P1ay_Z0ne_Bot"
