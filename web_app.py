@@ -7,7 +7,7 @@ import sqlite3
 import threading
 import subprocess
 import requests
-import re  # تم الإضافة لمعالجة الاسم
+import re
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
@@ -356,11 +356,15 @@ async def api_search(request: Request):
                     entry.get("thumbnails")[0].get("url") if entry.get("thumbnails")
                     else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
                 )
+                
+                # آلية الفحص الشامل لاسم الناشر في البحث
+                uploader = entry.get("uploader") or entry.get("creator") or entry.get("channel") or entry.get("uploader_id") or "غير معروف"
+                
                 valid_videos.append({
                     "id": video_id,
                     "title": title,
                     "duration": entry.get("duration") or 0,
-                    "uploader": entry.get("uploader") or entry.get("channel") or "غير معروف",
+                    "uploader": uploader,
                     "thumbnail": thumb_url
                 })
             if len(valid_videos) == 15: break
@@ -376,11 +380,20 @@ async def get_preview(request: Request):
         opts = get_hardened_ydl_options()
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
+            
+            # تحسين سحب صورة المعاينة للمنصات الأخرى
+            thumb = info.get("thumbnail")
+            if not thumb and info.get("thumbnails"):
+                thumb = info.get("thumbnails")[-1].get("url")
+                
+            # آلية الفحص الشامل لاسم الناشر في المعاينة
+            uploader = info.get("uploader") or info.get("creator") or info.get("channel") or info.get("uploader_id") or info.get("extractor_key") or "غير معروف"
+
             return {
                 "success": True,
                 "title": info.get("title", "بدون عنوان"),
-                "thumb": info.get("thumbnail", ""),
-                "uploader": info.get("uploader", "غير معروف"),
+                "thumb": thumb or "",
+                "uploader": uploader,
                 "duration": info.get("duration", 0)
             }
     except Exception as e:
@@ -468,7 +481,6 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             }]
         })
     elif mode == 'raw_video':
-        # تم إزالة تفضيلات vp09 و av01 لأنها تسبب توقف الصورة في بعض المشغلات والآيفون
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
@@ -501,12 +513,15 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 ext = 'mp3' if mode == 'audio' else 'mp4'
                 filename = f"{job_id}.{ext}"
 
+            # آلية الفحص الشامل لاسم الناشر في المعالجة النهائية
+            uploader = info.get("uploader") or info.get("creator") or info.get("channel") or info.get("uploader_id") or info.get("extractor_key") or "غير معروف"
+
             payload = {
                 "status": "completed",
                 "url": f"/files/{filename}",
                 "title": info.get('title', 'مقطع'),
                 "thumb": info.get('thumbnail', ''),
-                "uploader": info.get('uploader', 'غير معروف'),
+                "uploader": uploader,
                 "duration": info.get('duration', 0),
                 "is_audio": mode in ['audio', 'raw_audio']
             }
@@ -625,21 +640,25 @@ async def send_to_telegram(request: Request):
             if temp_file_created: file_path.unlink(missing_ok=True)
             return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
 
-        # 🌟 استخراج الوقت الفعلي الدقيق باستخدام ffprobe (لحل مشكلة عدم ظهور الوقت)
+        # استخراج الوقت الفعلي الدقيق باستخدام ffprobe وتجاهل الأخطاء
+        final_duration = 0
         try:
             cmd_dur = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(file_path)]
             res_dur = subprocess.run(cmd_dur, capture_output=True, text=True)
-            if res_dur.stdout.strip():
-                duration = int(float(res_dur.stdout.strip()))
+            output_val = res_dur.stdout.strip()
+            if output_val and output_val != 'N/A':
+                final_duration = int(float(output_val))
         except Exception:
             pass
 
+        if final_duration == 0 and duration > 0:
+            final_duration = duration
+
         api_method = "sendAudio" if is_audio else "sendVideo"
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
-        dur = int(duration) if duration else 0
         
-        time_str = f"{dur // 60:02d}:{dur % 60:02d}"
-        if dur > 0:
+        time_str = f"{final_duration // 60:02d}:{final_duration % 60:02d}"
+        if final_duration > 0:
             caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>'
         else:
             caption = "- @P1ay_Z0ne_Bot"
@@ -661,10 +680,16 @@ async def send_to_telegram(request: Request):
             'reply_markup': json.dumps(reply_markup)
         }
         
+        # إرسال البيانات بشكل صحيح (عدم إرسال duration إذا كان صفر)
         if is_audio:
-            data_payload.update({'title': title, 'performer': performer, 'duration': dur})
+            data_payload.update({'title': title, 'performer': performer})
+            if final_duration > 0:
+                data_payload['duration'] = final_duration
         else:
-            data_payload.update({'supports_streaming': True, 'duration': dur})
+            data_payload.update({'supports_streaming': True})
+            if final_duration > 0:
+                data_payload['duration'] = final_duration
+                
             try:
                 cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
                 res = subprocess.run(cmd, capture_output=True, text=True)
@@ -673,7 +698,7 @@ async def send_to_telegram(request: Request):
             except Exception:
                 pass
 
-        # 🌟 تنظيف العنوان ليكون اسم الملف (لحل مشكلة ظهور "غير معروف")
+        # تنظيف العنوان ليكون اسم الملف
         safe_title = re.sub(r'[\\/*?:"<>|]', "", title).strip()
         if not safe_title:
             safe_title = "PlayZone_Media"
@@ -682,7 +707,6 @@ async def send_to_telegram(request: Request):
         display_filename = f"{safe_title}{file_extension}"
 
         with open(file_path, 'rb') as f_media:
-            # استخدام display_filename المخصص بدلاً من اسم الملف المشفر (file_path.name)
             files_payload = {'audio' if is_audio else 'video': (display_filename, f_media)}
             
             if thumb and is_audio:
