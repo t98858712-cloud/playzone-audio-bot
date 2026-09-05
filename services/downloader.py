@@ -36,7 +36,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # 🌟 الاستراتيجية الذكية للدقة الحقيقية (معدلة لمنع تعليق الصورة):
         # الاعتماد كلياً على ترميز H.264 (avc1) المدعوم من تيليجرام وآيفون لتجنب مشكلة تشغيل الصوت دون الصورة
         if resolution == "best":
             opts["format"] = (
