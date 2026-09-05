@@ -2,9 +2,9 @@ import uuid
 import shutil
 import logging
 import asyncio
-import urllib.request
-import subprocess
 import json
+import subprocess
+import urllib.request
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
@@ -15,81 +15,87 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-def fix_video_if_needed(file_path: Path):
-    """إصلاح تجمد الفيديو وضمان تشغيله على تليجرام دون التأثير على جودة الصوت أو التحميل"""
+def sanitize_video_stream(file_path: Path) -> Path:
+    """
+    فحص ومعالجة سريعة لملف الفيديو المكتمل.
+    إذا كان الترميز غير متوافق (مثل AV1/VP9 داخل MP4) أو الأبعاد فردية، يتم تصحيحه فوراً
+    ليعمل بسلاسة على كافة الأجهزة وتطبيق التليجرام.
+    """
     if not file_path.exists() or file_path.stat().st_size == 0:
-        return
+        return file_path
+    
+    if file_path.suffix.lower() not in [".mp4", ".mkv", ".webm", ".mov"]:
+        return file_path
+
     try:
-        cmd = [
+        probe_cmd = [
             "ffprobe", "-v", "error",
             "-select_streams", "v:0",
-            "-show_entries", "stream=codec_name,pix_fmt,width,height",
-            "-of", "json", str(file_path)
+            "-show_entries", "stream=codec_name,width,height,pix_fmt",
+            "-of", "json",
+            str(file_path)
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        probe = json.loads(res.stdout) if res.stdout else {}
-        streams = probe.get("streams", [])
+        res = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=8)
+        if res.returncode != 0 or not res.stdout.strip():
+            return file_path
+        
+        probe_data = json.loads(res.stdout)
+        streams = probe_data.get("streams", [])
         if not streams:
-            return
-        v = streams[0]
-        codec = v.get("codec_name", "").lower()
-        pix = v.get("pix_fmt", "").lower()
-        w = int(v.get("width") or 0)
-        h = int(v.get("height") or 0)
+            return file_path
+        
+        stream = streams[0]
+        codec = str(stream.get("codec_name", "")).lower().strip()
+        width = int(stream.get("width") or 0)
+        height = int(stream.get("height") or 0)
+        pix_fmt = str(stream.get("pix_fmt", "")).lower().strip()
 
-        needs_transcode = (codec != "h264") or (pix != "yuv420p") or (w % 2 != 0) or (h % 2 != 0)
-        temp_out = file_path.with_name(f"fix_{file_path.name}")
+        needs_fix = (
+            codec not in ["h264", "avc1"] or
+            (width > 0 and width % 2 != 0) or
+            (height > 0 and height % 2 != 0) or
+            pix_fmt != "yuv420p"
+        )
 
-        if needs_transcode:
-            trans_cmd = [
-                "ffmpeg", "-y", "-i", str(file_path),
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-                "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "192k",
-                "-movflags", "+faststart",
-                str(temp_out)
-            ]
-            r = subprocess.run(trans_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if r.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
-                temp_out.replace(file_path)
-            elif temp_out.exists():
-                temp_out.unlink(missing_ok=True)
+        if not needs_fix:
+            return file_path
+
+        temp_fixed = file_path.with_name(f"fixed_{uuid.uuid4().hex[:6]}_{file_path.name}")
+        ffmpeg_cmd = [
+            "ffmpeg", "-y", "-v", "error",
+            "-i", str(file_path),
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "22",
+            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
+            "-c:a", "copy",
+            "-movflags", "+faststart",
+            str(temp_fixed)
+        ]
+        run_res = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=90)
+        if run_res.returncode == 0 and temp_fixed.exists() and temp_fixed.stat().st_size > 0:
+            file_path.unlink(missing_ok=True)
+            temp_fixed.rename(file_path)
         else:
-            fast_cmd = [
-                "ffmpeg", "-y", "-i", str(file_path),
-                "-c", "copy",
-                "-movflags", "+faststart",
-                str(temp_out)
-            ]
-            r = subprocess.run(fast_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if r.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
-                temp_out.replace(file_path)
-            elif temp_out.exists():
-                temp_out.unlink(missing_ok=True)
-    except Exception:
-        pass
+            if temp_fixed.exists():
+                temp_fixed.unlink(missing_ok=True)
+    except Exception as e:
+        logger.warning(f"Sanitizing stream skipped/failed: {e}")
+    return file_path
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-        "playlist_items": "1",
-        "retries": 15,
-        "fragment_retries": 15,
-        "socket_timeout": 45,
-        "cachedir": False,
-        "concurrent_fragment_downloads": 5,
-        "no_check_certificate": True,
+        "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
+        "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
+        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                # السماح لعميل الويب باستخدام الكوكيز دون إجبار player_skip
-                "player_client": ["web", "mweb", "tv"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
@@ -100,15 +106,18 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
+        # الأولوية دائماً لترميز H.264 (avc1) لضمان التوافق التام وسرعة التحميل
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"best"
             )
         else:
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
                 f"best"
             )
@@ -116,22 +125,12 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
-    # التحقق المباشر من مسار الكوكيز لضمان تمريره لـ yt-dlp في كافة الظروف
-    cookie_candidates = [
-        COOKIES_FILE if 'COOKIES_FILE' in globals() else None,
-        Path("cookies.txt"),
-        Path("./cookies.txt")
-    ]
-    for cp in cookie_candidates:
-        if cp and Path(cp).exists() and Path(cp).stat().st_size > 0:
-            opts["cookiefile"] = str(Path(cp).resolve())
-            break
-
-    if job_dir:
-        opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
-    if progress_data is not None:
-        opts["progress_hooks"] = [download_hook(progress_data)]
-        
+    from core.config import COOKIES_FILE
+    from utils.helpers import cookie_file_is_usable
+    if cookie_file_is_usable(COOKIES_FILE):
+        opts["cookiefile"] = str(COOKIES_FILE)
+    if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
+    if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
     return opts
 
 def extract_metadata(url: str):
@@ -151,21 +150,13 @@ def search_youtube(query: str, limit: int = 30):
         "ignoreerrors": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["web", "mweb"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         }
     }
-    
-    cookie_candidates = [
-        COOKIES_FILE if 'COOKIES_FILE' in globals() else None,
-        Path("cookies.txt"),
-        Path("./cookies.txt")
-    ]
-    for cp in cookie_candidates:
-        if cp and Path(cp).exists() and Path(cp).stat().st_size > 0:
-            opts["cookiefile"] = str(Path(cp).resolve())
-            break
-
+    if cookie_file_is_usable(COOKIES_FILE):
+        opts["cookiefile"] = str(COOKIES_FILE)
     combined_entries = []
     seen_ids = set()
     try:
@@ -211,14 +202,16 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
     opts = get_ydl_options(job_dir, progress_data, mode, resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
-        res = ydl.extract_info(url, download=True)
-
+        info = ydl.extract_info(url, download=True)
+    
+    # تصحيح تجميد الصورة في الفيديو مباشرة بعد اكتمال التنزيل
     if mode != "audio":
-        for file_path in job_dir.glob("playzone_stream.*"):
-            if file_path.is_file() and not file_path.name.endswith(".part"):
-                fix_video_if_needed(file_path)
+        for f in job_dir.glob("playzone_stream.*"):
+            if f.is_file() and not f.name.endswith(".part"):
+                sanitize_video_stream(f)
+                break
 
-    return res
+    return info
 
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
@@ -236,17 +229,17 @@ async def youtube_health_monitor(app: Application):
     while True:
         await asyncio.sleep(6 * 3600)
         try:
-            cookie_file = Path("cookies.txt")
-            if not cookie_file.exists() or cookie_file.stat().st_size == 0:
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير موجود أو فارغ. يرجى تجديده لتفادي حظر التحميل.")
+            if not cookie_file_is_usable(COOKIES_FILE):
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
                 continue
             opts = {
                 "quiet": True, 
                 "extract_flat": True, 
-                "cookiefile": str(cookie_file.resolve()),
+                "cookiefile": str(COOKIES_FILE),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["web"]
+                        "player_client": ["android", "ios", "tv"],
+                        "player_skip": ["web", "mweb"]
                     }
                 }
             }
@@ -254,4 +247,4 @@ async def youtube_health_monitor(app: Application):
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
         except Exception as e:
             if "Sign in" in str(e) or "cookie" in str(e).lower():
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور أو انتهت صلاحيته.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور.")
