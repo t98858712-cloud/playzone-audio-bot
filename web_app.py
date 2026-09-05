@@ -23,7 +23,7 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
-# --- الإعدادات العامة ---
+# --- الإعدادات العامة والتكوين السحابي ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -49,7 +49,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- قاعدة البيانات المحلية ---
+# --- إدارة قاعدة البيانات المحلية ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -107,12 +107,9 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- استخراج صورة المعاينة الحقيقية محلياً وبرمجياً دون أي روابط بديلة ---
+# --- معالجة واستخراج صور المعاينة الحقيقية دون أي روابط بديلة ---
 def get_entry_thumbnail(entry: dict) -> str:
-    """
-    استخراج الرابط الأصلي الفعلي لصورة المعاينة من بيانات المنصة مباشرة
-    بدون توليد روابط بديلة أو تخمينية.
-    """
+    """استخراج رابط الصورة الأصلي الحقيقي من بيانات المنصة مباشرة دون تخمين روابط"""
     if not entry or not isinstance(entry, dict):
         return ""
     
@@ -130,10 +127,7 @@ def get_entry_thumbnail(entry: dict) -> str:
     return ""
 
 def extract_thumbnail_from_video(video_path: Path) -> Path | None:
-    """
-    توليد صورة معاينة حقيقية من إطار الفيديو نفسه (الثانية 00:00:01)
-    لضمان صورة مطابقة 100% دون الحاجة لأي رابط خارجي.
-    """
+    """استخراج صورة معاينة فعلية من إطار الفيديو محلياً لمنع ظهور بطاقات بدون صور"""
     if not video_path.exists() or video_path.stat().st_size == 0:
         return None
     thumb_path = video_path.with_suffix(".jpg")
@@ -154,7 +148,7 @@ def extract_thumbnail_from_video(video_path: Path) -> Path | None:
         pass
     return None
 
-# --- فحص ومعالجة تجميد حركة الفيديو ---
+# --- الفحص الشرطي للريلز والفيديو لمنع تجميد حركة الصورة ---
 def sanitize_video_stream(file_path: Path) -> Path:
     if not file_path.exists() or file_path.stat().st_size == 0:
         return file_path
@@ -218,7 +212,7 @@ def sanitize_video_stream(file_path: Path) -> Path:
         pass
     return file_path
 
-# --- خيارات التنزيل المحصنة ---
+# --- خيارات التحميل المحصنة (المكان الوحيد المسموح له باستخدام الكوكيز) ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -251,9 +245,9 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         opts["progress_hooks"] = [progress_hook]
     return opts
 
-# --- خيارات البحث الأصلية (لإرجاع الصور الحقيقية كاملة) ---
+# --- خيارات البحث السريع والمستقل تماماً (معزول 100% عن الكوكيز لمنع حرقها) ---
 def get_search_ydl_options():
-    opts = {
+    return {
         "quiet": True,
         "no_warnings": True,
         "extract_flat": True,
@@ -261,15 +255,12 @@ def get_search_ydl_options():
         "noplaylist": True,
         "no_check_certificate": True,
         "socket_timeout": 15,
+        # لا نضع cookiefile هنا نهائياً لحماية حساب الكوكيز من تتبع جوجل
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
-    cookie_path = Path("cookies.txt")
-    if cookie_path.exists() and cookie_path.stat().st_size > 0:
-        opts["cookiefile"] = str(cookie_path)
-    return opts
 
 # --- مسارات API ---
 @app.get("/")
@@ -496,7 +487,9 @@ async def get_preview(request: Request):
     try:
         data = await request.json()
         url = data.get("url", "")
-        opts = get_hardened_ydl_options()
+        # المعاينة تعمل بخيارات بدون كوكيز أيضاً لحماية الجلسة
+        opts = get_search_ydl_options()
+        opts["skip_download"] = True
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False) or {}
             thumb_url = get_entry_thumbnail(info)
@@ -797,7 +790,6 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            # جلب الصورة الأصلية إن وجدت، أو استخراجها مباشرة من إطار الفيديو محلياً
             thumb_bytes = None
             if thumb and thumb.startswith("http"):
                 try:
