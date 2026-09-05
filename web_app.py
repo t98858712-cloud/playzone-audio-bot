@@ -3,6 +3,7 @@ import sys
 import uuid
 import time
 import json
+import re
 import sqlite3
 import threading
 import subprocess
@@ -23,7 +24,6 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
-# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -49,7 +49,6 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -107,7 +106,6 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -140,7 +138,33 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         opts["progress_hooks"] = [progress_hook]
     return opts
 
-# --- المسارات والـ API Endpoints ---
+def inspect_media_file(file_path: Path) -> dict:
+    """استخراج المدة الحقيقية والأبعاد عبر ffprobe لحل مشكلة عدم ظهور الوقت نهائياً"""
+    info = {"duration": 0, "width": 0, "height": 0}
+    if not file_path.exists():
+        return info
+    try:
+        cmd = [
+            'ffprobe', '-v', 'error',
+            '-show_entries', 'format=duration:stream=width,height,duration',
+            '-of', 'json', str(file_path)
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        data = json.loads(res.stdout)
+        
+        fmt = data.get('format', {})
+        if fmt.get('duration'):
+            info['duration'] = int(round(float(fmt['duration'])))
+            
+        for s in data.get('streams', []):
+            if info['duration'] == 0 and s.get('duration'):
+                info['duration'] = int(round(float(s['duration'])))
+            if s.get('width') and s.get('height') and info['width'] == 0:
+                info['width'] = int(s['width'])
+                info['height'] = int(s['height'])
+    except Exception:
+        pass
+    return info
 
 @app.get("/")
 def home():
@@ -215,120 +239,6 @@ async def ping_session(request: Request):
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
-
-def get_web_visitors_report() -> str:
-    now = time.time()
-    online_threshold = now - 120
-    rows = []
-    online_count = 0
-    seen_users = set()
-
-    try:
-        from database.connection import db
-        from firebase_admin import firestore
-        from utils.helpers import esc
-    except ImportError:
-        db = None
-        firestore = None
-        def esc(s): return str(s) if s else ""
-
-    if db is not None and firestore is not None:
-        try:
-            docs = db.collection('web_visitors').order_by('last_ping', direction=firestore.Query.DESCENDING).limit(30).stream()
-            for doc in docs:
-                d = doc.to_dict()
-                tg_key = str(d.get('tg_id', '')).strip()
-                v_key = tg_key if tg_key != "زائر مجهول" else d.get('session_id')
-                
-                if v_key in seen_users:
-                    continue
-                seen_users.add(v_key)
-                
-                rows.append(d)
-                if float(d.get('last_ping', 0)) >= online_threshold:
-                    online_count += 1
-                if len(rows) >= 15:
-                    break
-        except Exception:
-            rows = []
-
-    if not rows:
-        with get_db() as conn:
-            cursor = conn.execute(
-                "SELECT session_id, tg_id, device, last_ping FROM web_live_sessions ORDER BY last_ping DESC LIMIT 30"
-            )
-            for r in cursor.fetchall():
-                tg_key = str(r['tg_id']).strip()
-                v_key = tg_key if tg_key != "زائر مجهول" else r['session_id']
-                
-                if v_key in seen_users:
-                    continue
-                seen_users.add(v_key)
-                
-                lp = float(r['last_ping'])
-                if lp >= online_threshold:
-                    online_count += 1
-                    
-                rows.append({
-                    'tg_id': r['tg_id'],
-                    'device': r['device'],
-                    'last_ping': lp
-                })
-                if len(rows) >= 15:
-                    break
-
-    if not rows:
-        return "🌐 <b>لا يوجد زوار في الموقع حالياً.</b>"
-
-    text = f"🌐 <b>رادار زوار الموقع الإلكتروني المتكامل (Firebase)</b>\n\n"
-    text += f"🟢 <b>المتواجدون الآن (أونلاين):</b> {online_count} زائر\n\n"
-    text += "📋 <b>أحدث الزوار ومعلوماتهم والتوقيتات:</b>\n\n"
-
-    local_tz = timezone(timedelta(hours=3))
-
-    for r in rows:
-        tg_id_str = str(r.get('tg_id', '')).strip()
-        last_ping = float(r.get('last_ping', 0))
-        is_online = last_ping >= online_threshold
-        status_str = "🟢 أونلاين" if is_online else "🔴 غير متواجد"
-        
-        dt = datetime.fromtimestamp(last_ping, tz=timezone.utc).astimezone(local_tz)
-        exact_time = dt.strftime('%Y-%m-%d %I:%M %p')
-        device_str = r.get('device') or "متصفح ويب 🌐"
-        
-        user_header = "👤 <b>زائر مجهول</b>"
-        id_line = ""
-
-        if tg_id_str != "زائر مجهول" and tg_id_str.isdigit() and db is not None:
-            try:
-                u_doc = db.collection('users').document(tg_id_str).get()
-                if u_doc.exists:
-                    u = u_doc.to_dict()
-                    first_name = esc(u.get('first_name', ''))
-                    last_name = esc(u.get('last_name', ''))
-                    full_name = f"{first_name} {last_name}".strip() or "مستخدم"
-                    username = u.get('username')
-                    uname_str = f" (@{esc(username)})" if username and username != "لا يوجد" and username != "" else ""
-                    
-                    user_header = f"👤 <code>{full_name}</code>{uname_str}"
-                    id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
-                else:
-                    user_header = "👤 <b>مستخدم</b>"
-                    id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
-            except Exception:
-                user_header = "👤 <b>مستخدم</b>"
-                id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
-        elif tg_id_str != "زائر مجهول" and tg_id_str.isdigit():
-            user_header = "👤 <b>مستخدم</b>"
-            id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
-
-        text += f"• {user_header}{id_line}\n  └ {device_str} | {status_str}\n  └ 🕒 <code>{exact_time}</code>\n\n"
-
-    return text
-
-@app.get("/api/admin/web_visitors")
-def api_admin_web_visitors():
-    return {"report": get_web_visitors_report()}
 
 @app.post("/api/search")
 async def api_search(request: Request):
@@ -443,7 +353,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 pass
         elif d['status'] == 'finished':
             try:
-                payload = {"status": "converting", "percent": 99.0, "spd_mb": "معالجة..."}
+                payload = {"status": "converting", "percent": 99.0, "spd_mb": "معالجة التوافق والبيانات..."}
                 with get_db() as conn:
                     conn.execute("UPDATE progress SET status='converting', data=?, timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
                     conn.commit()
@@ -453,41 +363,63 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     max_fs = "49M"
     
+    # ضمان تضمين الوسوم الوصفية (العنوان، الفنان، التاريخ) في جميع الحالات
+    base_postprocessors = [{"key": "FFmpegMetadata", "add_metadata": True}]
+
     if mode == 'raw_audio':
         opts.update({
-            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
+            'format': f"bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio[filesize<?{max_fs}]/bestaudio/best",
+            'postprocessors': base_postprocessors
         })
     elif mode == 'audio':
         opts.update({
             'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192'
-            }]
+            'postprocessors': [
+                {
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192'
+                },
+                {"key": "FFmpegMetadata", "add_metadata": True}
+            ]
         })
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
-                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo+bestaudio/best"
+                f"best[ext=mp4]/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
+            'postprocessors': base_postprocessors,
+            'postprocessor_args': {
+                'ffmpeg': [
+                    '-c:a', 'aac',
+                    '-b:a', '320k',
+                    '-movflags', '+faststart'
+                ]
+            }
         })
     else:
+        # فيديو عالي الدقة متوافق 100% بدون شاشة سوداء مع تفعيل faststart لإظهار الوقت فوراً
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[height<={target_res}]+bestaudio/"
-                f"bestvideo+bestaudio/best"
+                f"best[ext=mp4]/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
+            'postprocessors': base_postprocessors,
+            'postprocessor_args': {
+                'ffmpeg': [
+                    '-c:a', 'aac',
+                    '-b:a', '192k',
+                    '-movflags', '+faststart'
+                ]
+            }
         })
     
     try:
@@ -496,10 +428,16 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             
             matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
             if matching_files:
-                filename = matching_files[0].name
+                file_path = matching_files[0]
+                filename = file_path.name
             else:
                 ext = 'mp3' if mode == 'audio' else 'mp4'
                 filename = f"{job_id}.{ext}"
+                file_path = WEB_DIR / filename
+
+            # التحقق التام من المدة عبر ffprobe إذا لم تكن موجودة
+            real_meta = inspect_media_file(file_path)
+            duration_val = info.get('duration') or real_meta.get('duration') or 0
 
             payload = {
                 "status": "completed",
@@ -507,7 +445,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 "title": info.get('title', 'مقطع'),
                 "thumb": info.get('thumbnail', ''),
                 "uploader": info.get('uploader', 'غير معروف'),
-                "duration": info.get('duration', 0),
+                "duration": duration_val,
                 "is_audio": mode in ['audio', 'raw_audio']
             }
             with get_db() as conn:
@@ -567,8 +505,8 @@ async def send_to_telegram(request: Request):
 
         chat_id = ""
         is_audio = True
-        title = "مقطع"
-        performer = "PlayZone"
+        title = ""
+        performer = ""
         duration = 0
         thumb = ""
         file_url = ""
@@ -577,8 +515,8 @@ async def send_to_telegram(request: Request):
             body = await request.json()
             chat_id = str(body.get("chat_id", ""))
             is_audio = bool(body.get("is_audio", True))
-            title = str(body.get("title", "مقطع"))
-            performer = str(body.get("performer", "PlayZone"))
+            title = str(body.get("title", "")).strip()
+            performer = str(body.get("performer", "")).strip()
             duration = int(body.get("duration", 0))
             thumb = str(body.get("thumb", ""))
             file_url = str(body.get("file_url", ""))
@@ -587,8 +525,8 @@ async def send_to_telegram(request: Request):
             chat_id = str(form.get("chat_id", ""))
             is_audio_val = form.get("is_audio", "true")
             is_audio = str(is_audio_val).lower() in ["true", "1", "yes"]
-            title = str(form.get("title", "مقطع"))
-            performer = str(form.get("performer", "PlayZone"))
+            title = str(form.get("title", "")).strip()
+            performer = str(form.get("performer", "")).strip()
             try:
                 duration = int(form.get("duration", 0))
             except (ValueError, TypeError):
@@ -625,16 +563,46 @@ async def send_to_telegram(request: Request):
             if temp_file_created: file_path.unlink(missing_ok=True)
             return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
 
+        # 🌟 استعادة العنوان والمدة بدقة من قاعدة البيانات إذا وصلتا فارغتين
+        job_prefix = file_path.stem
+        with get_db() as conn:
+            cur = conn.execute("SELECT data FROM progress WHERE job_id = ?", (job_prefix,))
+            p_row = cur.fetchone()
+            if p_row:
+                try:
+                    p_info = json.loads(p_row["data"])
+                    if not title or title in ["مقطع", "undefined"]:
+                        title = p_info.get("title", "")
+                    if not performer or performer in ["PlayZone", "غير معروف"]:
+                        performer = p_info.get("uploader", "")
+                    if duration <= 0:
+                        duration = int(p_info.get("duration", 0))
+                except Exception:
+                    pass
+
+        # 🌟 فحص ملف الوسائط عبر ffprobe لضمان عدم خلو الوقت أو الأبعاد نهائياً
+        media_probe = inspect_media_file(file_path)
+        if duration <= 0:
+            duration = media_probe["duration"]
+
+        title = title or ("صوتية" if is_audio else "فيديو")
+        performer = performer or "PlayZone"
+
         api_method = "sendAudio" if is_audio else "sendVideo"
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
-        dur = int(duration) if duration else 0
+        dur = int(duration)
         
-        time_str = f"{dur // 60:02d}:{dur % 60:02d}"
-        if dur > 0:
-            caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>'
-        else:
-            caption = "- @P1ay_Z0ne_Bot"
+        time_str = f"{dur // 60:02d}:{dur % 60:02d}" if dur > 0 else ""
+        time_badge = f"⏱️ <b>المدة:</b> <code>{time_str}</code>\n" if time_str else ""
         
+        # كابشن منسق يظهر فيه اسم الفيديو ووقت العرض كاملاً
+        caption = (
+            f"🎬 <b>{title}</b>\n" if not is_audio else f"🎵 <b>{title}</b>\n"
+        )
+        if performer and performer != "PlayZone":
+            caption += f"👤 <b>القناة/الفنان:</b> {performer}\n"
+        caption += f"{time_badge}\n- @P1ay_Z0ne_Bot"
+
         share_bot_url = "https://t.me/MusicPlayZoneBot"
         share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:"
         full_share_url = f"https://t.me/share/url?url={quote(share_bot_url)}&text={quote(share_text)}"
@@ -653,19 +621,26 @@ async def send_to_telegram(request: Request):
         }
         
         if is_audio:
-            data_payload.update({'title': title, 'performer': performer, 'duration': dur})
+            data_payload.update({
+                'title': title,
+                'performer': performer,
+                'duration': dur
+            })
         else:
-            data_payload.update({'supports_streaming': True, 'duration': dur})
-            try:
-                cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
-                res = subprocess.run(cmd, capture_output=True, text=True)
-                probe_data = json.loads(res.stdout)
-                data_payload.update({'width': probe_data['streams'][0]['width'], 'height': probe_data['streams'][0]['height']})
-            except Exception:
-                pass
+            data_payload.update({
+                'supports_streaming': True,
+                'duration': dur
+            })
+            if media_probe["width"] > 0 and media_probe["height"] > 0:
+                data_payload.update({'width': media_probe["width"], 'height': media_probe["height"]})
+
+        # إرسال الملف باسمه الحقيقي المُنظف بدلاً من الـ UUID لضمان ظهوره في مشغل تليجرام
+        clean_title = re.sub(r'[\\/*?:"<>|]', "", title).strip() or ("audio" if is_audio else "video")
+        ext = ".mp3" if is_audio else ".mp4"
+        send_filename = f"{clean_title[:50]}{ext}"
 
         with open(file_path, 'rb') as f_media:
-            files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
+            files_payload = {'audio' if is_audio else 'video': (send_filename, f_media)}
             
             if thumb and is_audio:
                 try:
