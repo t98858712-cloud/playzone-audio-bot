@@ -9,7 +9,7 @@ import subprocess
 import requests
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, HTTPException, Request
@@ -23,7 +23,7 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
-# --- التكوين السحابي والإعدادات العامة ---
+# --- الإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -49,7 +49,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
+# --- قاعدة البيانات المحلية ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -107,12 +107,55 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- دالة الفحص والمعالجة الشرطية للفيديو (حل تجميد الصورة) ---
+# --- استخراج صورة المعاينة الحقيقية محلياً وبرمجياً دون أي روابط بديلة ---
+def get_entry_thumbnail(entry: dict) -> str:
+    """
+    استخراج الرابط الأصلي الفعلي لصورة المعاينة من بيانات المنصة مباشرة
+    بدون توليد روابط بديلة أو تخمينية.
+    """
+    if not entry or not isinstance(entry, dict):
+        return ""
+    
+    thumb = entry.get("thumbnail")
+    if thumb and isinstance(thumb, str) and thumb.startswith("http"):
+        return thumb
+
+    thumbnails = entry.get("thumbnails")
+    if thumbnails and isinstance(thumbnails, list):
+        for t in reversed(thumbnails):
+            if isinstance(t, dict):
+                u = t.get("url")
+                if u and isinstance(u, str) and u.startswith("http"):
+                    return u
+    return ""
+
+def extract_thumbnail_from_video(video_path: Path) -> Path | None:
+    """
+    توليد صورة معاينة حقيقية من إطار الفيديو نفسه (الثانية 00:00:01)
+    لضمان صورة مطابقة 100% دون الحاجة لأي رابط خارجي.
+    """
+    if not video_path.exists() or video_path.stat().st_size == 0:
+        return None
+    thumb_path = video_path.with_suffix(".jpg")
+    try:
+        cmd = [
+            "ffmpeg", "-y", "-v", "error",
+            "-ss", "00:00:01",
+            "-i", str(video_path),
+            "-vframes", "1",
+            "-vf", "scale='min(480,iw)':-1",
+            "-q:v", "2",
+            str(thumb_path)
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if res.returncode == 0 and thumb_path.exists() and thumb_path.stat().st_size > 0:
+            return thumb_path
+    except Exception:
+        pass
+    return None
+
+# --- فحص ومعالجة تجميد حركة الفيديو ---
 def sanitize_video_stream(file_path: Path) -> Path:
-    """
-    تفحص ملف الفيديو للتأكد من توافقه وتصحيحه تلقائياً إذا كان بترميز VP9/AV1
-    أو بأبعاد فردية تمنع محركات التشغيل والتليجرام من تحريك الإطارات.
-    """
     if not file_path.exists() or file_path.stat().st_size == 0:
         return file_path
     
@@ -142,10 +185,6 @@ def sanitize_video_stream(file_path: Path) -> Path:
         height = int(stream.get("height") or 0)
         pix_fmt = str(stream.get("pix_fmt", "")).lower().strip()
 
-        # أسباب تعطل حركة الصورة مع عمل الصوت:
-        # 1. الترميز ليس H.264 (مثل AV1 أو VP9 المعتمد في المنصات مؤخراً)
-        # 2. أبعاد فردية (Odd dimensions) تفشل معها معالجات الهواتف وتطبيق تليجرام
-        # 3. تنسيق ألوان غير قياسي (مثل 10-bit HDR)
         needs_fix = (
             codec not in ["h264", "avc1"] or
             (width > 0 and width % 2 != 0) or
@@ -179,7 +218,7 @@ def sanitize_video_stream(file_path: Path) -> Path:
         pass
     return file_path
 
-# --- خيارات yt-dlp الأساسية والمحصنة ---
+# --- خيارات التنزيل المحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -212,8 +251,27 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         opts["progress_hooks"] = [progress_hook]
     return opts
 
-# --- المسارات والـ API Endpoints ---
+# --- خيارات البحث الأصلية (لإرجاع الصور الحقيقية كاملة) ---
+def get_search_ydl_options():
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": True,
+        "skip_download": True,
+        "noplaylist": True,
+        "no_check_certificate": True,
+        "socket_timeout": 15,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+    }
+    cookie_path = Path("cookies.txt")
+    if cookie_path.exists() and cookie_path.stat().st_size > 0:
+        opts["cookiefile"] = str(cookie_path)
+    return opts
 
+# --- مسارات API ---
 @app.get("/")
 def home():
     index_path = Path("index.html")
@@ -408,10 +466,7 @@ async def api_search(request: Request):
     try:
         data = await request.json()
         query = data.get("query", "")
-        opts = get_hardened_ydl_options()
-        opts['extract_flat'] = True
-        if 'playlist_items' in opts: del opts['playlist_items']
-        if 'noplaylist' in opts: del opts['noplaylist']
+        opts = get_search_ydl_options()
         
         with yt_dlp.YoutubeDL(opts) as ydl:
             raw_results = ydl.extract_info(f"ytsearch25:{query}", download=False) or {}
@@ -423,10 +478,7 @@ async def api_search(request: Request):
             video_id = entry.get("id")
             title = entry.get("title")
             if video_id and title:
-                thumb_url = entry.get("thumbnail") or (
-                    entry.get("thumbnails")[0].get("url") if entry.get("thumbnails")
-                    else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-                )
+                thumb_url = get_entry_thumbnail(entry)
                 valid_videos.append({
                     "id": video_id,
                     "title": title,
@@ -446,11 +498,12 @@ async def get_preview(request: Request):
         url = data.get("url", "")
         opts = get_hardened_ydl_options()
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+            info = ydl.extract_info(url, download=False) or {}
+            thumb_url = get_entry_thumbnail(info)
             return {
                 "success": True,
                 "title": info.get("title", "بدون عنوان"),
-                "thumb": info.get("thumbnail", ""),
+                "thumb": thumb_url,
                 "uploader": info.get("uploader", "غير معروف"),
                 "duration": info.get("duration", 0)
             }
@@ -569,7 +622,6 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
             if matching_files:
                 target_file = matching_files[0]
-                # فحص وتصحيح الريلز/الفيديو لمنع تجميد الصورة
                 if mode not in ['audio', 'raw_audio']:
                     target_file = sanitize_video_stream(target_file)
                 filename = target_file.name
@@ -577,11 +629,12 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 ext = 'mp3' if mode == 'audio' else 'mp4'
                 filename = f"{job_id}.{ext}"
 
+            thumb_url = get_entry_thumbnail(info)
             payload = {
                 "status": "completed",
                 "url": f"/files/{filename}",
                 "title": info.get('title', 'مقطع'),
-                "thumb": info.get('thumbnail', ''),
+                "thumb": thumb_url,
                 "uploader": info.get('uploader', 'غير معروف'),
                 "duration": info.get('duration', 0),
                 "is_audio": mode in ['audio', 'raw_audio']
@@ -638,6 +691,7 @@ def get_progress(job_id: str):
 async def send_to_telegram(request: Request):
     temp_file_created = False
     file_path = None
+    extracted_thumb_path = None
     try:
         content_type = request.headers.get("content-type", "")
 
@@ -694,7 +748,6 @@ async def send_to_telegram(request: Request):
         if not file_path or not file_path.exists():
             return {"success": False, "error": "الملف غير موجود على السيرفر."}
 
-        # التأكد من سلامة ملف الفيديو قبل إرساله للتليجرام
         if not is_audio:
             file_path = sanitize_video_stream(Path(file_path))
 
@@ -710,10 +763,7 @@ async def send_to_telegram(request: Request):
         dur = int(duration) if duration else 0
         
         time_str = f"{dur // 60:02d}:{dur % 60:02d}"
-        if dur > 0:
-            caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>'
-        else:
-            caption = "- @P1ay_Z0ne_Bot"
+        caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>' if dur > 0 else "- @P1ay_Z0ne_Bot"
         
         share_bot_url = "https://t.me/MusicPlayZoneBot"
         share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:"
@@ -747,26 +797,38 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            if thumb and is_audio:
+            # جلب الصورة الأصلية إن وجدت، أو استخراجها مباشرة من إطار الفيديو محلياً
+            thumb_bytes = None
+            if thumb and thumb.startswith("http"):
                 try:
                     t_res = requests.get(thumb, timeout=4)
-                    if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
+                    if t_res.status_code == 200:
+                        thumb_bytes = t_res.content
                 except Exception:
-                    pass
+                    thumb_bytes = None
+
+            if not thumb_bytes and not is_audio:
+                extracted = extract_thumbnail_from_video(file_path)
+                if extracted and extracted.exists():
+                    extracted_thumb_path = extracted
+                    thumb_bytes = extracted.read_bytes()
+
+            if thumb_bytes:
+                files_payload['thumb'] = ('thumb.jpg', thumb_bytes, 'image/jpeg')
                     
             response = requests.post(telegram_url, data=data_payload, files=files_payload, timeout=120)
             res_data = response.json()
         
-        if temp_file_created:
-            file_path.unlink(missing_ok=True)
+        if temp_file_created: file_path.unlink(missing_ok=True)
+        if extracted_thumb_path and extracted_thumb_path.exists(): extracted_thumb_path.unlink(missing_ok=True)
 
         if response.status_code == 200 and res_data.get("ok"): 
             return {"success": True}
         return {"success": False, "error": res_data.get("description", "تأكد من بدء المحادثة مع البوت أولاً.")}
         
     except Exception as e: 
-        if temp_file_created and file_path and file_path.exists():
-            file_path.unlink(missing_ok=True)
+        if temp_file_created and file_path and file_path.exists(): file_path.unlink(missing_ok=True)
+        if extracted_thumb_path and extracted_thumb_path.exists(): extracted_thumb_path.unlink(missing_ok=True)
         return {"success": False, "error": str(e)}
 
 if __name__ == "__main__":
