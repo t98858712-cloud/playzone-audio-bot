@@ -9,7 +9,7 @@ import subprocess
 import requests
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, HTTPException, Request
@@ -23,7 +23,7 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
-# --- الإعدادات العامة والتكوين السحابي ---
+# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -49,7 +49,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-# --- إدارة قاعدة البيانات المحلية ---
+# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -107,130 +107,7 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-# --- دوال المعالجة والتحقق المباشر ---
-def get_media_duration(file_path: Path) -> int:
-    """استخراج مدة المقطع الفعلية مباشرة من ملف الوسائط بالثواني عبر ffprobe"""
-    if not file_path.exists():
-        return 0
-    try:
-        cmd = [
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "json",
-            str(file_path)
-        ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-        data = json.loads(res.stdout)
-        dur = float(data.get("format", {}).get("duration", 0))
-        return int(round(dur))
-    except Exception:
-        return 0
-
-def get_entry_thumbnail(entry: dict) -> str:
-    """استخراج صورة المعاينة الحقيقية دون روابط افتراضية"""
-    if not entry or not isinstance(entry, dict):
-        return ""
-    
-    thumb = entry.get("thumbnail")
-    if thumb and isinstance(thumb, str) and thumb.startswith("http"):
-        return thumb
-
-    thumbnails = entry.get("thumbnails")
-    if thumbnails and isinstance(thumbnails, list):
-        for t in reversed(thumbnails):
-            if isinstance(t, dict):
-                u = t.get("url")
-                if u and isinstance(u, str) and u.startswith("http"):
-                    return u
-    return ""
-
-def extract_thumbnail_from_video(video_path: Path) -> Path | None:
-    """استخراج إطار حقيقي كصورة معاينة من الفيديو مباشرة"""
-    if not video_path.exists() or video_path.stat().st_size == 0:
-        return None
-    thumb_path = video_path.with_suffix(".jpg")
-    try:
-        cmd = [
-            "ffmpeg", "-y", "-v", "error",
-            "-ss", "00:00:01",
-            "-i", str(video_path),
-            "-vframes", "1",
-            "-vf", "scale='min(480,iw)':-1",
-            "-q:v", "2",
-            str(thumb_path)
-        ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        if res.returncode == 0 and thumb_path.exists() and thumb_path.stat().st_size > 0:
-            return thumb_path
-    except Exception:
-        pass
-    return None
-
-def sanitize_video_stream(file_path: Path) -> Path:
-    """فحص الفيديو وحل مشكلة تجمد حركة الصورة للأبعاد الفردية وتنسيقات VP9/AV1"""
-    if not file_path.exists() or file_path.stat().st_size == 0:
-        return file_path
-    
-    if file_path.suffix.lower() not in [".mp4", ".mkv", ".webm", ".mov"]:
-        return file_path
-
-    try:
-        probe_cmd = [
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=codec_name,width,height,pix_fmt",
-            "-of", "json",
-            str(file_path)
-        ]
-        res = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=8)
-        if res.returncode != 0 or not res.stdout.strip():
-            return file_path
-        
-        probe_data = json.loads(res.stdout)
-        streams = probe_data.get("streams", [])
-        if not streams:
-            return file_path
-        
-        stream = streams[0]
-        codec = str(stream.get("codec_name", "")).lower().strip()
-        width = int(stream.get("width") or 0)
-        height = int(stream.get("height") or 0)
-        pix_fmt = str(stream.get("pix_fmt", "")).lower().strip()
-
-        needs_fix = (
-            codec not in ["h264", "avc1"] or
-            (width > 0 and width % 2 != 0) or
-            (height > 0 and height % 2 != 0) or
-            pix_fmt != "yuv420p"
-        )
-
-        if not needs_fix:
-            return file_path
-
-        temp_fixed = file_path.with_name(f"fixed_{uuid.uuid4().hex[:6]}_{file_path.name}")
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", "-v", "error",
-            "-i", str(file_path),
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-crf", "22",
-            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
-            "-c:a", "copy",
-            "-movflags", "+faststart",
-            str(temp_fixed)
-        ]
-        run_res = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=90)
-        if run_res.returncode == 0 and temp_fixed.exists() and temp_fixed.stat().st_size > 0:
-            file_path.unlink(missing_ok=True)
-            temp_fixed.rename(file_path)
-        else:
-            if temp_fixed.exists():
-                temp_fixed.unlink(missing_ok=True)
-    except Exception:
-        pass
-    return file_path
-
-# --- خيارات yt-dlp للتحميل وفحص الروابط (مع التوافق التام لليوتيوب) ---
+# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
         "quiet": True,
@@ -239,14 +116,14 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "playlist_items": "1",
         "retries": 15,
         "fragment_retries": 15,
-        "socket_timeout": 35,
+        "socket_timeout": 30,
         "cachedir": False,
         "concurrent_fragment_downloads": 5,
         "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                # تسلسل عملاء متوازن يدعم الكوكيز ويتفادى حظر الويب
-                "player_client": ["android", "web", "ios"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         },
         "http_headers": {
@@ -263,7 +140,8 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         opts["progress_hooks"] = [progress_hook]
     return opts
 
-# --- مسارات API ---
+# --- المسارات والـ API Endpoints ---
+
 @app.get("/")
 def home():
     index_path = Path("index.html")
@@ -458,20 +336,11 @@ async def api_search(request: Request):
     try:
         data = await request.json()
         query = data.get("query", "")
-        # إعدادات مخصصة للبحث السريع فقط
-        opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "extract_flat": True,
-            "skip_download": True,
-            "noplaylist": True,
-            "no_check_certificate": True,
-            "socket_timeout": 15,
-            "http_headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9"
-            }
-        }
+        opts = get_hardened_ydl_options()
+        opts['extract_flat'] = True
+        if 'playlist_items' in opts: del opts['playlist_items']
+        if 'noplaylist' in opts: del opts['noplaylist']
+        
         with yt_dlp.YoutubeDL(opts) as ydl:
             raw_results = ydl.extract_info(f"ytsearch25:{query}", download=False) or {}
             
@@ -482,16 +351,14 @@ async def api_search(request: Request):
             video_id = entry.get("id")
             title = entry.get("title")
             if video_id and title:
-                thumb_url = get_entry_thumbnail(entry)
-                dur = entry.get("duration")
-                try:
-                    dur_val = int(round(float(dur))) if dur else 0
-                except (ValueError, TypeError):
-                    dur_val = 0
+                thumb_url = entry.get("thumbnail") or (
+                    entry.get("thumbnails")[0].get("url") if entry.get("thumbnails")
+                    else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+                )
                 valid_videos.append({
                     "id": video_id,
                     "title": title,
-                    "duration": dur_val,
+                    "duration": entry.get("duration") or 0,
                     "uploader": entry.get("uploader") or entry.get("channel") or "غير معروف",
                     "thumbnail": thumb_url
                 })
@@ -504,35 +371,16 @@ async def api_search(request: Request):
 async def get_preview(request: Request):
     try:
         data = await request.json()
-        url = data.get("url", "").strip()
-        if not url:
-            return {"success": False, "error": "الرابط فارغ"}
-
-        # استخراج البيانات الكاملة بدون تفعيل extract_flat لجلب الاسم والمدة بدقة
+        url = data.get("url", "")
         opts = get_hardened_ydl_options()
-        opts["skip_download"] = True
-        opts.pop("format", None)
-
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False) or {}
-            if "entries" in info and info["entries"]:
-                entries_list = [e for e in info["entries"] if e]
-                if entries_list:
-                    info = entries_list[0]
-
-            title = info.get("title") or "مقطع فيديو"
-            dur = info.get("duration")
-            try:
-                dur_seconds = int(round(float(dur))) if dur else 0
-            except (ValueError, TypeError):
-                dur_seconds = 0
-
+            info = ydl.extract_info(url, download=False)
             return {
                 "success": True,
-                "title": title,
-                "thumb": get_entry_thumbnail(info),
-                "uploader": info.get("uploader") or info.get("channel") or "غير معروف",
-                "duration": dur_seconds
+                "title": info.get("title", "بدون عنوان"),
+                "thumb": info.get("thumbnail", ""),
+                "uploader": info.get("uploader", "غير معروف"),
+                "duration": info.get("duration", 0)
             }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -621,8 +469,8 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     elif mode == 'raw_video':
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
+                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
@@ -634,8 +482,8 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[height<={target_res}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
@@ -648,35 +496,18 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             
             matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
             if matching_files:
-                target_file = matching_files[0]
-                if mode not in ['audio', 'raw_audio']:
-                    target_file = sanitize_video_stream(target_file)
-                filename = target_file.name
+                filename = matching_files[0].name
             else:
                 ext = 'mp3' if mode == 'audio' else 'mp4'
                 filename = f"{job_id}.{ext}"
-                target_file = WEB_DIR / filename
-
-            # استخراج مدة المقطع واسمه مع التأكيد النهائي عبر ffprobe
-            dur_info = info.get('duration') if info else None
-            try:
-                duration_val = int(round(float(dur_info))) if dur_info else 0
-            except (ValueError, TypeError):
-                duration_val = 0
-
-            if duration_val == 0 and target_file.exists():
-                duration_val = get_media_duration(target_file)
-
-            title_val = (info.get('title') if info else None) or target_file.stem or "مقطع"
-            thumb_url = get_entry_thumbnail(info) if info else ""
 
             payload = {
                 "status": "completed",
                 "url": f"/files/{filename}",
-                "title": title_val,
-                "thumb": thumb_url,
-                "uploader": (info.get('uploader') or info.get('channel') if info else None) or 'غير معروف',
-                "duration": duration_val,
+                "title": info.get('title', 'مقطع'),
+                "thumb": info.get('thumbnail', ''),
+                "uploader": info.get('uploader', 'غير معروف'),
+                "duration": info.get('duration', 0),
                 "is_audio": mode in ['audio', 'raw_audio']
             }
             with get_db() as conn:
@@ -731,7 +562,6 @@ def get_progress(job_id: str):
 async def send_to_telegram(request: Request):
     temp_file_created = False
     file_path = None
-    extracted_thumb_path = None
     try:
         content_type = request.headers.get("content-type", "")
 
@@ -749,10 +579,7 @@ async def send_to_telegram(request: Request):
             is_audio = bool(body.get("is_audio", True))
             title = str(body.get("title", "مقطع"))
             performer = str(body.get("performer", "PlayZone"))
-            try:
-                duration = int(body.get("duration", 0))
-            except (ValueError, TypeError):
-                duration = 0
+            duration = int(body.get("duration", 0))
             thumb = str(body.get("thumb", ""))
             file_url = str(body.get("file_url", ""))
         else:
@@ -791,9 +618,6 @@ async def send_to_telegram(request: Request):
         if not file_path or not file_path.exists():
             return {"success": False, "error": "الملف غير موجود على السيرفر."}
 
-        if not is_audio:
-            file_path = sanitize_video_stream(Path(file_path))
-
         if not TELEGRAM_TOKEN:
             return {"success": False, "error": "توكن البوت غير مفعل بالخلفية."}
 
@@ -801,19 +625,15 @@ async def send_to_telegram(request: Request):
             if temp_file_created: file_path.unlink(missing_ok=True)
             return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
 
-        # التأكد النهائي من المدة واسم المقطع
-        dur = int(duration) if duration else 0
-        if dur == 0:
-            dur = get_media_duration(file_path)
-
-        if not title or title.strip() in ["مقطع", "بدون عنوان"]:
-            title = file_path.stem
-
         api_method = "sendAudio" if is_audio else "sendVideo"
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
+        dur = int(duration) if duration else 0
         
         time_str = f"{dur // 60:02d}:{dur % 60:02d}"
-        caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>' if dur > 0 else "- @P1ay_Z0ne_Bot"
+        if dur > 0:
+            caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>'
+        else:
+            caption = "- @P1ay_Z0ne_Bot"
         
         share_bot_url = "https://t.me/MusicPlayZoneBot"
         share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:"
@@ -847,37 +667,26 @@ async def send_to_telegram(request: Request):
         with open(file_path, 'rb') as f_media:
             files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
-            thumb_bytes = None
-            if thumb and thumb.startswith("http"):
+            if thumb and is_audio:
                 try:
                     t_res = requests.get(thumb, timeout=4)
-                    if t_res.status_code == 200:
-                        thumb_bytes = t_res.content
+                    if t_res.status_code == 200: files_payload['thumb'] = ('thumb.jpg', t_res.content, 'image/jpeg')
                 except Exception:
-                    thumb_bytes = None
-
-            if not thumb_bytes and not is_audio:
-                extracted = extract_thumbnail_from_video(file_path)
-                if extracted and extracted.exists():
-                    extracted_thumb_path = extracted
-                    thumb_bytes = extracted.read_bytes()
-
-            if thumb_bytes:
-                files_payload['thumb'] = ('thumb.jpg', thumb_bytes, 'image/jpeg')
+                    pass
                     
             response = requests.post(telegram_url, data=data_payload, files=files_payload, timeout=120)
             res_data = response.json()
         
-        if temp_file_created: file_path.unlink(missing_ok=True)
-        if extracted_thumb_path and extracted_thumb_path.exists(): extracted_thumb_path.unlink(missing_ok=True)
+        if temp_file_created:
+            file_path.unlink(missing_ok=True)
 
         if response.status_code == 200 and res_data.get("ok"): 
             return {"success": True}
         return {"success": False, "error": res_data.get("description", "تأكد من بدء المحادثة مع البوت أولاً.")}
         
     except Exception as e: 
-        if temp_file_created and file_path and file_path.exists(): file_path.unlink(missing_ok=True)
-        if extracted_thumb_path and extracted_thumb_path.exists(): extracted_thumb_path.unlink(missing_ok=True)
+        if temp_file_created and file_path and file_path.exists():
+            file_path.unlink(missing_ok=True)
         return {"success": False, "error": str(e)}
 
 if __name__ == "__main__":
