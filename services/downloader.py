@@ -3,6 +3,8 @@ import shutil
 import logging
 import asyncio
 import urllib.request
+import re
+import subprocess
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
@@ -12,6 +14,34 @@ from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progres
 from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
+
+def resolve_clean_title(info: dict, max_len: int = 60) -> str:
+    """استخراج عنوان نظيف من الميتاداتا أو الوصف مع تنظيف الروابط والهاشتاغات"""
+    raw_title = (
+        info.get("title") 
+        or info.get("description") 
+        or info.get("fulltitle") 
+        or f"مقطع_{info.get('id', 'video')}"
+    )
+    first_line = raw_title.split("\n")[0].strip()
+    clean_line = re.sub(r"https?://\S+|#\S+", "", first_line).strip()
+    if not clean_line:
+        clean_line = f"مقطع_{info.get('id', 'PlayZone')}"
+    return clean_line[:max_len].strip()
+
+def get_media_duration(file_path: Path) -> int:
+    """استخراج مدة الفيديو أو الصوت عبر ffprobe في حال عدم توفرها في الميتاداتا"""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            str(file_path)
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        return int(float(res.stdout.strip()))
+    except Exception:
+        return 0
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
@@ -30,41 +60,40 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
-    # دمج الوسوم الوصفية (اسم الأغنية، الفنان، الألبوم، المدة) في ملف التحميل
-    opts["postprocessors"] = [{"key": "FFmpegMetadata", "add_metadata": True}]
-
     if mode == "audio":
         opts["format"] = "bestaudio/best"
-        opts["postprocessors"].insert(0, {
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192'
-        })
+        opts["postprocessors"] = [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192"
+        }]
     else:
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # 🌟 استراتيجية التوافق التام وإصلاح تجمد الشاشة:
-        # 1. إعطاء الأولوية القصوى لترميز AVC1 (H.264) ودمجه مع أي مسار صوت متاح
-        # 2. تفعيل -movflags +faststart لنقل الفهرس إلى أول الملف وظهور الوقت فورياً
+        # اختيار الجودة وتجهيز الفلتر
         if resolution == "best":
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4]/best"
+                f"best"
             )
         else:
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4]/best"
+                f"best"
             )
             
         opts["merge_output_format"] = "mp4"
+        
+        # حل مشكلة تجمد الفيديو: فرض ترميز H.264 و yuv420p و faststart
         opts["postprocessor_args"] = {
             "ffmpeg": [
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-preset", "veryfast",
+                "-crf", "23",
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-movflags", "+faststart"
@@ -86,7 +115,10 @@ def extract_metadata(url: str):
     opts.pop("format", None) 
     
     with yt_dlp.YoutubeDL(opts) as ydl:
-        return ydl.extract_info(url, download=False)
+        info = ydl.extract_info(url, download=False)
+        if info:
+            info["clean_title"] = resolve_clean_title(info)
+        return info
 
 def search_youtube(query: str, limit: int = 30):
     opts = {
@@ -111,6 +143,7 @@ def search_youtube(query: str, limit: int = 30):
             entries = res.get('entries', []) if res else []
         for entry in entries:
             if entry and entry.get('id') and entry['id'] not in seen_ids:
+                entry['clean_title'] = resolve_clean_title(entry)
                 combined_entries.append(entry)
                 seen_ids.add(entry['id'])
     except Exception as e:
@@ -148,7 +181,17 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
     opts = get_ydl_options(job_dir, progress_data, mode, resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
-        return ydl.extract_info(url, download=True)
+        info = ydl.extract_info(url, download=True)
+        
+        # التأكد من معالجة العنوان والوقت
+        if info:
+            info["clean_title"] = resolve_clean_title(info)
+            if not info.get("duration"):
+                # البحث عن الملف الناتج وفحص مدته
+                files = list(job_dir.glob("playzone_stream.*"))
+                if files:
+                    info["duration"] = get_media_duration(files[0])
+        return info
 
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
