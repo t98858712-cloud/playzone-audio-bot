@@ -2,7 +2,6 @@ import uuid
 import shutil
 import logging
 import asyncio
-import subprocess
 import urllib.request
 import yt_dlp
 from pathlib import Path
@@ -13,39 +12,6 @@ from utils.helpers import cookie_file_is_usable, alert_admins_live, make_progres
 from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
-
-def ensure_video_compatibility(target: Path):
-    """
-    التحقق من ترميز الفيديو: إذا لم يكن h264 أو كان بترميز VP9/AV1 المسبب لتجمد الصورة
-    يتم تحويله فوراً وبسرعة إلى H.264 وضبط نسق الألوان لضمان عمله على كافة الأجهزة وتيليجرام.
-    """
-    try:
-        files = list(target.glob("*.mp4")) if target.is_dir() else [target]
-        for f in files:
-            if not f.exists() or f.name.endswith(".part"):
-                continue
-            cmd_probe = [
-                "ffprobe", "-v", "error", "-select_streams", "v:0",
-                "-show_entries", "stream=codec_name",
-                "-of", "default=noprint_wrappers=1:nokey=1", str(f)
-            ]
-            res = subprocess.run(cmd_probe, capture_output=True, text=True)
-            codec = res.stdout.strip().lower()
-            
-            if codec and codec != "h264":
-                temp_out = f.with_name(f"fixed_{f.name}")
-                cmd_convert = [
-                    "ffmpeg", "-y", "-i", str(f),
-                    "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                    "-pix_fmt", "yuv420p",
-                    "-c:a", "copy",
-                    "-movflags", "+faststart",
-                    str(temp_out)
-                ]
-                subprocess.run(cmd_convert, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                temp_out.replace(f)
-    except Exception as e:
-        logger.warning(f"Video compatibility check failed: {e}")
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
@@ -70,32 +36,26 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # سحب فيديو H.264 (avc1) أولاً مع أي صوت متاح ليتم تحويل الصوت إلى AAC
+        # 🌟 الاستراتيجية الذكية للدقة الحقيقية:
+        # 1. نحاول أولاً سحب جودة H.264 (avc1) المتوافقة كلياً مع التليجرام بالدقة المطلوبة لتجنب استهلاك السيرفر.
+        # 2. إذا لم تتوفر، نسحب أفضل جودة فيديو متاحة بالدقة المطلوبة (حتى لو كانت VP9/AV1) لضمان الدقة الحقيقية.
+        # 3. ندمج الفيديو مع الصوت ونخرجهما داخل حاوية mp4 القياسية.
         if resolution == "best":
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1]+bestaudio/"
-                f"best[vcodec^=avc1][filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"best"
             )
         else:
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"best[vcodec^=avc1][height<={resolution}]/"
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
                 f"best"
             )
             
         opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {
-            "ffmpeg": [
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-movflags", "+faststart"
-            ]
-        }
+        # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -174,10 +134,7 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
     opts = get_ydl_options(job_dir, progress_data, mode, resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-    if mode != "audio" and job_dir:
-        ensure_video_compatibility(job_dir)
-    return info
+        return ydl.extract_info(url, download=True)
 
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
