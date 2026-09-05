@@ -174,12 +174,10 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["tv_embedded", "web", "mweb", "tv"]
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
@@ -388,6 +386,7 @@ async def api_search(request: Request):
         query = data.get("query", "")
         opts = get_hardened_ydl_options()
         opts['extract_flat'] = True
+        opts['extractor_args'] = {'youtube': {'player_client': ['web', 'mweb', 'tv_embedded']}}
         if 'playlist_items' in opts: del opts['playlist_items']
         if 'noplaylist' in opts: del opts['noplaylist']
         
