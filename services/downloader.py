@@ -16,7 +16,6 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def resolve_clean_title(info: dict, max_len: int = 60) -> str:
-    """استخراج عنوان نظيف من الميتاداتا أو الوصف مع تنظيف الروابط والهاشتاغات"""
     raw_title = (
         info.get("title") 
         or info.get("description") 
@@ -30,7 +29,6 @@ def resolve_clean_title(info: dict, max_len: int = 60) -> str:
     return clean_line[:max_len].strip()
 
 def get_media_duration(file_path: Path) -> int:
-    """استخراج مدة الفيديو أو الصوت عبر ffprobe في حال عدم توفرها في الميتاداتا"""
     try:
         cmd = [
             'ffprobe', '-v', 'error',
@@ -50,8 +48,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["web", "mweb"]
             }
         },
         "http_headers": {
@@ -71,29 +68,24 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # اختيار الجودة وتجهيز الفلتر
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"best"
             )
         else:
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
                 f"best"
             )
             
         opts["merge_output_format"] = "mp4"
-        
-        # حل مشكلة تجمد الفيديو: فرض ترميز H.264 و yuv420p و faststart
         opts["postprocessor_args"] = {
             "ffmpeg": [
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
-                "-preset", "veryfast",
-                "-crf", "23",
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-movflags", "+faststart"
@@ -128,9 +120,12 @@ def search_youtube(query: str, limit: int = 30):
         "ignoreerrors": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["web", "mweb"]
             }
+        },
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
         }
     }
     if cookie_file_is_usable(COOKIES_FILE):
@@ -182,12 +177,9 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, re
     opts = get_ydl_options(job_dir, progress_data, mode, resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        
-        # التأكد من معالجة العنوان والوقت
         if info:
             info["clean_title"] = resolve_clean_title(info)
             if not info.get("duration"):
-                # البحث عن الملف الناتج وفحص مدته
                 files = list(job_dir.glob("playzone_stream.*"))
                 if files:
                     info["duration"] = get_media_duration(files[0])
@@ -218,9 +210,12 @@ async def youtube_health_monitor(app: Application):
                 "cookiefile": str(COOKIES_FILE),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios", "tv"],
-                        "player_skip": ["web", "mweb"]
+                        "player_client": ["web", "mweb"]
                     }
+                },
+                "http_headers": {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Accept-Language": "en-US,en;q=0.9",
                 }
             }
             with yt_dlp.YoutubeDL(opts) as ydl:
