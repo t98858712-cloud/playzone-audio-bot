@@ -3,8 +3,6 @@ import shutil
 import logging
 import asyncio
 import urllib.request
-import re
-import subprocess
 import yt_dlp
 from pathlib import Path
 from urllib.parse import urlparse
@@ -15,34 +13,7 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
-def resolve_clean_title(info: dict, max_len: int = 60) -> str:
-    raw_title = (
-        info.get("title") 
-        or info.get("description") 
-        or info.get("fulltitle") 
-        or f"مقطع_{info.get('id', 'video')}"
-    )
-    first_line = raw_title.split("\n")[0].strip()
-    clean_line = re.sub(r"https?://\S+|#\S+", "", first_line).strip()
-    if not clean_line:
-        clean_line = f"مقطع_{info.get('id', 'PlayZone')}"
-    return clean_line[:max_len].strip()
-
-def get_media_duration(file_path: Path) -> int:
-    try:
-        cmd = [
-            'ffprobe', '-v', 'error',
-            '-show_entries', 'format=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1',
-            str(file_path)
-        ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
-        return int(float(res.stdout.strip()))
-    except Exception:
-        return 0
-
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
-    # الإعدادات الأصلية 100% بدون أي تعديل لمنع فشل الكوكيز
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
@@ -65,22 +36,23 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # الترتيب الذكي لتفضيل H.264 لتجنب تجمد الصورة
+        # 🌟 الاستراتيجية الذكية للدقة الحقيقية (معدلة لمنع تعليق الصورة):
+        # الاعتماد كلياً على ترميز H.264 (avc1) المدعوم من تيليجرام وآيفون لتجنب مشكلة تشغيل الصوت دون الصورة
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"best[ext=mp4][filesize<?{max_fs}]/"
                 f"best"
             )
         else:
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
+                f"best[ext=mp4][height<={resolution}][filesize<?{max_fs}]/"
                 f"best"
             )
             
         opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -97,10 +69,7 @@ def extract_metadata(url: str):
     opts.pop("format", None) 
     
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        if info:
-            info["clean_title"] = resolve_clean_title(info)
-        return info
+        return ydl.extract_info(url, download=False)
 
 def search_youtube(query: str, limit: int = 30):
     opts = {
@@ -125,7 +94,6 @@ def search_youtube(query: str, limit: int = 30):
             entries = res.get('entries', []) if res else []
         for entry in entries:
             if entry and entry.get('id') and entry['id'] not in seen_ids:
-                entry['clean_title'] = resolve_clean_title(entry)
                 combined_entries.append(entry)
                 seen_ids.add(entry['id'])
     except Exception as e:
@@ -163,14 +131,7 @@ async def run_progress_updates(message, progress_data: dict, stop_event: asyncio
 def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, resolution: str = "720"):
     opts = get_ydl_options(job_dir, progress_data, mode, resolution)
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        if info:
-            info["clean_title"] = resolve_clean_title(info)
-            if not info.get("duration"):
-                files = list(job_dir.glob("playzone_stream.*"))
-                if files:
-                    info["duration"] = get_media_duration(files[0])
-        return info
+        return ydl.extract_info(url, download=True)
 
 def download_thumbnail_safely(thumb_url: str, output_path: Path) -> Path | None:
     from utils.helpers import is_public_host
