@@ -36,19 +36,21 @@ def get_media_duration(file_path: Path) -> int:
             '-of', 'default=noprint_wrappers=1:nokey=1',
             str(file_path)
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
         return int(float(res.stdout.strip()))
     except Exception:
         return 0
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
+    # الإعدادات الأصلية 100% بدون أي تعديل لمنع فشل الكوكيز
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["web", "mweb"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         },
         "http_headers": {
@@ -59,38 +61,26 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     
     if mode == "audio":
         opts["format"] = "bestaudio/best"
-        opts["postprocessors"] = [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192"
-        }]
     else:
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
+        # الترتيب الذكي لتفضيل H.264 لتجنب تجمد الصورة
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
                 f"best"
             )
         else:
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
                 f"best"
             )
             
         opts["merge_output_format"] = "mp4"
-        opts["postprocessor_args"] = {
-            "ffmpeg": [
-                "-c:a", "aac",
-                "-b:a", "192k",
-                "-movflags", "+faststart"
-            ]
-        }
+        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k", "-movflags", "+faststart"]}
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
@@ -120,12 +110,9 @@ def search_youtube(query: str, limit: int = 30):
         "ignoreerrors": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["web", "mweb"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
-        },
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
         }
     }
     if cookie_file_is_usable(COOKIES_FILE):
@@ -210,12 +197,9 @@ async def youtube_health_monitor(app: Application):
                 "cookiefile": str(COOKIES_FILE),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["web", "mweb"]
+                        "player_client": ["android", "ios", "tv"],
+                        "player_skip": ["web", "mweb"]
                     }
-                },
-                "http_headers": {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    "Accept-Language": "en-US,en;q=0.9",
                 }
             }
             with yt_dlp.YoutubeDL(opts) as ydl:
