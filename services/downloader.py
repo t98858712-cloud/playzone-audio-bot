@@ -15,8 +15,26 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+def get_media_duration(file_path: Path) -> int:
+    """استخراج مدة المقطع الفعلية عبر ffprobe لضمان عدم ظهور 00:00"""
+    if not file_path.exists():
+        return 0
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "json",
+            str(file_path)
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        data = json.loads(res.stdout)
+        dur = float(data.get("format", {}).get("duration", 0))
+        return int(round(dur))
+    except Exception:
+        return 0
+
 def get_entry_thumbnail(entry: dict) -> str:
-    """استخراج رابط الصورة الأصلي الحقيقي دون تخمين روابط خارجية"""
+    """استخراج رابط صورة المعاينة الحقيقي من بيانات المنصة دون تخمين روابط"""
     if not entry or not isinstance(entry, dict):
         return ""
     
@@ -34,7 +52,7 @@ def get_entry_thumbnail(entry: dict) -> str:
     return ""
 
 def sanitize_video_stream(file_path: Path) -> Path:
-    """إصلاح تجميد حركة الصورة على الهواتف وتليجرام دون التأثير على الفيديوهات السليمة"""
+    """فحص ومعالجة سريعة تمنع تجمد شاشة الفيديو مع عمل الصوت"""
     if not file_path.exists() or file_path.stat().st_size == 0:
         return file_path
     
@@ -104,8 +122,8 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         "concurrent_fragment_downloads": 10, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                # تسلسل متوافق مع الكوكيز وتخطي قيود السيرفرات السحابية
+                "player_client": ["android", "web", "ios"]
             }
         },
         "http_headers": {
@@ -140,7 +158,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
-    # تفعيل الكوكيز فقط أثناء التحميل الفعلي المحمي ببيئة مشغلات الهواتف
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
@@ -157,7 +174,6 @@ def extract_metadata(url: str):
         return ydl.extract_info(url, download=False)
 
 def search_youtube(query: str, limit: int = 30):
-    # عزل الكوكيز نهائياً عن البحث لضمان عدم حرق الجلسة من قبل حماية جوجل
     opts = {
         "quiet": True, 
         "extract_flat": True, 
@@ -251,8 +267,7 @@ async def youtube_health_monitor(app: Application):
                 "cookiefile": str(COOKIES_FILE),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios", "tv"],
-                        "player_skip": ["web", "mweb"]
+                        "player_client": ["android", "web", "ios"]
                     }
                 }
             }
