@@ -30,32 +30,46 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         }
     }
     
+    # دمج الوسوم الوصفية (اسم الأغنية، الفنان، الألبوم، المدة) في ملف التحميل
+    opts["postprocessors"] = [{"key": "FFmpegMetadata", "add_metadata": True}]
+
     if mode == "audio":
         opts["format"] = "bestaudio/best"
+        opts["postprocessors"].insert(0, {
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192'
+        })
     else:
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # 🌟 الاستراتيجية الذكية للدقة الحقيقية:
-        # 1. نحاول أولاً سحب جودة H.264 (avc1) المتوافقة كلياً مع التليجرام بالدقة المطلوبة لتجنب استهلاك السيرفر.
-        # 2. إذا لم تتوفر، نسحب أفضل جودة فيديو متاحة بالدقة المطلوبة (حتى لو كانت VP9/AV1) لضمان الدقة الحقيقية.
-        # 3. ندمج الفيديو مع الصوت ونخرجهما داخل حاوية mp4 القياسية.
+        # 🌟 استراتيجية التوافق التام وإصلاح تجمد الشاشة:
+        # 1. إعطاء الأولوية القصوى لترميز AVC1 (H.264) ودمجه مع أي مسار صوت متاح
+        # 2. تفعيل -movflags +faststart لنقل الفهرس إلى أول الملف وظهور الوقت فورياً
         if resolution == "best":
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best"
+                f"best[ext=mp4]/best"
             )
         else:
             opts["format"] = (
-                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"bestvideo[vcodec^=avc1][height<={resolution}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={resolution}][filesize<?{max_fs}]+bestaudio/"
-                f"best"
+                f"best[ext=mp4]/best"
             )
             
         opts["merge_output_format"] = "mp4"
-        # ضمان معالجة الصوت بترميز AAC عالي الجودة متوافق مع كافة الهواتف أثناء عملية الدمج
-        opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
+        opts["postprocessor_args"] = {
+            "ffmpeg": [
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-movflags", "+faststart"
+            ]
+        }
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
