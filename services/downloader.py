@@ -16,7 +16,7 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def fix_video_if_needed(file_path: Path):
-    """إصلاح تجمد الفيديو وضمان تشغيله على تليجرام دون المساس بإعدادات التحميل"""
+    """إصلاح تجمد الفيديو وضمان تشغيله على تليجرام دون التأثير على جودة الصوت أو التحميل"""
     if not file_path.exists() or file_path.stat().st_size == 0:
         return
     try:
@@ -72,15 +72,24 @@ def fix_video_if_needed(file_path: Path):
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
     opts = {
-        "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
-        "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "playlist_items": "1",
+        "retries": 15,
+        "fragment_retries": 15,
+        "socket_timeout": 45,
+        "cachedir": False,
+        "concurrent_fragment_downloads": 5,
+        "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["tv_embedded", "web", "mweb", "tv"]
+                # السماح لعميل الويب باستخدام الكوكيز دون إجبار player_skip
+                "player_client": ["web", "mweb", "tv"]
             }
         },
         "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
@@ -107,12 +116,22 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         opts["merge_output_format"] = "mp4"
         opts["postprocessor_args"] = {"ffmpeg": ["-c:a", "aac", "-b:a", "320k"]}
 
-    from core.config import COOKIES_FILE
-    from utils.helpers import cookie_file_is_usable
-    if cookie_file_is_usable(COOKIES_FILE):
-        opts["cookiefile"] = str(COOKIES_FILE)
-    if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
-    if progress_data is not None: opts["progress_hooks"] = [download_hook(progress_data)]
+    # التحقق المباشر من مسار الكوكيز لضمان تمريره لـ yt-dlp في كافة الظروف
+    cookie_candidates = [
+        COOKIES_FILE if 'COOKIES_FILE' in globals() else None,
+        Path("cookies.txt"),
+        Path("./cookies.txt")
+    ]
+    for cp in cookie_candidates:
+        if cp and Path(cp).exists() and Path(cp).stat().st_size > 0:
+            opts["cookiefile"] = str(Path(cp).resolve())
+            break
+
+    if job_dir:
+        opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
+    if progress_data is not None:
+        opts["progress_hooks"] = [download_hook(progress_data)]
+        
     return opts
 
 def extract_metadata(url: str):
@@ -132,12 +151,21 @@ def search_youtube(query: str, limit: int = 30):
         "ignoreerrors": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["web", "mweb", "tv_embedded"]
+                "player_client": ["web", "mweb"]
             }
         }
     }
-    if cookie_file_is_usable(COOKIES_FILE):
-        opts["cookiefile"] = str(COOKIES_FILE)
+    
+    cookie_candidates = [
+        COOKIES_FILE if 'COOKIES_FILE' in globals() else None,
+        Path("cookies.txt"),
+        Path("./cookies.txt")
+    ]
+    for cp in cookie_candidates:
+        if cp and Path(cp).exists() and Path(cp).stat().st_size > 0:
+            opts["cookiefile"] = str(Path(cp).resolve())
+            break
+
     combined_entries = []
     seen_ids = set()
     try:
@@ -208,16 +236,17 @@ async def youtube_health_monitor(app: Application):
     while True:
         await asyncio.sleep(6 * 3600)
         try:
-            if not cookie_file_is_usable(COOKIES_FILE):
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير صالح أو انتهت صلاحيته. يرجى تجديده عبر الأمر /setcookie لمنع توقف التحميل.")
+            cookie_file = Path("cookies.txt")
+            if not cookie_file.exists() or cookie_file.stat().st_size == 0:
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nملف `cookies.txt` غير موجود أو فارغ. يرجى تجديده لتفادي حظر التحميل.")
                 continue
             opts = {
                 "quiet": True, 
                 "extract_flat": True, 
-                "cookiefile": str(COOKIES_FILE),
+                "cookiefile": str(cookie_file.resolve()),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["tv_embedded", "web", "mweb"]
+                        "player_client": ["web"]
                     }
                 }
             }
@@ -225,4 +254,4 @@ async def youtube_health_monitor(app: Application):
                 ydl.extract_info("https://www.youtube.com/watch?v=BaW_jenozKc", download=False)
         except Exception as e:
             if "Sign in" in str(e) or "cookie" in str(e).lower():
-                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور.")
+                await alert_admins_live(app.bot, "⚠️ <b>تنبيه من السيرفر:</b>\nيوتيوب يطلب تسجيل الدخول. ملف الكوكيز الحالي محظور أو انتهت صلاحيته.")
