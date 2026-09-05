@@ -7,7 +7,7 @@ import sqlite3
 import threading
 import subprocess
 import requests
-import re
+import re  # تم الإضافة لمعالجة الاسم
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
@@ -24,6 +24,7 @@ try:
 except ImportError:
     def stat_inc_sync(key: str, value: int = 1): pass
 
+# --- التكوين السحابي والإعدادات العامة ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "MusicPlayZoneBot")
 ADSTERRA_LINK = os.getenv(
@@ -49,32 +50,7 @@ app.add_middleware(
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
 
-def resolve_clean_title(info: dict, max_len: int = 60) -> str:
-    raw_title = (
-        info.get("title") 
-        or info.get("description") 
-        or info.get("fulltitle") 
-        or f"مقطع_{info.get('id', 'video')}"
-    )
-    first_line = raw_title.split("\n")[0].strip()
-    clean_line = re.sub(r"https?://\S+|#\S+", "", first_line).strip()
-    if not clean_line:
-        clean_line = f"مقطع_{info.get('id', 'PlayZone')}"
-    return clean_line[:max_len].strip()
-
-def get_media_duration(file_path: Path) -> int:
-    try:
-        cmd = [
-            'ffprobe', '-v', 'error',
-            '-show_entries', 'format=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1',
-            str(file_path)
-        ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
-        return int(float(res.stdout.strip()))
-    except Exception:
-        return 0
-
+# --- إدارة قاعدة البيانات المحلية (SQLite - WAL Mode) ---
 @contextmanager
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
@@ -132,8 +108,8 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
+# --- خيارات yt-dlp الأساسية والمحصنة ---
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
-    # الحفاظ التام على الإعدادات الأصلية للـ cookies
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -164,6 +140,8 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     if progress_hook:
         opts["progress_hooks"] = [progress_hook]
     return opts
+
+# --- المسارات والـ API Endpoints ---
 
 @app.get("/")
 def home():
@@ -239,9 +217,118 @@ async def ping_session(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+def get_web_visitors_report() -> str:
+    now = time.time()
+    online_threshold = now - 120
+    rows = []
+    online_count = 0
+    seen_users = set()
+
+    try:
+        from database.connection import db
+        from firebase_admin import firestore
+        from utils.helpers import esc
+    except ImportError:
+        db = None
+        firestore = None
+        def esc(s): return str(s) if s else ""
+
+    if db is not None and firestore is not None:
+        try:
+            docs = db.collection('web_visitors').order_by('last_ping', direction=firestore.Query.DESCENDING).limit(30).stream()
+            for doc in docs:
+                d = doc.to_dict()
+                tg_key = str(d.get('tg_id', '')).strip()
+                v_key = tg_key if tg_key != "زائر مجهول" else d.get('session_id')
+                
+                if v_key in seen_users:
+                    continue
+                seen_users.add(v_key)
+                
+                rows.append(d)
+                if float(d.get('last_ping', 0)) >= online_threshold:
+                    online_count += 1
+                if len(rows) >= 15:
+                    break
+        except Exception:
+            rows = []
+
+    if not rows:
+        with get_db() as conn:
+            cursor = conn.execute(
+                "SELECT session_id, tg_id, device, last_ping FROM web_live_sessions ORDER BY last_ping DESC LIMIT 30"
+            )
+            for r in cursor.fetchall():
+                tg_key = str(r['tg_id']).strip()
+                v_key = tg_key if tg_key != "زائر مجهول" else r['session_id']
+                
+                if v_key in seen_users:
+                    continue
+                seen_users.add(v_key)
+                
+                lp = float(r['last_ping'])
+                if lp >= online_threshold:
+                    online_count += 1
+                    
+                rows.append({
+                    'tg_id': r['tg_id'],
+                    'device': r['device'],
+                    'last_ping': lp
+                })
+                if len(rows) >= 15:
+                    break
+
+    if not rows:
+        return "🌐 <b>لا يوجد زوار في الموقع حالياً.</b>"
+
+    text = f"🌐 <b>رادار زوار الموقع الإلكتروني المتكامل (Firebase)</b>\n\n"
+    text += f"🟢 <b>المتواجدون الآن (أونلاين):</b> {online_count} زائر\n\n"
+    text += "📋 <b>أحدث الزوار ومعلوماتهم والتوقيتات:</b>\n\n"
+
+    local_tz = timezone(timedelta(hours=3))
+
+    for r in rows:
+        tg_id_str = str(r.get('tg_id', '')).strip()
+        last_ping = float(r.get('last_ping', 0))
+        is_online = last_ping >= online_threshold
+        status_str = "🟢 أونلاين" if is_online else "🔴 غير متواجد"
+        
+        dt = datetime.fromtimestamp(last_ping, tz=timezone.utc).astimezone(local_tz)
+        exact_time = dt.strftime('%Y-%m-%d %I:%M %p')
+        device_str = r.get('device') or "متصفح ويب 🌐"
+        
+        user_header = "👤 <b>زائر مجهول</b>"
+        id_line = ""
+
+        if tg_id_str != "زائر مجهول" and tg_id_str.isdigit() and db is not None:
+            try:
+                u_doc = db.collection('users').document(tg_id_str).get()
+                if u_doc.exists:
+                    u = u_doc.to_dict()
+                    first_name = esc(u.get('first_name', ''))
+                    last_name = esc(u.get('last_name', ''))
+                    full_name = f"{first_name} {last_name}".strip() or "مستخدم"
+                    username = u.get('username')
+                    uname_str = f" (@{esc(username)})" if username and username != "لا يوجد" and username != "" else ""
+                    
+                    user_header = f"👤 <code>{full_name}</code>{uname_str}"
+                    id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
+                else:
+                    user_header = "👤 <b>مستخدم</b>"
+                    id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
+            except Exception:
+                user_header = "👤 <b>مستخدم</b>"
+                id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
+        elif tg_id_str != "زائر مجهول" and tg_id_str.isdigit():
+            user_header = "👤 <b>مستخدم</b>"
+            id_line = f"\n  └ 🆔 <code>{tg_id_str}</code>"
+
+        text += f"• {user_header}{id_line}\n  └ {device_str} | {status_str}\n  └ 🕒 <code>{exact_time}</code>\n\n"
+
+    return text
+
 @app.get("/api/admin/web_visitors")
 def api_admin_web_visitors():
-    from web_app import get_web_visitors_report
     return {"report": get_web_visitors_report()}
 
 @app.post("/api/search")
@@ -263,8 +350,8 @@ async def api_search(request: Request):
         for entry in entries:
             if not entry: continue
             video_id = entry.get("id")
-            title = resolve_clean_title(entry)
-            if video_id:
+            title = entry.get("title")
+            if video_id and title:
                 thumb_url = entry.get("thumbnail") or (
                     entry.get("thumbnails")[0].get("url") if entry.get("thumbnails")
                     else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
@@ -291,7 +378,7 @@ async def get_preview(request: Request):
             info = ydl.extract_info(url, download=False)
             return {
                 "success": True,
-                "title": resolve_clean_title(info),
+                "title": info.get("title", "بدون عنوان"),
                 "thumb": info.get("thumbnail", ""),
                 "uploader": info.get("uploader", "غير معروف"),
                 "duration": info.get("duration", 0)
@@ -381,27 +468,26 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             }]
         })
     elif mode == 'raw_video':
+        # تم إزالة تفضيلات vp09 و av01 لأنها تسبب توقف الصورة في بعض المشغلات والآيفون
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
-                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
+                f"best[ext=mp4][filesize<?{max_fs}]/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
         })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[height<={target_res}]+bestaudio/"
+                f"best[ext=mp4][height<={target_res}][filesize<?{max_fs}]/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
         })
     
     try:
@@ -410,25 +496,18 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
             
             matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
             if matching_files:
-                file_path = matching_files[0]
-                filename = file_path.name
+                filename = matching_files[0].name
             else:
-                ext = 'mp3' if mode in ['audio', 'raw_audio'] else 'mp4'
+                ext = 'mp3' if mode == 'audio' else 'mp4'
                 filename = f"{job_id}.{ext}"
-                file_path = WEB_DIR / filename
-
-            clean_title = resolve_clean_title(info)
-            duration = info.get('duration') or 0
-            if (not duration or duration == 0) and file_path.exists():
-                duration = get_media_duration(file_path)
 
             payload = {
                 "status": "completed",
                 "url": f"/files/{filename}",
-                "title": clean_title,
+                "title": info.get('title', 'مقطع'),
                 "thumb": info.get('thumbnail', ''),
                 "uploader": info.get('uploader', 'غير معروف'),
-                "duration": duration,
+                "duration": info.get('duration', 0),
                 "is_audio": mode in ['audio', 'raw_audio']
             }
             with get_db() as conn:
@@ -546,12 +625,18 @@ async def send_to_telegram(request: Request):
             if temp_file_created: file_path.unlink(missing_ok=True)
             return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
 
-        dur = int(duration) if duration else 0
-        if dur == 0:
-            dur = get_media_duration(file_path)
+        # 🌟 استخراج الوقت الفعلي الدقيق باستخدام ffprobe (لحل مشكلة عدم ظهور الوقت)
+        try:
+            cmd_dur = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(file_path)]
+            res_dur = subprocess.run(cmd_dur, capture_output=True, text=True)
+            if res_dur.stdout.strip():
+                duration = int(float(res_dur.stdout.strip()))
+        except Exception:
+            pass
 
         api_method = "sendAudio" if is_audio else "sendVideo"
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
+        dur = int(duration) if duration else 0
         
         time_str = f"{dur // 60:02d}:{dur % 60:02d}"
         if dur > 0:
@@ -588,8 +673,17 @@ async def send_to_telegram(request: Request):
             except Exception:
                 pass
 
+        # 🌟 تنظيف العنوان ليكون اسم الملف (لحل مشكلة ظهور "غير معروف")
+        safe_title = re.sub(r'[\\/*?:"<>|]', "", title).strip()
+        if not safe_title:
+            safe_title = "PlayZone_Media"
+        
+        file_extension = file_path.suffix if file_path.suffix else ('.mp3' if is_audio else '.mp4')
+        display_filename = f"{safe_title}{file_extension}"
+
         with open(file_path, 'rb') as f_media:
-            files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
+            # استخدام display_filename المخصص بدلاً من اسم الملف المشفر (file_path.name)
+            files_payload = {'audio' if is_audio else 'video': (display_filename, f_media)}
             
             if thumb and is_audio:
                 try:
