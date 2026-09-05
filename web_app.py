@@ -3,11 +3,11 @@ import sys
 import uuid
 import time
 import json
-import re
 import sqlite3
 import threading
 import subprocess
 import requests
+import re
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import quote
@@ -48,6 +48,36 @@ app.add_middleware(
 )
 
 app.mount("/files", StaticFiles(directory=WEB_DIR), name="files")
+
+# --- دوال المعالجة المساعدة (العنوان، المدة، قاعدة البيانات) ---
+
+def resolve_clean_title(info: dict, max_len: int = 60) -> str:
+    """استخراج العنوان وحل مشكلة ظهور الاسم كـ 'غير معروف'"""
+    raw_title = (
+        info.get("title") 
+        or info.get("description") 
+        or info.get("fulltitle") 
+        or f"مقطع_{info.get('id', 'video')}"
+    )
+    first_line = raw_title.split("\n")[0].strip()
+    clean_line = re.sub(r"https?://\S+|#\S+", "", first_line).strip()
+    if not clean_line:
+        clean_line = f"مقطع_{info.get('id', 'PlayZone')}"
+    return clean_line[:max_len].strip()
+
+def get_media_duration(file_path: Path) -> int:
+    """حل مشكلة عدم ظهور الوقت عبر استخراجه من الملف محلياً"""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            str(file_path)
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+        return int(float(res.stdout.strip()))
+    except Exception:
+        return 0
 
 @contextmanager
 def get_db():
@@ -138,33 +168,7 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         opts["progress_hooks"] = [progress_hook]
     return opts
 
-def inspect_media_file(file_path: Path) -> dict:
-    """استخراج المدة الحقيقية والأبعاد عبر ffprobe لحل مشكلة عدم ظهور الوقت نهائياً"""
-    info = {"duration": 0, "width": 0, "height": 0}
-    if not file_path.exists():
-        return info
-    try:
-        cmd = [
-            'ffprobe', '-v', 'error',
-            '-show_entries', 'format=duration:stream=width,height,duration',
-            '-of', 'json', str(file_path)
-        ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        data = json.loads(res.stdout)
-        
-        fmt = data.get('format', {})
-        if fmt.get('duration'):
-            info['duration'] = int(round(float(fmt['duration'])))
-            
-        for s in data.get('streams', []):
-            if info['duration'] == 0 and s.get('duration'):
-                info['duration'] = int(round(float(s['duration'])))
-            if s.get('width') and s.get('height') and info['width'] == 0:
-                info['width'] = int(s['width'])
-                info['height'] = int(s['height'])
-    except Exception:
-        pass
-    return info
+# --- مسارات الويب ---
 
 @app.get("/")
 def home():
@@ -240,6 +244,11 @@ async def ping_session(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.get("/api/admin/web_visitors")
+def api_admin_web_visitors():
+    from web_app import get_web_visitors_report
+    return {"report": get_web_visitors_report()}
+
 @app.post("/api/search")
 async def api_search(request: Request):
     stat_inc_sync("web_requests", 1)
@@ -259,8 +268,8 @@ async def api_search(request: Request):
         for entry in entries:
             if not entry: continue
             video_id = entry.get("id")
-            title = entry.get("title")
-            if video_id and title:
+            title = resolve_clean_title(entry)
+            if video_id:
                 thumb_url = entry.get("thumbnail") or (
                     entry.get("thumbnails")[0].get("url") if entry.get("thumbnails")
                     else f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
@@ -287,7 +296,7 @@ async def get_preview(request: Request):
             info = ydl.extract_info(url, download=False)
             return {
                 "success": True,
-                "title": info.get("title", "بدون عنوان"),
+                "title": resolve_clean_title(info),
                 "thumb": info.get("thumbnail", ""),
                 "uploader": info.get("uploader", "غير معروف"),
                 "duration": info.get("duration", 0)
@@ -353,7 +362,7 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 pass
         elif d['status'] == 'finished':
             try:
-                payload = {"status": "converting", "percent": 99.0, "spd_mb": "معالجة التوافق والبيانات..."}
+                payload = {"status": "converting", "percent": 99.0, "spd_mb": "معالجة..."}
                 with get_db() as conn:
                     conn.execute("UPDATE progress SET status='converting', data=?, timestamp=? WHERE job_id=?", (json.dumps(payload), time.time(), job_id))
                     conn.commit()
@@ -363,58 +372,36 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
     opts = get_hardened_ydl_options(outtmpl_path=WEB_DIR / f'{job_id}.%(ext)s', progress_hook=hook)
     max_fs = "49M"
     
-    # ضمان تضمين الوسوم الوصفية (العنوان، الفنان، التاريخ) في جميع الحالات
-    base_postprocessors = [{"key": "FFmpegMetadata", "add_metadata": True}]
-
     if mode == 'raw_audio':
         opts.update({
-            'format': f"bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio[filesize<?{max_fs}]/bestaudio/best",
-            'postprocessors': base_postprocessors
+            'format': f"bestaudio[acodec=opus][filesize<?{max_fs}]/bestaudio[ext=m4a][filesize<?{max_fs}]/bestaudio/best"
         })
     elif mode == 'audio':
         opts.update({
             'format': 'bestaudio/best',
-            'postprocessors': [
-                {
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192'
-                },
-                {"key": "FFmpegMetadata", "add_metadata": True}
-            ]
-        })
-    elif mode == 'raw_video':
-        opts.update({
-            'format': (
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
-                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4]/best"
-            ),
-            'merge_output_format': 'mp4',
-            'postprocessors': base_postprocessors,
-            'postprocessor_args': {
-                'ffmpeg': [
-                    '-c:a', 'aac',
-                    '-b:a', '320k',
-                    '-movflags', '+faststart'
-                ]
-            }
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192'
+            }]
         })
     else:
-        # فيديو عالي الدقة متوافق 100% بدون شاشة سوداء مع تفعيل faststart لإظهار الوقت فوراً
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[filesize<?{max_fs}]/"
-                f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
-                f"best[ext=mp4]/best"
+                f"bestvideo[height<={target_res}]+bestaudio/"
+                f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessors': base_postprocessors,
+            # ترميز x264 صريح لتفادي تجمد الصورة وتشغيل الفيديو بسلاسة
             'postprocessor_args': {
                 'ffmpeg': [
+                    '-c:v', 'libx264',
+                    '-pix_fmt', 'yuv420p',
+                    '-preset', 'veryfast',
+                    '-crf', '23',
                     '-c:a', 'aac',
                     '-b:a', '192k',
                     '-movflags', '+faststart'
@@ -431,21 +418,23 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 file_path = matching_files[0]
                 filename = file_path.name
             else:
-                ext = 'mp3' if mode == 'audio' else 'mp4'
+                ext = 'mp3' if mode in ['audio', 'raw_audio'] else 'mp4'
                 filename = f"{job_id}.{ext}"
                 file_path = WEB_DIR / filename
 
-            # التحقق التام من المدة عبر ffprobe إذا لم تكن موجودة
-            real_meta = inspect_media_file(file_path)
-            duration_val = info.get('duration') or real_meta.get('duration') or 0
+            # معالجة مشكلة الوقت والاسم
+            clean_title = resolve_clean_title(info)
+            duration = info.get('duration') or 0
+            if (not duration or duration == 0) and file_path.exists():
+                duration = get_media_duration(file_path)
 
             payload = {
                 "status": "completed",
                 "url": f"/files/{filename}",
-                "title": info.get('title', 'مقطع'),
+                "title": clean_title,
                 "thumb": info.get('thumbnail', ''),
                 "uploader": info.get('uploader', 'غير معروف'),
-                "duration": duration_val,
+                "duration": duration,
                 "is_audio": mode in ['audio', 'raw_audio']
             }
             with get_db() as conn:
@@ -505,8 +494,8 @@ async def send_to_telegram(request: Request):
 
         chat_id = ""
         is_audio = True
-        title = ""
-        performer = ""
+        title = "مقطع"
+        performer = "PlayZone"
         duration = 0
         thumb = ""
         file_url = ""
@@ -515,8 +504,8 @@ async def send_to_telegram(request: Request):
             body = await request.json()
             chat_id = str(body.get("chat_id", ""))
             is_audio = bool(body.get("is_audio", True))
-            title = str(body.get("title", "")).strip()
-            performer = str(body.get("performer", "")).strip()
+            title = str(body.get("title", "مقطع"))
+            performer = str(body.get("performer", "PlayZone"))
             duration = int(body.get("duration", 0))
             thumb = str(body.get("thumb", ""))
             file_url = str(body.get("file_url", ""))
@@ -525,8 +514,8 @@ async def send_to_telegram(request: Request):
             chat_id = str(form.get("chat_id", ""))
             is_audio_val = form.get("is_audio", "true")
             is_audio = str(is_audio_val).lower() in ["true", "1", "yes"]
-            title = str(form.get("title", "")).strip()
-            performer = str(form.get("performer", "")).strip()
+            title = str(form.get("title", "مقطع"))
+            performer = str(form.get("performer", "PlayZone"))
             try:
                 duration = int(form.get("duration", 0))
             except (ValueError, TypeError):
@@ -563,46 +552,20 @@ async def send_to_telegram(request: Request):
             if temp_file_created: file_path.unlink(missing_ok=True)
             return {"success": False, "error": "حجم الملف يتجاوز 50 ميجابايت."}
 
-        # 🌟 استعادة العنوان والمدة بدقة من قاعدة البيانات إذا وصلتا فارغتين
-        job_prefix = file_path.stem
-        with get_db() as conn:
-            cur = conn.execute("SELECT data FROM progress WHERE job_id = ?", (job_prefix,))
-            p_row = cur.fetchone()
-            if p_row:
-                try:
-                    p_info = json.loads(p_row["data"])
-                    if not title or title in ["مقطع", "undefined"]:
-                        title = p_info.get("title", "")
-                    if not performer or performer in ["PlayZone", "غير معروف"]:
-                        performer = p_info.get("uploader", "")
-                    if duration <= 0:
-                        duration = int(p_info.get("duration", 0))
-                except Exception:
-                    pass
-
-        # 🌟 فحص ملف الوسائط عبر ffprobe لضمان عدم خلو الوقت أو الأبعاد نهائياً
-        media_probe = inspect_media_file(file_path)
-        if duration <= 0:
-            duration = media_probe["duration"]
-
-        title = title or ("صوتية" if is_audio else "فيديو")
-        performer = performer or "PlayZone"
+        # التأكد النهائي من المدة قبل الإرسال لتليجرام
+        dur = int(duration) if duration else 0
+        if dur == 0:
+            dur = get_media_duration(file_path)
 
         api_method = "sendAudio" if is_audio else "sendVideo"
         telegram_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/{api_method}"
-        dur = int(duration)
         
-        time_str = f"{dur // 60:02d}:{dur % 60:02d}" if dur > 0 else ""
-        time_badge = f"⏱️ <b>المدة:</b> <code>{time_str}</code>\n" if time_str else ""
+        time_str = f"{dur // 60:02d}:{dur % 60:02d}"
+        if dur > 0:
+            caption = f'- @P1ay_Z0ne_Bot , <a href="https://t.me/MusicPlayZoneBot">{time_str}</a>'
+        else:
+            caption = "- @P1ay_Z0ne_Bot"
         
-        # كابشن منسق يظهر فيه اسم الفيديو ووقت العرض كاملاً
-        caption = (
-            f"🎬 <b>{title}</b>\n" if not is_audio else f"🎵 <b>{title}</b>\n"
-        )
-        if performer and performer != "PlayZone":
-            caption += f"👤 <b>القناة/الفنان:</b> {performer}\n"
-        caption += f"{time_badge}\n- @P1ay_Z0ne_Bot"
-
         share_bot_url = "https://t.me/MusicPlayZoneBot"
         share_text = "📥 حمّل أي فيديو أو أغنية MP3 في ثوانٍ!\n⚡ بوت سريع، مجاني وبأعلى جودة.\n👇 جرّبه الآن:"
         full_share_url = f"https://t.me/share/url?url={quote(share_bot_url)}&text={quote(share_text)}"
@@ -621,26 +584,19 @@ async def send_to_telegram(request: Request):
         }
         
         if is_audio:
-            data_payload.update({
-                'title': title,
-                'performer': performer,
-                'duration': dur
-            })
+            data_payload.update({'title': title, 'performer': performer, 'duration': dur})
         else:
-            data_payload.update({
-                'supports_streaming': True,
-                'duration': dur
-            })
-            if media_probe["width"] > 0 and media_probe["height"] > 0:
-                data_payload.update({'width': media_probe["width"], 'height': media_probe["height"]})
-
-        # إرسال الملف باسمه الحقيقي المُنظف بدلاً من الـ UUID لضمان ظهوره في مشغل تليجرام
-        clean_title = re.sub(r'[\\/*?:"<>|]', "", title).strip() or ("audio" if is_audio else "video")
-        ext = ".mp3" if is_audio else ".mp4"
-        send_filename = f"{clean_title[:50]}{ext}"
+            data_payload.update({'supports_streaming': True, 'duration': dur})
+            try:
+                cmd = ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json', str(file_path)]
+                res = subprocess.run(cmd, capture_output=True, text=True)
+                probe_data = json.loads(res.stdout)
+                data_payload.update({'width': probe_data['streams'][0]['width'], 'height': probe_data['streams'][0]['height']})
+            except Exception:
+                pass
 
         with open(file_path, 'rb') as f_media:
-            files_payload = {'audio' if is_audio else 'video': (send_filename, f_media)}
+            files_payload = {'audio' if is_audio else 'video': (file_path.name, f_media)}
             
             if thumb and is_audio:
                 try:
