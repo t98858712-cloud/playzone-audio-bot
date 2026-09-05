@@ -16,9 +16,7 @@ from locales.language import _t
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
 def get_entry_thumbnail(entry: dict) -> str:
-    """
-    استخراج رابط الصورة الأصلي الحقيقي من المنصة دون أي روابط تخمينية.
-    """
+    """استخراج رابط الصورة الأصلي الحقيقي دون تخمين روابط خارجية"""
     if not entry or not isinstance(entry, dict):
         return ""
     
@@ -36,9 +34,7 @@ def get_entry_thumbnail(entry: dict) -> str:
     return ""
 
 def sanitize_video_stream(file_path: Path) -> Path:
-    """
-    فحص فوري وتصحيح ترميز الفيديو لمنع تجميد حركة الصورة على الأجهزة وتليجرام.
-    """
+    """إصلاح تجميد حركة الصورة على الهواتف وتليجرام دون التأثير على الفيديوهات السليمة"""
     if not file_path.exists() or file_path.stat().st_size == 0:
         return file_path
     
@@ -144,6 +140,7 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
 
     from core.config import COOKIES_FILE
     from utils.helpers import cookie_file_is_usable
+    # تفعيل الكوكيز فقط أثناء التحميل الفعلي المحمي ببيئة مشغلات الهواتف
     if cookie_file_is_usable(COOKIES_FILE):
         opts["cookiefile"] = str(COOKIES_FILE)
     if job_dir: opts["outtmpl"] = str(job_dir / "playzone_stream.%(ext)s")
@@ -160,7 +157,7 @@ def extract_metadata(url: str):
         return ydl.extract_info(url, download=False)
 
 def search_youtube(query: str, limit: int = 30):
-    # إعدادات مخصصة للبحث فقط دون قيود المشغلات لإرجاع كافة الصور الأصلية
+    # عزل الكوكيز نهائياً عن البحث لضمان عدم حرق الجلسة من قبل حماية جوجل
     opts = {
         "quiet": True, 
         "extract_flat": True, 
@@ -173,8 +170,6 @@ def search_youtube(query: str, limit: int = 30):
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
-    if cookie_file_is_usable(COOKIES_FILE):
-        opts["cookiefile"] = str(COOKIES_FILE)
     combined_entries = []
     seen_ids = set()
     try:
