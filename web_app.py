@@ -105,38 +105,60 @@ def cleanup_cron():
 
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
-def ensure_compatible_video(file_path: Path) -> Path:
+def fix_video_if_needed(file_path: Path):
+    """إصلاح تجمد الفيديو وضمان تشغيله على تليجرام والمتصفحات"""
     if not file_path.exists() or file_path.stat().st_size == 0:
-        return file_path
-        
-    target_path = file_path.with_suffix(".mp4")
-    temp_out = file_path.with_name(f"fixed_{uuid.uuid4().hex[:6]}.mp4")
-    
-    cmd = [
-        "ffmpeg", "-y", "-i", str(file_path),
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-        "-profile:v", "main", "-level", "4.0",
-        "-vf", "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
-        "-movflags", "+faststart",
-        str(temp_out)
-    ]
-    
+        return
     try:
-        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
-        if res.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
-            if file_path.exists():
-                file_path.unlink(missing_ok=True)
-            temp_out.replace(target_path)
-            return target_path
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=codec_name,pix_fmt,width,height",
+            "-of", "json", str(file_path)
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        probe = json.loads(res.stdout) if res.stdout else {}
+        streams = probe.get("streams", [])
+        if not streams:
+            return
+        v = streams[0]
+        codec = v.get("codec_name", "").lower()
+        pix = v.get("pix_fmt", "").lower()
+        w = int(v.get("width") or 0)
+        h = int(v.get("height") or 0)
+
+        needs_transcode = (codec != "h264") or (pix != "yuv420p") or (w % 2 != 0) or (h % 2 != 0)
+        temp_out = file_path.with_name(f"fix_{file_path.name}")
+
+        if needs_transcode:
+            trans_cmd = [
+                "ffmpeg", "-y", "-i", str(file_path),
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "192k",
+                "-movflags", "+faststart",
+                str(temp_out)
+            ]
+            r = subprocess.run(trans_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if r.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
+                temp_out.replace(file_path)
+            elif temp_out.exists():
+                temp_out.unlink(missing_ok=True)
         else:
-            if temp_out.exists():
+            fast_cmd = [
+                "ffmpeg", "-y", "-i", str(file_path),
+                "-c", "copy",
+                "-movflags", "+faststart",
+                str(temp_out)
+            ]
+            r = subprocess.run(fast_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if r.returncode == 0 and temp_out.exists() and temp_out.stat().st_size > 1000:
+                temp_out.replace(file_path)
+            elif temp_out.exists():
                 temp_out.unlink(missing_ok=True)
     except Exception:
-        if temp_out.exists():
-            temp_out.unlink(missing_ok=True)
-    return file_path
+        pass
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
     opts = {
@@ -148,11 +170,12 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "fragment_retries": 15,
         "socket_timeout": 30,
         "cachedir": False,
-        "concurrent_fragment_downloads": 2,
+        "concurrent_fragment_downloads": 5,
         "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["ios", "web", "mweb"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         },
         "http_headers": {
@@ -493,29 +516,40 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 'preferredquality': '192'
             }]
         })
+    elif mode == 'raw_video':
+        opts.update({
+            'format': (
+                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
+                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo+bestaudio/best"
+            ),
+            'merge_output_format': 'mp4',
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k']}
+        })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
+                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={target_res}]+bestaudio/"
-                f"best[height<={target_res}]/best"
+                f"bestvideo+bestaudio/best"
             ),
-            'merge_output_format': 'mp4'
+            'merge_output_format': 'mp4',
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k']}
         })
     
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
             
-            if mode not in ['audio', 'raw_audio']:
-                for v_file in list(WEB_DIR.glob(f"{job_id}.*")):
-                    if v_file.is_file() and not v_file.name.endswith(".part") and not v_file.name.startswith("fixed_"):
-                        ensure_compatible_video(v_file)
-
-            matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part") and not f.name.startswith("fixed_")]
+            matching_files = [f for f in WEB_DIR.glob(f"{job_id}.*") if not f.name.endswith(".part")]
             if matching_files:
-                filename = matching_files[0].name
+                target_file = matching_files[0]
+                if mode not in ['audio', 'raw_audio']:
+                    fix_video_if_needed(target_file)
+                filename = target_file.name
             else:
                 ext = 'mp3' if mode == 'audio' else 'mp4'
                 filename = f"{job_id}.{ext}"
@@ -638,7 +672,7 @@ async def send_to_telegram(request: Request):
             return {"success": False, "error": "الملف غير موجود على السيرفر."}
 
         if not is_audio:
-            file_path = ensure_compatible_video(file_path)
+            fix_video_if_needed(file_path)
 
         if not TELEGRAM_TOKEN:
             return {"success": False, "error": "توكن البوت غير مفعل بالخلفية."}
