@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a0f">
+    
+    <!-- أيقونات الاختصار للشاشة الرئيسية (iOS & Android) -->
+    <link data-mgx-overview="icon" rel="icon" href="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6smycajsa/playzone-logo-dark.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6smycajsa/playzone-logo-dark.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6smycajsa/playzone-logo-dark.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6smycajsa/playzone-logo-dark.png">
+    
+    <!-- وسوم تطبيق الويب للأجهزة المحمولة -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PlayZone">
+    <meta name="application-name" content="PlayZone">
+
+    <link rel="manifest" id="manifestLink" href="/manifest.json">
+    <title data-mgx-overview="title">PlayZone | Music</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <meta data-mgx-overview="description" name="description" content="PlayZone Music - ابحث وحمّل واستمع لأغانيك المفضلة بجودة عالية مع ميزات فريدة." />
+    <meta data-mgx-overview="og:title" property="og:title" content="PlayZone | Music" />
+    <meta data-mgx-overview="og:description" property="og:description" content="PlayZone Music - ابحث وحمّل واستمع لأغانيك المفضلة بجودة عالية مع ميزات فريدة." />
+    <meta data-mgx-overview="og:image" property="og:image" content="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6smycajsa/playzone-logo-dark.png" />
+    <meta data-mgx-overview="twitter:title" name="twitter:title" content="PlayZone | Music" />
+    <meta data-mgx-overview="twitter:description" name="twitter:description" content="PlayZone Music - ابحث وحمّل واستمع لأغانيك المفضلة بجودة عالية مع ميزات فريدة." />
+    <meta data-mgx-overview="twitter:image" name="twitter:image" content="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6smycajsa/playzone-logo-dark.png" />
+    <script>
+        tailwind.config={
+            darkMode:'class',
+            theme:{
+                extend:{
+                    fontFamily: { sans: ['Tajawal', 'sans-serif'] },
+                    colors:{
+                        accent:'#8b5cf6', accentHover:'#7c3aed', accentLight: '#a78bfa',
+                        bgDark:'#0a0a0f', bgDeep: '#050508',
+                        panel:'#12121a', panelLight: '#1a1a2e',
+                        panelBorder:'#2a2a3e', panelBorderLight: '#3a3a5e',
+                        textMuted:'#9ca3af', textDim: '#6b7280',
+                        tgBlue: '#0088cc', tgBlueHover: '#0099dd',
+                        success: '#10b981', danger: '#ef4444',
+                        warning: '#f59e0b'
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="antialiased flex h-[100dvh] w-full select-none overflow-hidden bg-bgDark">
+    <div id="toast"></div>
+
+    <aside class="sidebar-glow w-[68px] md:w-[82px] bg-panel/80 backdrop-blur-xl border-l border-panelBorder/50 flex flex-col justify-between h-[100dvh] z-40 flex-shrink-0">
+        <div>
+            <div class="h-16 md:h-20 flex items-center justify-center border-b border-panelBorder/30">
+                <div id="sidebarLogoIcon" class="w-10 h-10 md:w-11 md:h-11 bg-gradient-to-br from-accent/20 to-purple-900/30 rounded-2xl flex items-center justify-center text-accent text-xl relative group cursor-pointer border border-accent/20 transition-all duration-300">
+                    <div class="absolute inset-0 bg-accent/10 rounded-2xl blur-lg opacity-60 group-hover:opacity-100 transition-opacity"></div>
+                    <i id="sidebarIconEl" class="fas fa-headphones z-10 text-sm text-accentLight transition-transform duration-300"></i>
+                </div>
+            </div>
+            <nav class="mt-4 md:mt-6 px-1.5 md:px-2 space-y-3">
+                <button onclick="switchView('searchView')" id="nav-searchView" class="nav-btn nav-btn-active w-11 h-11 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl transition-all duration-300" title="البحث والتحميل">
+                    <i class="fas fa-search text-[14px] md:text-[15px]"></i>
+                    <span class="text-[9px] mt-1 font-bold hidden md:block">البحث</span>
+                </button>
+                <button onclick="switchView('libraryView')" id="nav-libraryView" class="nav-btn w-11 h-11 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelLight hover:text-white transition-all duration-300" title="ملفاتي">
+                    <i class="fas fa-folder-open text-[14px] md:text-[15px]"></i>
+                    <span class="text-[9px] mt-1 font-medium hidden md:block">ملفاتي</span>
+                </button>
+                <button onclick="switchView('recentView')" id="nav-recentView" class="nav-btn w-11 h-11 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelLight hover:text-white transition-all duration-300" title="الاستماع مؤخراً">
+                    <i class="fas fa-history text-[14px] md:text-[15px]"></i>
+                    <span class="text-[9px] mt-1 font-medium hidden md:block">مؤخراً</span>
+                </button>
+                <button onclick="switchView('settingsView')" id="nav-settingsView" class="nav-btn w-11 h-11 md:w-14 md:h-14 mx-auto flex flex-col items-center justify-center rounded-2xl text-textMuted hover:bg-panelLight hover:text-white transition-all duration-300" title="الإعدادات">
+                    <i class="fas fa-sliders-h text-[14px] md:text-[15px]"></i>
+                    <span class="text-[9px] mt-1 font-medium hidden md:block">إعدادات</span>
+                </button>
+            </nav>
+        </div>
+        <div class="p-2 pb-10 md:pb-6 flex flex-col items-center gap-2 mb-2 md:mb-0">
+            <a href="https://t.me/MusicPlayZoneBot" target="_blank" class="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-tgBlue/10 text-tgBlue hover:bg-tgBlue/20 hover:scale-105 flex items-center justify-center transition-all duration-300 border border-tgBlue/20 shadow-md">
+                <i class="fab fa-telegram-plane text-base md:text-lg"></i>
+            </a>
+        </div>
+    </aside>
+
+    <main class="flex-1 h-[100dvh] overflow-y-auto pb-28 relative scroll-smooth bg-bgDark w-full">
+        <div class="fixed top-0 left-0 w-full h-72 bg-gradient-to-b from-accent/[0.03] to-transparent pointer-events-none z-0"></div>
+
+        <div id="topShortcutBar" class="sticky top-0 z-30 backdrop-blur-md bg-gradient-to-r from-accent/20 via-purple-900/40 to-accent/20 border-b border-accent/20 px-4 py-2 flex items-center justify-between text-xs text-white shadow-lg">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-bolt text-amber-400"></i>
+                <span>احصل على تجربة تطبيق كاملة بإنشاء اختصار على شاشتك</span>
+            </div>
+            <button onclick="switchView('settingsView')" class="bg-accent hover:bg-accentHover text-white px-3 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 shadow-md cursor-pointer transition-transform active:scale-95">
+                <i class="fas fa-plus-circle"></i> إنشاء اختصار
+            </button>
+        </div>
+
+        <section id="searchView" class="view-section active p-3 sm:p-5 md:p-8 max-w-4xl mx-auto relative z-10 w-full">
+            <div class="glass-card p-4 sm:p-6 md:p-8 mb-6 mt-2 sm:mt-4 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-3xl"></div>
+                <div class="absolute bottom-0 left-0 w-24 h-24 bg-purple-600/5 rounded-full blur-2xl"></div>
+                <div class="relative">
+                    <div class="flex items-center gap-2 mb-2 min-h-[40px]">
+                        <h2 id="typingTitle" class="text-xl sm:text-2xl md:text-3xl font-black text-white typing-cursor"></h2>
+                    </div>
+                    <p class="text-textMuted mb-5 text-xs sm:text-sm leading-relaxed">ابحث عن مقاطع الفيديو أو الأغاني لتحميلها وتشغيلها مباشرة.</p>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <div class="relative flex-1">
+                            <i class="fas fa-music absolute right-4 top-1/2 -translate-y-1/2 text-textDim text-sm"></i>
+                            <input type="text" id="url" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="أدخل كلمة البحث أو رابط المقطع..." class="modern-input pr-11 flex-1 text-xs sm:text-sm">
+                        </div>
+                        <button onclick="processInput()" id="mainBtn" class="btn bg-gradient-to-r from-accent to-purple-600 hover:from-accentHover hover:to-purple-700 text-white sm:w-36 md:w-40 shadow-lg glow-accent">
+                            <i class="fas fa-search"></i> بحث
+                        </button>
+                    </div>
+                </div>
+
+                <div id="searchResults" class="hidden mt-6 sm:mt-8 w-full">
+                    <div class="bg-bgDeep/60 border border-panelBorder/50 rounded-2xl p-3 sm:p-4 backdrop-blur-sm max-h-[55dvh] sm:max-h-[60dvh] flex flex-col">
+                        <div class="mb-3 pb-3 border-b border-panelBorder/40 flex justify-between items-center flex-shrink-0">
+                            <h3 class="text-white font-bold text-xs sm:text-sm flex items-center gap-2">
+                                <span class="w-2 h-2 bg-accent rounded-full pulse-dot"></span>
+                                نتائج البحث
+                            </h3>
+                            <button onclick="document.getElementById('searchResults').classList.add('hidden')" class="w-7 h-7 rounded-xl bg-panelLight/50 text-textMuted hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-all">
+                                <i class="fas fa-times text-xs"></i>
+                            </button>
+                        </div>
+                        <div id="searchResultsList" class="flex flex-col gap-2.5 w-full overflow-y-auto max-h-[45dvh] sm:max-h-[50dvh] pr-1"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="previewBox" class="hidden glass-card p-4 sm:p-6 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-accent/30 to-transparent"></div>
+                <div class="flex flex-col md:flex-row gap-5 items-center">
+                    <div class="w-full md:w-1/3">
+                        <div class="relative rounded-2xl overflow-hidden border border-panelBorder/40 shadow-xl">
+                            <img id="thumb" class="w-full object-cover aspect-video" alt="thumbnail">
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+                        </div>
+                    </div>
+                    <div class="w-full md:w-2/3 space-y-3.5">
+                        <h3 id="title" class="font-bold text-sm sm:text-base md:text-lg text-white line-clamp-2 leading-relaxed"></h3>
+                        
+                        <div id="adGate" class="bg-bgDeep/80 border border-panelBorder/50 p-4 rounded-2xl text-center backdrop-blur-sm">
+                            <div class="flex items-center justify-center gap-2 mb-2.5">
+                                <i class="fas fa-lock text-accent text-xs sm:text-sm"></i>
+                                <p class="text-xs text-textMuted font-medium">يرجى فتح الإعلان ليتم التحميل تلقائياً</p>
+                            </div>
+                            <div class="flex flex-col sm:flex-row gap-2.5">
+                                <button id="realAdLink" onclick="openAdAndVerify(event)" class="btn bg-gradient-to-r from-blue-600 to-blue-500 text-white flex-1 hover:from-blue-500 hover:to-blue-400 text-xs sm:text-sm shadow-lg shadow-blue-600/20">
+                                    <i class="fas fa-external-link-alt"></i> فتح الإعلان
+                                </button>
+                                <button id="verifyBtn" class="btn bg-panel/80 text-textMuted flex-1 border border-panelBorder text-xs sm:text-sm cursor-wait">
+                                    <i class="fas fa-sync fa-spin"></i> بانتظار فحص الإعلان...
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="dlOptions" class="hidden space-y-3.5">
+                            <!-- 📌 تم تحديث قائمة الاختيارات الأربعة هنا -->
+                            <div class="flex flex-col gap-2.5">
+                                <select id="mode" onchange="toggleRes()" class="modern-input bg-bgDeep/80 py-2.5 text-xs sm:text-sm">
+                                    <option value="raw_video">🎬 الفيديو الأصلي</option>
+                                    <option value="raw_audio">🎵 الصوت الأصلي</option>
+                                    <option value="video" selected>📹 الفيديو المفلتر</option>
+                                    <option value="audio">🔊 الصوت المفلتر</option>
+                                </select>
+                                <select id="resolution" class="modern-input bg-bgDeep/80 py-2.5 text-xs sm:text-sm">
+                                    <option value="360">360p</option>
+                                    <option value="480">480p</option>
+                                    <option value="720" selected>720p</option>
+                                    <option value="1080">1080p</option>
+                                    <option value="best">أعلى دقة متاحة</option>
+                                </select>
+                            </div>
+                            <button id="startDownloadBtnEl" onclick="startDownload(event)" class="btn bg-gradient-to-r from-accent via-purple-600 to-fuchsia-600 text-white w-full hover:from-accentHover hover:via-purple-700 hover:to-fuchsia-700 shadow-xl glow-accent text-xs sm:text-sm">
+                                <i class="fas fa-download"></i> بدء التحميل
+                            </button>
+                        </div>
+
+                        <div id="progressBox" class="hidden bg-bgDeep/80 p-4 rounded-2xl border border-panelBorder/50 backdrop-blur-sm">
+                            <div class="flex justify-between items-center mb-2.5">
+                                <span id="progStatus" class="text-accent font-bold text-xs flex items-center gap-2">
+                                    <i class="fas fa-circle-notch fa-spin"></i> جاري التحميل...
+                                </span>
+                                <span id="progPercent" class="font-mono font-black text-white text-base sm:text-lg transition-all duration-300">0%</span>
+                            </div>
+                            <div class="w-full bg-bgDeep rounded-full h-2 mb-2.5 overflow-hidden relative border border-panelBorder/30">
+                                <div id="progBar" class="bg-gradient-to-r from-accent via-purple-500 to-fuchsia-500 h-full relative w-0 rounded-full">
+                                    <div class="shimmer-bg"></div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between text-[10px] sm:text-[11px] text-textDim font-mono">
+                                <span id="progSize">-- MB / -- MB</span>
+                                <span id="progSpeed">-- MB/s</span>
+                            </div>
+                            <div id="directDownloadArea" class="hidden mt-3 pt-3 border-t border-panelBorder/40">
+                                <button id="directDownloadBtn" onclick="downloadCurrentActiveTrack()" class="btn bg-gradient-to-r from-emerald-600 to-emerald-500 text-white w-full hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-600/20 text-xs sm:text-sm">
+                                    <i class="fas fa-arrow-alt-circle-down"></i> تحميل إلى جهازك 💾
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="libraryView" class="view-section flex-layout p-3 sm:p-5 md:p-8 max-w-6xl mx-auto h-full flex flex-col relative z-10 w-full">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5 mt-1 sm:mt-2">
+                <div>
+                    <h2 class="text-lg sm:text-xl md:text-2xl font-black text-white flex items-center gap-2">
+                        <span class="w-7 h-7 sm:w-8 sm:h-8 bg-accent/10 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-folder-open text-accent text-xs sm:text-sm"></i>
+                        </span>
+                        ملفاتي المحفوظة
+                    </h2>
+                    <p class="text-textMuted text-xs mt-1 mr-9">الملفات التي قمت بتحميلها مسبقاً</p>
+                </div>
+                <div class="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
+                    <div class="relative flex-1 sm:w-56 md:w-64">
+                        <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-textDim text-xs"></i>
+                        <input type="text" id="libSearch" oninput="applyFilters()" placeholder="بحث في ملفاتك..." class="modern-input pl-3 pr-9 py-2 bg-panel/60 text-xs">
+                    </div>
+                    <select id="libFilter" onchange="applyFilters(true)" class="modern-input py-2 px-3 w-auto bg-panel/60 text-accentLight font-bold text-xs border-accent/20">
+                        <option value="all">الكل</option>
+                        <option value="favorites">❤️ المفضلة</option>
+                        <option value="audio">🎵 الصوتيات</option>
+                        <option value="video">🎬 الفيديوهات</option>
+                    </select>
+                </div>
+            </div>
+            <div id="libraryContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-3 flex-1 content-start w-full"></div>
+            <div id="pagination" class="mt-6 flex justify-center items-center gap-2 pb-6"></div>
+        </section>
+
+        <section id="recentView" class="view-section p-3 sm:p-5 md:p-8 max-w-4xl mx-auto relative z-10 w-full">
+            <div class="flex items-center justify-between mb-5 mt-1 sm:mt-2">
+                <div>
+                    <h2 class="text-lg sm:text-xl md:text-2xl font-black text-white flex items-center gap-2">
+                        <span class="w-7 h-7 sm:w-8 sm:h-8 bg-accent/10 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-history text-accent text-xs sm:text-sm"></i>
+                        </span>
+                        الاستماع مؤخراً
+                    </h2>
+                </div>
+                <button onclick="clearRecentHistory()" class="btn bg-panel/60 text-textMuted hover:text-red-400 text-xs border border-panelBorder/40 py-2 px-3">
+                    <i class="fas fa-trash-alt"></i> مسح السجل
+                </button>
+            </div>
+            <div id="recentContainer" class="flex flex-col gap-2.5 w-full"></div>
+        </section>
+
+        <section id="settingsView" class="view-section p-3 sm:p-5 md:p-8 max-w-3xl mx-auto relative z-10 w-full">
+            <div class="flex items-center gap-3 mb-5 mt-1 sm:mt-2">
+                <span class="w-8 h-8 sm:w-9 sm:h-9 bg-accent/10 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-sliders-h text-accent text-xs sm:text-sm"></i>
+                </span>
+                <h2 class="text-lg sm:text-xl md:text-2xl font-black text-white">الإعدادات</h2>
+            </div>
+            <div class="space-y-4">
+                <div id="shortcutSettingCard" class="glass-card p-4 sm:p-6">
+                    <div class="flex items-center gap-3 mb-3.5">
+                        <div class="w-9 h-9 bg-accent/10 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-mobile-alt text-accent text-xs sm:text-sm"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">اختصار الشاشة الرئيسية</h3>
+                            <p id="shortcutStatusText" class="text-textDim text-[10px] sm:text-[11px] mt-0.5">إضافة اختصار مباشر للتطبيق على شاشة هاتفك للوصول السريع</p>
+                        </div>
+                    </div>
+                    <div id="shortcutButtonsGroup" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <button onclick="installAndroidApp()" id="androidInstallBtn" class="btn bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-500/30 text-xs py-2.5">
+                            <i class="fab fa-android text-sm"></i> إضافة اختصار (أندرويد)
+                        </button>
+                        <button onclick="showIosInstructions()" class="btn bg-gray-800/80 text-white hover:bg-gray-700/80 border border-panelBorder/50 text-xs py-2.5">
+                            <i class="fab fa-apple text-sm"></i> إضافة اختصار (آيفون)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="glass-card p-4 sm:p-6">
+                    <div class="flex items-center gap-3 mb-3.5">
+                        <div class="w-9 h-9 bg-indigo-500/10 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-moon text-indigo-400 text-xs sm:text-sm"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">مؤقت النوم</h3>
+                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">إيقاف التشغيل تلقائياً بعد مدة محددة</p>
+                        </div>
+                    </div>
+                    <div id="sleepTimerStatus" class="hidden mb-3.5 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-center">
+                        <p class="text-indigo-300 text-xs sm:text-sm font-bold"><i class="fas fa-clock"></i> المؤقت نشط: <span id="sleepCountdown">--:--</span></p>
+                        <button onclick="cancelSleepTimer()" class="mt-1.5 text-xs text-red-400 hover:text-red-300 underline">إلغاء المؤقت</button>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2 mb-3">
+                        <button onclick="setSleepTimer(15)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">15 د</button>
+                        <button onclick="setSleepTimer(30)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">30 د</button>
+                        <button onclick="setSleepTimer(45)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">45 د</button>
+                        <button onclick="setSleepTimer(60)" class="btn bg-panelLight/50 text-white text-xs py-2 border border-panelBorder/40 hover:border-indigo-500/40 hover:bg-indigo-500/10">60 د</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="number" id="customSleepInput" placeholder="تحديد وقت مخصص (بالدقائق)..." min="1" max="1440" class="modern-input font-mono bg-bgDeep/60 text-xs py-2 flex-1">
+                        <button onclick="setCustomSleepTimer()" class="btn bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 shadow-lg shadow-indigo-600/20 flex-shrink-0">
+                            <i class="fas fa-check"></i> تفعيل
+                        </button>
+                    </div>
+                </div>
+
+                <div class="glass-card p-4 sm:p-6">
+                    <div class="flex items-center gap-3 mb-3.5">
+                        <div class="w-9 h-9 bg-tgBlue/10 rounded-xl flex items-center justify-center">
+                            <i class="fab fa-telegram text-tgBlue text-base sm:text-lg"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">ربط حساب تيليجرام</h3>
+                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">أدخل معرف حسابك لتلقي الملفات عبر البوت @MusicPlayZoneBot</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-2.5 mb-4">
+                        <input type="text" id="settingTgId" placeholder="أدخل الـ User ID هنا..." class="modern-input font-mono bg-bgDeep/60 text-xs sm:text-sm py-2.5">
+                        <button onclick="updateTgId()" class="btn bg-tgBlue hover:bg-tgBlueHover text-white px-5 text-xs sm:text-sm shadow-lg shadow-tgBlue/20">حفظ</button>
+                    </div>
+                    <div class="flex items-center justify-between p-3.5 bg-bgDeep/60 rounded-2xl border border-panelBorder/40">
+                        <div>
+                            <p class="font-bold text-white text-xs sm:text-sm">إرسال تلقائي للبوت</p>
+                            <p class="text-[10px] sm:text-[11px] text-textDim mt-0.5">إرسال الملف إلى حسابك فور اكتمال تحميله</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="autoForwardToggle" onchange="toggleAutoForward()" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-zinc-800 rounded-full peer peer-checked:after:-translate-x-full peer-checked:bg-accent after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all duration-300"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="glass-card p-4 sm:p-6">
+                    <div class="flex items-center gap-3 mb-3.5">
+                        <div class="w-9 h-9 bg-red-500/10 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-database text-red-400 text-xs sm:text-sm"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">إدارة الذاكرة التخزينية</h3>
+                            <p class="text-textDim text-[10px] sm:text-[11px] mt-0.5">إدارة الملفات المحفوظة محلياً</p>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center p-3.5 bg-bgDeep/60 rounded-2xl border border-panelBorder/40">
+                        <div>
+                            <p class="font-bold text-white text-xs sm:text-sm" id="libCountStatus">سجل الملفات (0)</p>
+                            <p class="text-[10px] sm:text-[11px] text-textDim mt-0.5">مسح سجل الملفات، وسجل الاستماع، والذاكرة التخزينية</p>
+                        </div>
+                        <button onclick="clearAllLibrary()" class="btn bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 text-xs px-4 py-2 border border-red-500/20">
+                            <i class="fas fa-trash-alt"></i> مسح الكل
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="floatingPlayer">
+        <div id="playerHeader" class="drag-handle p-3 bg-gradient-to-r from-bgDeep/80 to-panel/80 border-b border-panelBorder/30 flex items-center justify-between">
+            <div class="flex items-center gap-2 overflow-hidden flex-1 pl-1">
+                <div class="marquee-wrapper">
+                    <p id="playerTitle" class="font-bold text-xs text-white animate-marquee">جاهز للتشغيل</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1 flex-shrink-0 mr-1">
+                <button onclick="toggleCompactMode(event)" class="w-6 h-6 rounded-lg bg-panelLight/50 text-textMuted hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all" title="تصغير">
+                    <i class="fas fa-compress-alt text-[10px]"></i>
+                </button>
+                <button onclick="resetPlayerPosition()" class="w-6 h-6 rounded-lg bg-panelLight/50 text-textMuted hover:text-white hover:bg-panelLight flex items-center justify-center transition-all" title="إعادة تعيين">
+                    <i class="fas fa-location-arrow text-[10px]"></i>
+                </button>
+                <button onclick="closePlayer()" class="w-6 h-6 rounded-lg bg-panelLight/50 text-textMuted hover:text-red-400 hover:bg-red-500/10 flex items-center justify-center transition-all">
+                    <i class="fas fa-times text-[10px]"></i>
+                </button>
+            </div>
+        </div>
+        <div id="playerBody" class="p-3.5 sm:p-4 select-none">
+            <div id="videoContainer" class="hidden w-full aspect-video rounded-2xl overflow-hidden bg-black mb-3 border border-panelBorder/50 shadow-xl">
+                <video id="globalVideoElement" class="w-full h-full object-contain" ontimeupdate="updatePlayerProgress()" onended="handleMediaEnd()"></video>
+            </div>
+            <div id="audioVisualizer" class="flex flex-col items-center justify-center py-2 mb-2">
+                <div class="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-accent/30 shadow-2xl overflow-hidden mb-2.5 bg-bgDeep">
+                    <img id="playerCoverImg" src="https://mgx-backend-cdn.metadl.com/generate/images/1300473/2026-07-24/tcy6tjycajra/default-album-art.png" class="w-full h-full object-cover album-spin" alt="album art">
+                    <div class="absolute inset-0 bg-gradient-to-tr from-black/50 to-transparent"></div>
+                    <div class="absolute w-7 h-7 bg-bgDeep rounded-full top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 border-2 border-panelBorder flex items-center justify-center shadow-inner">
+                        <div class="w-2.5 h-2.5 bg-accent rounded-full"></div>
+                    </div>
+                </div>
+                <div id="visualizerBars" class="flex gap-2 items-end h-6 justify-center mt-1">
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                    <div class="wave-bar" style="width: 4px; height: 32px;"></div>
+                </div>
+            </div>
+            <div class="relative w-full h-2 bg-bgDeep rounded-full mb-2 cursor-pointer group border border-panelBorder/30" id="progressContainer" dir="ltr">
+                <div id="mediaProgressBar" class="absolute left-0 h-full bg-gradient-to-r from-accent to-purple-500 rounded-full w-0 pointer-events-none"></div>
+                <div id="mediaProgressSlider" class="absolute w-3 h-3 bg-white border-2 border-accent rounded-full -top-[2px] -ml-[6px] scale-100 group-hover:scale-125 transition-transform shadow-lg shadow-accent/30 pointer-events-none" style="left: 0%;"></div>
+            </div>
+            <div class="flex justify-between items-center text-[10px] text-textDim font-mono mb-2.5">
+                <span id="playerTime">0:00 / 0:00</span>
+                <span id="trackSource" class="bg-accent/10 text-accentLight px-2 py-0.5 rounded-lg text-[9px] font-bold border border-accent/20">صوت</span>
+            </div>
+            <div class="flex items-center justify-between gap-2 px-1">
+                <button onclick="toggleShuffle(event)" id="shuffleBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="عشوائي">
+                    <i class="fas fa-random"></i>
+                </button>
+
+                <button onclick="seekMedia(10)" class="px-2 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-1 border border-panelBorder/30 transition-all flex-shrink-0" title="تقديم 10 ثوانٍ">
+                    <i class="fas fa-rotate-right text-[9px]"></i>10
+                </button>
+
+                <button onclick="playNext()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="التالي">
+                    <i class="fas fa-step-forward"></i>
+                </button>
+
+                <button onclick="togglePlay()" id="playPauseBtn" class="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-purple-700 hover:from-accentHover hover:to-purple-800 text-white flex items-center justify-center text-sm shadow-lg glow-accent active:scale-90 transition-all flex-shrink-0">
+                    <i class="fas fa-play ml-0.5"></i>
+                </button>
+
+                <button onclick="playPrev()" class="w-7 h-7 rounded-xl text-white hover:text-accent hover:bg-accent/10 flex items-center justify-center transition-all text-xs flex-shrink-0" title="السابق">
+                    <i class="fas fa-step-backward"></i>
+                </button>
+
+                <button onclick="seekMedia(-10)" class="px-2 py-1 rounded-lg bg-panelLight/40 hover:bg-accent/20 text-white/90 hover:text-accent font-mono text-[10px] font-bold flex items-center gap-1 border border-panelBorder/30 transition-all flex-shrink-0" title="رجوع 10 ثوانٍ">
+                    10<i class="fas fa-rotate-left text-[9px]"></i>
+                </button>
+
+                <button onclick="toggleRepeat(event)" id="repeatBtn" class="w-7 h-7 rounded-xl text-textMuted hover:text-white hover:bg-panelLight/50 flex items-center justify-center transition-all text-xs flex-shrink-0" title="تكرار المقطع تلقائياً">
+                    <i class="fas fa-repeat"></i>
+                </button>
+            </div>
+            <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-panelBorder/30">
+                <button onclick="changeSpeed(event)" id="speedBtn" class="text-[9px] font-bold font-mono px-2 py-0.5 border border-panelBorder/50 rounded-lg text-textMuted hover:text-white hover:border-accent/30 transition-all bg-panelLight/30">1.0x</button>
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleMute()" id="muteBtn" class="text-textMuted hover:text-white transition-colors">
+                        <i class="fas fa-volume-up text-xs"></i>
+                    </button>
+                    <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" oninput="changeVolume()" class="w-14 h-1.5 bg-zinc-800 accent-accent rounded-lg cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md">
+                </div>
+                <button onclick="triggerPiP()" id="pipBtn" class="text-textMuted hover:text-white hidden transition-colors" title="تشغيل مصغر">
+                    <i class="fas fa-clone text-xs"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tgModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] hidden flex-col items-center justify-center p-4">
+        <div class="glass-card p-5 sm:p-7 max-w-sm w-full text-center">
+            <div class="w-14 h-14 bg-tgBlue/15 text-tgBlue rounded-2xl flex items-center justify-center mx-auto mb-4 text-xl border border-tgBlue/20">
+                <i class="fab fa-telegram-plane"></i>
+            </div>
+            <h3 class="text-base sm:text-lg font-black mb-1.5 text-white">ربط حساب Telegram</h3>
+            <p class="text-textMuted text-xs mb-4 leading-relaxed">يرجى إدخال معرف حسابك (User ID) لتفعيل خاصية الإرسال التلقائي عبر البوت @MusicPlayZoneBot.</p>
+            <button onclick="window.open('https://t.me/MusicPlayZoneBot', '_blank')" class="btn bg-tgBlue text-white w-full mb-3 text-xs sm:text-sm hover:bg-tgBlueHover shadow-lg shadow-tgBlue/20 py-2.5">
+                <i class="fas fa-robot"></i> الدخول للبوت ونسخ المعرف
+            </button>
+            <input type="text" id="tgIdInput" placeholder="الصق المعرف هنا..." class="modern-input bg-bgDeep/80 text-center text-xs sm:text-sm mb-3.5 font-mono py-2.5">
+            <div class="flex gap-2.5">
+                <button onclick="saveTgIdFromModal()" class="btn bg-gradient-to-r from-accent to-purple-600 text-white flex-1 text-xs sm:text-sm shadow-lg glow-accent py-2.5">حفظ ومتابعة</button>
+                <button onclick="closeTgModal()" class="btn bg-panelLight text-textMuted flex-1 hover:text-white text-xs sm:text-sm border border-panelBorder/50 py-2.5">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="androidModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] hidden flex-col items-center justify-center p-4">
+        <div class="glass-card p-5 sm:p-7 max-w-sm w-full text-center">
+            <div class="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-emerald-500/20">
+                <i class="fab fa-android"></i>
+            </div>
+            <h3 class="text-base sm:text-lg font-black mb-2 text-white">إضافة اختصار للأندرويد</h3>
+            <div class="text-textMuted text-xs mb-5 text-right space-y-2.5 leading-relaxed bg-bgDeep/60 p-3.5 rounded-xl border border-panelBorder/40">
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">1</span> اضغط زر القائمة <i class="fas fa-ellipsis-v text-emerald-400"></i> (الثلاث نقاط) في المتصفح.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">2</span> اختر <b>"إضافة إلى الشاشة الرئيسية"</b> أو <b>"تثبيت التطبيق"</b>.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-emerald-500/20 text-emerald-400 font-bold rounded-full inline-flex items-center justify-center text-[10px]">3</span> اضغط <b>"إضافة"</b> لتأكيد إنشاء الاختصار وسيعمل كـ تطبيق كامل!</p>
+            </div>
+            <button onclick="closeAndroidModal()" class="btn bg-gradient-to-r from-emerald-600 to-teal-600 text-white w-full text-xs sm:text-sm shadow-lg py-2.5">حسناً، فهمت</button>
+        </div>
+    </div>
+
+    <div id="iosModal" class="fixed inset-0 bg-black/90 backdrop-blur-xl z-[200] hidden flex-col items-center justify-center p-4">
+        <div class="glass-card p-5 sm:p-7 max-w-sm w-full text-center">
+            <div class="w-14 h-14 bg-white/10 text-white rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl border border-white/20">
+                <i class="fab fa-apple"></i>
+            </div>
+            <h3 class="text-base sm:text-lg font-black mb-2 text-white">إضافة اختصار للآيفون (iOS)</h3>
+            <div class="text-textMuted text-xs mb-5 text-right space-y-2.5 leading-relaxed bg-bgDeep/60 p-3.5 rounded-xl border border-panelBorder/40">
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-accent/20 text-accent font-bold rounded-full inline-flex items-center justify-center text-[10px]">1</span> اضغط على زر المشاركة <i class="fas fa-share-square text-accent"></i> في أسفل متصفح Safari.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-accent/20 text-accent font-bold rounded-full inline-flex items-center justify-center text-[10px]">2</span> اختر <b>"إضافة إلى الشاشة الرئيسية"</b> <i class="far fa-plus-square text-accent"></i>.</p>
+                <p class="flex items-center gap-2"><span class="w-5 h-5 bg-accent/20 text-accent font-bold rounded-full inline-flex items-center justify-center text-[10px]">3</span> اضغط على <b>"إضافة"</b> في الأعلى لإنشاء الاختصار مباشرة على شاشتك.</p>
+            </div>
+            <button onclick="closeIosModal()" class="btn bg-gradient-to-r from-accent to-purple-600 text-white w-full text-xs sm:text-sm shadow-lg glow-accent py-2.5">حسناً، فهمت</button>
+        </div>
+    </div>
+
+    <script src="app.js" type="module"></script>
+    <script src="https://pl30415120.effectivecpmnetwork.com/4a/6d/62/4a6d62278909f4c7def1f7baaeb9509b.js"></script>
+</body>
+</html>
