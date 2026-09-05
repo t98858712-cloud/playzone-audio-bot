@@ -37,7 +37,6 @@ def fix_video_if_needed(file_path: Path):
         w = int(v.get("width") or 0)
         h = int(v.get("height") or 0)
 
-        # فحص ما إذا كان الكودك غير مدعوم أو الأبعاد فردية تسبب تجمد الصورة
         needs_transcode = (codec != "h264") or (pix != "yuv420p") or (w % 2 != 0) or (h % 2 != 0)
         temp_out = file_path.with_name(f"fix_{file_path.name}")
 
@@ -75,15 +74,13 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True, "playlist_items": "1",
         "retries": 15, "fragment_retries": 15, "socket_timeout": 45, "cachedir": False,
-        "concurrent_fragment_downloads": 10, "no_check_certificate": True,
+        "concurrent_fragment_downloads": 5, "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["tv_embedded", "web", "mweb", "tv"]
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
@@ -135,8 +132,7 @@ def search_youtube(query: str, limit: int = 30):
         "ignoreerrors": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
+                "player_client": ["web", "mweb", "tv_embedded"]
             }
         }
     }
@@ -221,8 +217,7 @@ async def youtube_health_monitor(app: Application):
                 "cookiefile": str(COOKIES_FILE),
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["android", "ios", "tv"],
-                        "player_skip": ["web", "mweb"]
+                        "player_client": ["tv_embedded", "web", "mweb"]
                     }
                 }
             }
