@@ -133,6 +133,7 @@ def cleanup_cron():
 threading.Thread(target=cleanup_cron, daemon=True).start()
 
 def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
+    # الحفاظ التام على الإعدادات الأصلية للـ cookies
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -146,11 +147,12 @@ def get_hardened_ydl_options(outtmpl_path=None, progress_hook=None):
         "no_check_certificate": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["web", "mweb"]
+                "player_client": ["android", "ios", "tv"],
+                "player_skip": ["web", "mweb"]
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9"
         }
     }
@@ -378,23 +380,28 @@ def bg_download_worker(job_id: str, url: str, mode: str, res: str):
                 'preferredquality': '192'
             }]
         })
+    elif mode == 'raw_video':
+        opts.update({
+            'format': (
+                f"bestvideo[vcodec^=av01][filesize<?{max_fs}]+bestaudio[acodec^=opus]/"
+                f"bestvideo[vcodec^=vp09][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo+bestaudio/best"
+            ),
+            'merge_output_format': 'mp4',
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '320k', '-movflags', '+faststart']}
+        })
     else:
         target_res = res if res and res != 'best' else '720'
         opts.update({
             'format': (
                 f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
-                f"bestvideo[vcodec^=avc1][height<={target_res}][filesize<?{max_fs}]+bestaudio/"
                 f"bestvideo[height<={target_res}][filesize<?{max_fs}]+bestaudio/"
+                f"bestvideo[height<={target_res}]+bestaudio/"
                 f"bestvideo+bestaudio/best"
             ),
             'merge_output_format': 'mp4',
-            'postprocessor_args': {
-                'ffmpeg': [
-                    '-c:a', 'aac',
-                    '-b:a', '192k',
-                    '-movflags', '+faststart'
-                ]
-            }
+            'postprocessor_args': {'ffmpeg': ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']}
         })
     
     try:
