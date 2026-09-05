@@ -15,11 +15,29 @@ from locales.language import _t
 
 logger = logging.getLogger("PlayZoneEnterpriseBot")
 
+def get_entry_thumbnail(entry: dict) -> str:
+    """
+    استخراج رابط الصورة الأصلي الحقيقي من المنصة دون أي روابط تخمينية.
+    """
+    if not entry or not isinstance(entry, dict):
+        return ""
+    
+    thumb = entry.get("thumbnail")
+    if thumb and isinstance(thumb, str) and thumb.startswith("http"):
+        return thumb
+
+    thumbnails = entry.get("thumbnails")
+    if thumbnails and isinstance(thumbnails, list):
+        for t in reversed(thumbnails):
+            if isinstance(t, dict):
+                u = t.get("url")
+                if u and isinstance(u, str) and u.startswith("http"):
+                    return u
+    return ""
+
 def sanitize_video_stream(file_path: Path) -> Path:
     """
-    فحص ومعالجة سريعة لملف الفيديو المكتمل.
-    إذا كان الترميز غير متوافق (مثل AV1/VP9 داخل MP4) أو الأبعاد فردية، يتم تصحيحه فوراً
-    ليعمل بسلاسة على كافة الأجهزة وتطبيق التليجرام.
+    فحص فوري وتصحيح ترميز الفيديو لمنع تجميد حركة الصورة على الأجهزة وتليجرام.
     """
     if not file_path.exists() or file_path.stat().st_size == 0:
         return file_path
@@ -80,7 +98,7 @@ def sanitize_video_stream(file_path: Path) -> Path:
             if temp_fixed.exists():
                 temp_fixed.unlink(missing_ok=True)
     except Exception as e:
-        logger.warning(f"Sanitizing stream skipped/failed: {e}")
+        logger.warning(f"Sanitizing stream skipped: {e}")
     return file_path
 
 def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = None, mode: str = "video", resolution: str = "720"):
@@ -106,7 +124,6 @@ def get_ydl_options(job_dir: Path | None = None, progress_data: dict | None = No
         from core.config import LOCAL_API_URL
         max_fs = "50M" if not LOCAL_API_URL else "2000M"
         
-        # الأولوية دائماً لترميز H.264 (avc1) لضمان التوافق التام وسرعة التحميل
         if resolution == "best":
             opts["format"] = (
                 f"bestvideo[vcodec^=avc1][filesize<?{max_fs}]+bestaudio[acodec^=mp4a]/"
@@ -143,16 +160,17 @@ def extract_metadata(url: str):
         return ydl.extract_info(url, download=False)
 
 def search_youtube(query: str, limit: int = 30):
+    # إعدادات مخصصة للبحث فقط دون قيود المشغلات لإرجاع كافة الصور الأصلية
     opts = {
         "quiet": True, 
         "extract_flat": True, 
+        "skip_download": True,
         "no_warnings": True, 
         "ignoreerrors": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "tv"],
-                "player_skip": ["web", "mweb"]
-            }
+        "socket_timeout": 15,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
         }
     }
     if cookie_file_is_usable(COOKIES_FILE):
@@ -165,6 +183,7 @@ def search_youtube(query: str, limit: int = 30):
             entries = res.get('entries', []) if res else []
         for entry in entries:
             if entry and entry.get('id') and entry['id'] not in seen_ids:
+                entry['thumbnail'] = get_entry_thumbnail(entry)
                 combined_entries.append(entry)
                 seen_ids.add(entry['id'])
     except Exception as e:
@@ -204,7 +223,6 @@ def execute_download(url: str, mode: str, job_dir: Path, progress_data: dict, re
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
     
-    # تصحيح تجميد الصورة في الفيديو مباشرة بعد اكتمال التنزيل
     if mode != "audio":
         for f in job_dir.glob("playzone_stream.*"):
             if f.is_file() and not f.name.endswith(".part"):
