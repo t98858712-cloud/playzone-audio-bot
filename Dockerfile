@@ -14,12 +14,9 @@ RUN apt-get update && \
 # تحديد مسار العمل داخل السيرفر
 WORKDIR /app
 
-# نسخ ملف المتطلبات وتثبيت مكتبات البايثون
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# نسخ باقي ملفات البوت (الكود، الكوكيز، إلخ)
+# نسخ ملفات البوت أولاً ثم تثبيت أحدث إصدار من المكتبات لمنع تجميد yt-dlp في الكاش
 COPY . .
+RUN pip install --no-cache-dir -U -r requirements.txt
 
 # أمر تشغيل البوت والموقع معاً
 CMD sh -c "PORT=9999 python main.py & uvicorn web_app:app --host 0.0.0.0 --port ${PORT:-8080}"
