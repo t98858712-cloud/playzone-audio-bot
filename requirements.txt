@@ -1,0 +1,7 @@
+python-telegram-bot==21.11.1
+yt-dlp
+firebase-admin
+httpx
+fastapi
+uvicorn
+jinja2
